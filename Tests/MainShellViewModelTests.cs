@@ -1567,6 +1567,72 @@ public sealed class MainShellViewModelTests
         Assert.True(await WaitForLogContainsAsync(fixture.Runtime.DiagnosticsService.EventLogPath, "App.Shell.Tray.ToggleOverlay"));
     }
 
+    [Theory]
+    [InlineData("Copilot")]
+    [InlineData("Toolbox")]
+    [InlineData("WebApi")]
+    public async Task ExecuteTrayCommandAsync_Stop_ShouldStopRunOwnedByAnotherFeature(string owner)
+    {
+        var bridge = new FakeBridge();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableShellConfigJson(),
+            bridge: bridge);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
+        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync(
+            "127.0.0.1:5555",
+            "General",
+            null)).Success);
+        Assert.True(fixture.Runtime.SessionService.TryBeginRun(
+            owner,
+            string.Equals(owner, "Toolbox", StringComparison.Ordinal) ? "Recruit Recognition" : null,
+            out _));
+        Assert.True((await fixture.Runtime.ConnectFeatureService.StartAsync()).Success);
+        Assert.True(await WaitUntilAsync(() => fixture.Runtime.SessionService.CurrentState == SessionState.Running));
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.CurrentSessionState == SessionState.Running));
+
+        // Materialize both owner pages so the stop route has to cope with pages that
+        // exist but are not themselves driving this session.
+        _ = fixture.ViewModel.CopilotPage;
+        _ = fixture.ViewModel.ToolboxPage;
+
+        Assert.True(fixture.ViewModel.CanStopExecution);
+        await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Stop, "test-tray");
+
+        Assert.Equal(SessionState.Connected, fixture.Runtime.SessionService.CurrentState);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.Equal(1, bridge.StopCallCount);
+        Assert.Contains(fixture.ViewModel.GrowlMessages, msg => msg.Contains("停止执行", StringComparison.Ordinal));
+        Assert.True(await WaitForLogContainsAsync(fixture.Runtime.DiagnosticsService.EventLogPath, "App.Shell.Tray.Stop"));
+    }
+
+    [Fact]
+    public async Task ExecuteTrayCommandAsync_Stop_ShouldNotReportSuccessWhenTheSessionKeepsRunning()
+    {
+        var bridge = new FakeBridge { FailStop = true, RuntimeReportsRunning = true };
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableShellConfigJson(),
+            bridge: bridge);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
+        Assert.True((await fixture.Runtime.ConnectFeatureService.ConnectAsync(
+            "127.0.0.1:5555",
+            "General",
+            null)).Success);
+        Assert.True(fixture.Runtime.SessionService.TryBeginRun("WebApi", out _));
+        Assert.True((await fixture.Runtime.ConnectFeatureService.StartAsync()).Success);
+        Assert.True(await WaitUntilAsync(() => fixture.Runtime.SessionService.CurrentState == SessionState.Running));
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.CurrentSessionState == SessionState.Running));
+
+        await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Stop, "test-tray");
+
+        Assert.True(bridge.StopCallCount >= 1);
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal("WebApi", fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.DoesNotContain(fixture.ViewModel.GrowlMessages, msg => msg.Contains("停止执行", StringComparison.Ordinal));
+        Assert.True(await WaitForLogContainsAsync(fixture.Runtime.DiagnosticsService.EventLogPath, "stop-failed"));
+    }
+
     [Fact]
     public async Task ExecuteManualImportAsync_ShouldRefreshTaskQueueSettingsAndConnectionState()
     {
@@ -4087,6 +4153,12 @@ private sealed class CapturingTrayService : ITrayService
 
         public CoreConnectionInfo? LastConnectionInfo { get; private set; }
 
+        public int StopCallCount { get; private set; }
+
+        public bool FailStop { get; init; }
+
+        public bool RuntimeReportsRunning { get; init; }
+
         public Task<CoreResult<CoreInitializeInfo>> InitializeAsync(
             CoreInitializeRequest request,
             CancellationToken cancellationToken = default)
@@ -4114,7 +4186,10 @@ private sealed class CapturingTrayService : ITrayService
 
         public Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(CoreResult<bool>.Ok(true));
+            StopCallCount++;
+            return Task.FromResult(FailStop
+                ? CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "fake stop failure"))
+                : CoreResult<bool>.Ok(true));
         }
 
         public bool RuntimeRunning { get; set; }
@@ -4785,7 +4860,7 @@ private sealed class CapturingTrayService : ITrayService
     {
         await using var fixture = await TestFixture.CreateAsync();
 
-        Assert.Equal(MainShellViewModel.WindowDisplayName, fixture.ViewModel.WindowTitle);
+        Assert.StartsWith(MainShellViewModel.WindowDisplayName, fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
     }
 
     public async Task CanStartExecution_ShouldNotDisableWpfTrayStartOrStopEntries(

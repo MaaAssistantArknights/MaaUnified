@@ -164,6 +164,15 @@ public partial class TrayContextMenuWindow : Window
     private void OnOpened(object? sender, EventArgs e)
     {
         PositionWithinWorkingArea();
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (IsVisible)
+                {
+                    MenuPresenter.FocusFirstEnabledItem();
+                }
+            },
+            DispatcherPriority.Input);
     }
 
     private void OnClosed(object? sender, EventArgs e)
@@ -207,6 +216,11 @@ public partial class TrayContextMenuWindow : Window
         }
 
         CommandInvoked?.Invoke(this, new TrayContextMenuCommandInvokedEventArgs(command, e.Parameter as string));
+    }
+
+    private void OnMenuDismissRequested(object? sender, EventArgs e)
+    {
+        Close();
     }
 
     private void PositionWithinWorkingArea()

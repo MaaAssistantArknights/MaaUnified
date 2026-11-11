@@ -24,6 +24,123 @@ namespace MAAUnified.Tests;
 
 public sealed class TaskQueueG1FeatureTests
 {
+    [Theory]
+    [InlineData("0", 0, true)]
+    [InlineData("1", 1, true)]
+    [InlineData("6", 6, true)]
+    [InlineData("7", 7, false)]
+    public async Task TaskQueueGuide_VisibilityFollowsPersistedStep(
+        string persistedStep,
+        int expectedStep,
+        bool expectedGuideVisible)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] =
+            JsonValue.Create(persistedStep);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+
+        Assert.Equal(expectedStep, vm.GuideStepIndex);
+        Assert.Equal(expectedGuideVisible, vm.IsGuideVisible);
+        Assert.Equal(!expectedGuideVisible, vm.IsTaskQueueContentVisible);
+        if (expectedStep < 7)
+        {
+            Assert.True(vm.IsGuideStep0Visible || vm.IsGuideStep1Visible || vm.IsGuideStep6Visible);
+        }
+    }
+
+    [Fact]
+    public async Task TaskQueueGuide_NextPreviousAndDonePersistStep()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("1");
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+
+        Assert.True(await vm.PreviousGuideStepAsync());
+        Assert.Equal(0, vm.GuideStepIndex);
+        Assert.False(vm.CanGoToPreviousGuideStep);
+        Assert.Equal(0, fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex]!.GetValue<int>());
+
+        Assert.True(await vm.NextGuideStepAsync());
+        Assert.Equal(1, vm.GuideStepIndex);
+        Assert.True(vm.CanGoToPreviousGuideStep);
+        Assert.Equal(1, fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex]!.GetValue<int>());
+
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("6");
+        var finalStepVm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        Assert.True(finalStepVm.IsGuideDoneVisible);
+        Assert.False(finalStepVm.IsGuideNextVisible);
+
+        Assert.True(await finalStepVm.CompleteGuideAsync());
+        Assert.Equal(7, finalStepVm.GuideStepIndex);
+        Assert.False(finalStepVm.IsGuideVisible);
+        Assert.True(finalStepVm.IsTaskQueueContentVisible);
+
+        var reloaded = new UnifiedConfigurationService(
+            new AvaloniaJsonConfigStore(fixture.Root),
+            new GuiNewJsonConfigImporter(),
+            new GuiJsonConfigImporter(),
+            new UiLogService(),
+            fixture.Root);
+        await reloaded.LoadOrBootstrapAsync();
+        Assert.Equal(7, reloaded.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task TaskQueueGuide_ConfigurationContextReloadRefreshesPersistedStep()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        Assert.True(vm.IsGuideVisible);
+        Assert.True(vm.IsGuideStep0Visible);
+
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("6");
+        await vm.ReloadConfigurationContextAsync();
+
+        Assert.Equal(6, vm.GuideStepIndex);
+        Assert.True(vm.IsGuideVisible);
+        Assert.True(vm.IsGuideStep6Visible);
+        Assert.True(vm.IsGuideDoneVisible);
+    }
+
+    [Fact]
+    public async Task TaskQueueGuide_OpenTaskStepSuspendsWithoutLosingProgressAndResumeRestoresIt()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("3");
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+
+        Assert.True(vm.OpenCurrentGuideStepTarget());
+        Assert.False(vm.IsGuideVisible);
+        Assert.True(vm.IsTaskQueueContentVisible);
+        Assert.True(vm.CanResumeGuide);
+        Assert.Equal("3", fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex]!.GetValue<string>());
+
+        vm.ResumeGuide();
+
+        Assert.True(vm.IsGuideVisible);
+        Assert.False(vm.CanResumeGuide);
+        Assert.True(vm.IsGuideStep3Visible);
+    }
+
+    [Fact]
+    public async Task TaskQueueGuide_OpenSettingsStepNavigatesWithoutCompletingGuide()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("2");
+        var sections = new List<string>();
+        var vm = new TaskQueuePageViewModel(
+            fixture.Runtime,
+            new ConnectionGameSharedStateViewModel(),
+            navigateToSettingsSection: sections.Add);
+
+        Assert.True(vm.OpenCurrentGuideStepTarget());
+        Assert.Equal(["Connect"], sections);
+        Assert.True(vm.IsGuideVisible);
+        Assert.False(vm.CanResumeGuide);
+        Assert.Equal("2", fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task TaskQueuePage_InitializeOnEmptyQueue_ShouldSeedWpfDefaultTasks()
     {
@@ -872,7 +989,7 @@ public sealed class TaskQueueG1FeatureTests
         await vm.ToggleTaskEnabledOneShotAsync(task);
 
         Assert.Null(task.IsEnabled);
-        Assert.Contains("Run once", task.ToolTipText, StringComparison.Ordinal);
+        Assert.Contains(vm.RootTexts["TaskQueue.Status.TaskEnabled.Once"], task.ToolTipText, StringComparison.Ordinal);
         var queue = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
         Assert.True(queue.Success);
         Assert.Null(Assert.Single(queue.Value!).IsEnabled);
@@ -892,7 +1009,7 @@ public sealed class TaskQueueG1FeatureTests
         await vm.ToggleTaskEnabledOneShotAsync(task);
 
         Assert.Null(task.IsEnabled);
-        Assert.Contains("Skip once", task.ToolTipText, StringComparison.Ordinal);
+        Assert.Contains(vm.RootTexts["TaskQueue.Status.TaskEnabled.SkipOnce"], task.ToolTipText, StringComparison.Ordinal);
         var queue = await fixture.TaskQueue.GetCurrentTaskQueueAsync();
         Assert.True(queue.Success);
         Assert.Null(Assert.Single(queue.Value!).IsEnabled);

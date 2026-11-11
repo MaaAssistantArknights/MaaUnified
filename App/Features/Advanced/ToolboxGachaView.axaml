@@ -117,9 +117,11 @@
                   Orientation="Horizontal">
         <Button Classes="app-button app-secondary toolbox-gacha-action"
                 Content="{Binding GachaDrawOnceText}"
+                IsEnabled="{Binding CanStartGacha}"
                 Click="OnGachaOnceClick" />
         <Button Classes="app-button app-secondary toolbox-gacha-action"
                 Content="{Binding GachaDrawTenText}"
+                IsEnabled="{Binding CanStartGacha}"
                 Click="OnGachaTenTimesClick" />
         <Button Classes="app-button app-primary toolbox-gacha-action"
                 Content="{Binding PeepCommandText}"
@@ -182,9 +184,11 @@
                   Orientation="Horizontal">
         <Button Classes="app-button app-secondary toolbox-gacha-action"
                 Content="{Binding GachaDrawOnceText}"
+                IsEnabled="{Binding CanStartGacha}"
                 Click="OnGachaOnceClick" />
         <Button Classes="app-button app-secondary toolbox-gacha-action"
                 Content="{Binding GachaDrawTenText}"
+                IsEnabled="{Binding CanStartGacha}"
                 Click="OnGachaTenTimesClick" />
         <Button Classes="app-button app-primary toolbox-gacha-action"
                 Content="{Binding PeepCommandText}"

@@ -115,14 +115,10 @@ public partial class ConnectSettingsView : UserControl
 
         if (vm.AutoDetectMuMu12EmulatorPathIfNeeded())
         {
-            vm.TestLinkInfo = $"MuMu path auto-detected: {vm.MuMu12EmulatorPath}";
             return;
         }
 
-        if (!vm.ValidateMuMu12EmulatorPath(out var error) && !string.IsNullOrWhiteSpace(error))
-        {
-            vm.TestLinkInfo = error;
-        }
+        vm.ValidateAndShowMuMu12EmulatorPathStatus();
     }
 
     private void OnMuMuEmulatorPathLostFocus(object? sender, RoutedEventArgs e)
@@ -133,10 +129,7 @@ public partial class ConnectSettingsView : UserControl
             return;
         }
 
-        if (!vm.ValidateMuMu12EmulatorPath(out var error) && !string.IsNullOrWhiteSpace(error))
-        {
-            vm.TestLinkInfo = error;
-        }
+        vm.ValidateAndShowMuMu12EmulatorPathStatus();
     }
 
     private void OnLdPlayerExtrasChecked(object? sender, RoutedEventArgs e)
@@ -149,14 +142,10 @@ public partial class ConnectSettingsView : UserControl
 
         if (vm.AutoDetectLdPlayerEmulatorPathIfNeeded())
         {
-            vm.TestLinkInfo = $"LDPlayer path auto-detected: {vm.LdPlayerEmulatorPath}";
             return;
         }
 
-        if (!vm.ValidateLdPlayerEmulatorPath(out var error) && !string.IsNullOrWhiteSpace(error))
-        {
-            vm.TestLinkInfo = error;
-        }
+        vm.ValidateAndShowLdPlayerEmulatorPathStatus();
     }
 
     private void OnLdPlayerEmulatorPathLostFocus(object? sender, RoutedEventArgs e)
@@ -167,10 +156,7 @@ public partial class ConnectSettingsView : UserControl
             return;
         }
 
-        if (!vm.ValidateLdPlayerEmulatorPath(out var error) && !string.IsNullOrWhiteSpace(error))
-        {
-            vm.TestLinkInfo = error;
-        }
+        vm.ValidateAndShowLdPlayerEmulatorPathStatus();
     }
 
     private async void OnScreenshotTestClick(object? sender, RoutedEventArgs e)
@@ -178,6 +164,16 @@ public partial class ConnectSettingsView : UserControl
         var vm = VM;
         if (vm is null)
         {
+            return;
+        }
+
+        if (!vm.TryBeginScreenshotTestActivity())
+        {
+            LogScreenshotTestEvent(
+                "start",
+                vm,
+                "blocked",
+                message: "another session operation is already active");
             return;
         }
 
@@ -272,6 +268,10 @@ public partial class ConnectSettingsView : UserControl
                 errorCode: ex.GetType().Name);
             vm.TestLinkInfo = T("Settings.Connect.Error.ConnectionFailedShort", "Connection failed.");
             vm.TestLinkInfoSeverity = TestLinkInfoSeverity.Error;
+        }
+        finally
+        {
+            vm.EndScreenshotTestActivity();
         }
     }
 
@@ -535,7 +535,8 @@ public partial class ConnectSettingsView : UserControl
             bitmap,
             BuildScreenshotPreviewTitle(),
             BuildScreenshotPreviewSubtitle(),
-            BuildScreenshotPreviewStatusText());
+            BuildScreenshotPreviewStatusText(),
+            T("Settings.Action.Close"));
 
         if (_screenshotPreviewWindow.IsVisible)
         {
@@ -625,7 +626,8 @@ public partial class ConnectSettingsView : UserControl
             _screenshotPreviewWindow.UpdateChrome(
                 BuildScreenshotPreviewTitle(),
                 BuildScreenshotPreviewSubtitle(),
-                BuildScreenshotPreviewStatusText());
+                BuildScreenshotPreviewStatusText(),
+                T("Settings.Action.Close"));
         }
     }
 

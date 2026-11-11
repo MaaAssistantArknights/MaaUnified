@@ -22,6 +22,8 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Focusable" Value="True" />
+    <Setter Property="IsTabStop" Value="True" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="CornerRadius" Value="0" />
     <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
@@ -72,11 +74,12 @@
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Focusable" Value="True" />
+    <Setter Property="IsTabStop" Value="False" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="Margin" Value="0" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Stretch" />
-    <Setter Property="Focusable" Value="False" />
     <Setter Property="FocusAdorner" Value="{x:Null}" />
     <Setter Property="Template">
       <ControlTemplate>
@@ -125,6 +128,11 @@
   <Style Selector="controls|AppSelectionList ListBoxItem:focus-visible">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="controls|AppSelectionList ListBoxItem:focus-visible Border.app-selection-list-item-shell">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.InputFocus}" />
   </Style>
 
   <Style Selector="controls|AppSelectionList ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">

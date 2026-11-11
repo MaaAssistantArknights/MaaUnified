@@ -1399,6 +1399,24 @@
   <data name="Settings.About.OpenOfficialWebsite" xml:space="preserve">
     <value>公式サイトを開く</value>
   </data>
+  <data name="Settings.About.Bilibili" xml:space="preserve">
+    <value>bilibili</value>
+  </data>
+  <data name="Settings.About.Github" xml:space="preserve">
+    <value>ソースコード: GitHub</value>
+  </data>
+  <data name="Settings.About.QqGroup" xml:space="preserve">
+    <value>QQグループ</value>
+  </data>
+  <data name="Settings.About.QqChannel" xml:space="preserve">
+    <value>QQ channel</value>
+  </data>
+  <data name="Settings.About.Telegram" xml:space="preserve">
+    <value>Telegram</value>
+  </data>
+  <data name="Settings.About.Discord" xml:space="preserve">
+    <value>Discord</value>
+  </data>
   <data name="Settings.About.Status.AnnouncementDialogCancelled" xml:space="preserve">
     <value>お知らせダイアログをキャンセルしました。</value>
   </data>
@@ -1683,6 +1701,9 @@
   </data>
   <data name="Settings.Background.StretchMode" xml:space="preserve">
     <value>背景表示モード</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Title" xml:space="preserve">
+    <value>設定マネージャー</value>
   </data>
   <data name="Settings.ConfigurationManager.AutoSavedCurrent" xml:space="preserve">
     <value>現在のプロファイルへの変更は自動保存されます</value>
@@ -2365,6 +2386,12 @@
   <data name="Settings.IssueReport.Status.ImageCacheClearFailed" xml:space="preserve">
     <value>画像キャッシュの削除に失敗しました。</value>
   </data>
+  <data name="Settings.IssueReport.ClearImageCacheTip" xml:space="preserve">
+    <value>通常、手動でクリアする必要はありません。
+DEBUGディレクトリに保存される画像には数量制限があり、超過すると古い画像が自動的にクリアされます。
+手動クリアはすべての画像を削除するため、問題調査時にスクリーンショットが不足する可能性があります。
+キャッシュファイル（マップ、オペレーターアイコンなど）はクリア後に再生成が必要で、使用体験に影響する可能性があります。</value>
+  </data>
   <data name="Settings.IssueReport.Status.ImageCacheClearFailedWithReason" xml:space="preserve">
     <value>画像キャッシュの削除に失敗しました: {0}</value>
   </data>
@@ -2547,6 +2574,27 @@
   </data>
   <data name="Settings.Start.Dialog.SelectEmulatorPathTitle" xml:space="preserve">
     <value>エミュレータのパスを選択</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathNoCandidates" xml:space="preserve">
+    <value>パスが検出されませんでした</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathCandidateCount" xml:space="preserve">
+    <value>{0} 件の候補パス</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathDetectedPaths" xml:space="preserve">
+    <value>検出されたパス</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathIntro" xml:space="preserve">
+    <value>検出されたエミュレータの実行ファイルを選択するか、下にカスタムパスを貼り付けてください。</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathEmptyBody" xml:space="preserve">
+    <value>自動検出で見つからない場合は、下にエミュレータの実行ファイルパスを貼り付けてください。</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathCustomPath" xml:space="preserve">
+    <value>カスタムパス</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathWatermark" xml:space="preserve">
+    <value>/path/to/emulator</value>
   </data>
   <data name="Settings.Start.EmulatorExtraArgs" xml:space="preserve">
     <value>エミュレータ追加引数</value>
@@ -4557,6 +4605,36 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="TaskQueue.Root.Waiting" xml:space="preserve">
     <value>ミッション終了を待っています……</value>
   </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
+    <value>キャンセル</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
+    <value>エラー詳細</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Message" xml:space="preserve">
+    <value>{0} が実行中です。現在のタスクを停止してからタスクキューを開始してください。</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Message.Unknown" xml:space="preserve">
+    <value>別の機能が実行中です。現在のタスクを停止してからタスクキューを開始してください。</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.Copilot" xml:space="preserve">
+    <value>自動戦闘</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.TaskQueue" xml:space="preserve">
+    <value>一括実行</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.Toolbox" xml:space="preserve">
+    <value>ツール</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.WebApi" xml:space="preserve">
+    <value>Web API</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
+    <value>現在のタスクを停止</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Title" xml:space="preserve">
+    <value>タスクの開始がブロックされました</value>
+  </data>
   <data name="TaskQueue.Root.DailyStageLabel" xml:space="preserve">
     <value>今日のステージのヒント:</value>
   </data>
@@ -4902,5 +4980,272 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="Settings.VersionUpdate.NightlyWarning.Cancel" xml:space="preserve">
     <value>閉じる</value>
+  </data>
+  <data name="Copilot.Status.Starting" xml:space="preserve">
+    <value>起動中...</value>
+  </data>
+  <data name="Copilot.Status.ReorderSuccess" xml:space="preserve">
+    <value>作戦の順序を更新しました。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemSuccess" xml:space="preserve">
+    <value>作戦を更新しました。</value>
+  </data>
+  <data name="Copilot.Error.SortStateOutOfSync" xml:space="preserve">
+    <value>作戦リストの順序が変更されました。もう一度お試しください。</value>
+  </data>
+  <data name="Copilot.Error.TaskListPersistFail" xml:space="preserve">
+    <value>作戦リストを保存できませんでした。</value>
+  </data>
+  <data name="Copilot.Status.LoadSetPartialFailed" xml:space="preserve">
+    <value>次の作戦を読み込めませんでした：{0}</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Unavailable" xml:space="preserve">
+    <value>セキュアストレージは利用できません。復元するまで、機密設定と関連操作は無効です。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Retry" xml:space="preserve">
+    <value>セキュアストレージを再試行</value>
+  </data>
+  <data name="Settings.SensitiveStorage.DiscardUnreadable" xml:space="preserve">
+    <value>読み取れない値を破棄して再入力</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.PlaintextWarning" xml:space="preserve">
+    <value>セキュアストレージ: {0}。平文モードが有効なため、設定ディレクトリをコピーすると機密設定が漏洩する可能性があります。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.Unavailable" xml:space="preserve">
+    <value>セキュアストレージ: {0}。利用できません（{1}）。機密操作は無効です。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.CorruptUnreadable" xml:space="preserve">
+    <value>旧式の暗号化された機密値を復号できません。破棄を確認して再入力するまで、元の設定は保持されます。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.Available" xml:space="preserve">
+    <value>セキュアストレージ: {0}。</value>
+  </data>
+  <data name="Settings.Game.YoStarResolutionGuide.Available" xml:space="preserve">
+    <value>YoStar EN 解像度ガイドを利用できます。</value>
+  </data>
+  <data name="Settings.Game.YoStarResolutionGuide.Open" xml:space="preserve">
+    <value>YoStar EN 解像度ガイドを開く</value>
+  </data>
+  <data name="Settings.Game.OverseasClientHint" xml:space="preserve">
+    <value>海外クライアントを使用していますか？適応ガイドをご覧ください。</value>
+  </data>
+  <data name="Settings.Game.OverseasAdaptationGuide.Open" xml:space="preserve">
+    <value>海外クライアント適応ガイドを開く</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.Once" xml:space="preserve">
+    <value>今回のみ実行</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.SkipOnce" xml:space="preserve">
+    <value>今回のみスキップ</value>
+  </data>
+  <data name="TaskQueue.Guide.Title" xml:space="preserve">
+    <value>設定ガイド</value>
+  </data>
+  <data name="TaskQueue.Guide.Ui.Description" xml:space="preserve">
+    <value>言語、テーマ、背景、表示倍率など、使いやすい画面設定を選択します。</value>
+  </data>
+  <data name="TaskQueue.Guide.Game.Description" xml:space="preserve">
+    <value>クライアント種別とゲームの起動・アカウント切替動作を設定します。</value>
+  </data>
+  <data name="TaskQueue.Guide.Connection.Description" xml:space="preserve">
+    <value>ADB パスまたは接続プリセットを設定し、接続をテストします。</value>
+  </data>
+  <data name="TaskQueue.Guide.Tasks.Description" xml:space="preserve">
+    <value>MAA で実行するタスクを選択し、各タスクの設定を調整します。</value>
+  </data>
+  <data name="TaskQueue.Guide.Performance.Description" xml:space="preserve">
+    <value>端末で利用できるパフォーマンス、スクリーンショット、入力オプションを選択します。</value>
+  </data>
+  <data name="TaskQueue.Guide.Update.Description" xml:space="preserve">
+    <value>更新チャンネル、リソース更新、起動時の確認動作を設定します。</value>
+  </data>
+  <data name="TaskQueue.Guide.User.Description" xml:space="preserve">
+    <value>タスク開始前に、ドキュメント、問題報告、ヘルプへのリンクを確認できます。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Title" xml:space="preserve">
+    <value>セキュアストレージの警告</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Message" xml:space="preserve">
+    <value>システム保護のストレージを利用できません。平文モードでは、認証情報を含む機密設定が暗号化されずに別のローカルファイルへ保存されます。設定ディレクトリをコピーまたは同期すると、これらの機密情報が漏洩する可能性があります。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Cancel" xml:space="preserve">
+    <value>キャンセル</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.UsePlaintext" xml:space="preserve">
+    <value>平文で保存</value>
+  </data>
+  <data name="Copilot.Title" xml:space="preserve">
+    <value>自動戦闘</value>
+  </data>
+  <data name="Toolbox.Title" xml:space="preserve">
+    <value>ツールボックス</value>
+  </data>
+  <data name="Toolbox.OperBox.Title" xml:space="preserve">
+    <value>オペレーター</value>
+  </data>
+  <data name="Toolbox.Depot.Title" xml:space="preserve">
+    <value>倉庫アイテム認識</value>
+  </data>
+  <data name="Main.Close.SaveFailed" xml:space="preserve">
+    <value>{0}の保存に失敗しました。</value>
+  </data>
+  <data name="Common.Configuration" xml:space="preserve">
+    <value>設定</value>
+  </data>
+  <data name="Common.List.PairFormat" xml:space="preserve">
+    <value>{0}と{1}</value>
+  </data>
+  <data name="Common.List.Separator" xml:space="preserve">
+    <value>、</value>
+  </data>
+  <data name="Common.List.FinalSeparator" xml:space="preserve">
+    <value>と</value>
+  </data>
+  <data name="TaskQueue.Guide.OpenSettings" xml:space="preserve">
+    <value>対応する設定を開く</value>
+  </data>
+  <data name="TaskQueue.Guide.ConfigureTasks" xml:space="preserve">
+    <value>タスクを設定</value>
+  </data>
+  <data name="TaskQueue.Guide.Resume" xml:space="preserve">
+    <value>設定ガイドに戻る</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine" xml:space="preserve">
+    <value>{0} の {1} のインポートに失敗しました。{1} 設定を読み取れません。手動で修正してください。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.GlobalConfiguration" xml:space="preserve">
+    <value>グローバル</value>
+  </data>
+  <data name="Settings.Connect.Hint.MacBundledAdbNotFound" xml:space="preserve">
+    <value>内蔵 ADB が見つかりません: {0}</value>
+  </data>
+  <data name="ConnectionFailure.Generic.Message" xml:space="preserve">
+    <value>接続に失敗しました。接続設定を確認し、エミュレーターと ADB の再起動、それでも失敗する場合は PC の再起動を行ってください。</value>
+  </data>
+  <data name="ConnectionFailure.Callback.MessageFormat" xml:space="preserve">
+    <value>接続コールバック: {0}</value>
+  </data>
+  <data name="ConnectionFailure.Generic.Suggestion" xml:space="preserve">
+    <value>接続設定を確認し、エミュレーターと ADB を再起動してください。それでも失敗する場合は PC を再起動してください。</value>
+  </data>
+  <data name="ConnectionFailure.Timeout.Message" xml:space="preserve">
+    <value>エミュレーターへの接続がタイムアウトしました。</value>
+  </data>
+  <data name="ConnectionFailure.Timeout.Suggestion" xml:space="preserve">
+    <value>エミュレーターが起動していること、接続アドレスとポートが正しいこと、ADB が利用可能であることを確認してください。</value>
+  </data>
+  <data name="ConnectionFailure.TouchMode.Message" xml:space="preserve">
+    <value>現在のタッチモードは利用できません。</value>
+  </data>
+  <data name="ConnectionFailure.TouchMode.Suggestion" xml:space="preserve">
+    <value>接続設定で別のタッチモードに切り替えてから再試行してください。</value>
+  </data>
+  <data name="ConnectionFailure.AddressPort.Message" xml:space="preserve">
+    <value>このアドレスまたはポートに接続できませんでした。</value>
+  </data>
+  <data name="ConnectionFailure.AddressPort.Suggestion" xml:space="preserve">
+    <value>エミュレーターが起動していること、接続アドレスとポートが正しいことを確認してください。一般的な ADB ポートは 5555 で、一部のエミュレーターは 5554 などを使用します。</value>
+  </data>
+  <data name="ConnectionFailure.AdbDevice.Message" xml:space="preserve">
+    <value>ADB が利用可能なデバイスに接続されていません。</value>
+  </data>
+  <data name="ConnectionFailure.AdbDevice.Suggestion" xml:space="preserve">
+    <value>adb devices で対象が device 状態であることを確認してください。unauthorized の場合はエミュレーター内で許可し、offline/no devices の場合はエミュレーターまたは ADB を再起動してから再試行してください。</value>
+  </data>
+  <data name="ConnectionFailure.CoreUnavailable.Message" xml:space="preserve">
+    <value>接続コアが準備できていないか、解放されています。</value>
+  </data>
+  <data name="ConnectionFailure.CoreUnavailable.Suggestion" xml:space="preserve">
+    <value>しばらく待ってから再試行してください。繰り返し発生する場合はアプリを再起動してください。</value>
+  </data>
+  <data name="ConnectionFailure.CoreFailure.MessageFormat" xml:space="preserve">
+    <value>接続コアが失敗を返しました: {0}</value>
+  </data>
+  <data name="ConnectionFailure.CoreFailure.Suggestion" xml:space="preserve">
+    <value>エミュレーター、ADB パス、接続設定を確認してください。core コールバックの情報は詳細に保持されています。</value>
+  </data>
+  <data name="ConnectionFailure.AdbTarget.Message" xml:space="preserve">
+    <value>ADB が対象デバイスに接続されていません。</value>
+  </data>
+  <data name="ConnectionFailure.AdbTarget.Suggestion" xml:space="preserve">
+    <value>接続アドレスとポートが正しいことを確認してください。一般的な ADB ポートは 5555 です。エミュレーターが起動し、ADB が有効で、デバイスが同じネットワーク上にあることを確認してください。</value>
+  </data>
+  <data name="ConnectionFailure.AdbStart.Message" xml:space="preserve">
+    <value>ADB の起動に失敗しました。</value>
+  </data>
+  <data name="ConnectionFailure.AdbStart.Suggestion" xml:space="preserve">
+    <value>接続設定の ADB パスが、dmg、zip、フォルダー、インストーラーではなく adb 実行ファイルを指していることを確認してください。</value>
+  </data>
+  <data name="ConnectionFailure.InvalidConfiguration.Message" xml:space="preserve">
+    <value>接続設定が無効です。</value>
+  </data>
+  <data name="ConnectionFailure.InvalidConfiguration.Suggestion" xml:space="preserve">
+    <value>接続アドレスの形式、ポート、接続タイプ、ADB パスを確認してから再試行してください。</value>
+  </data>
+  <data name="ConnectionFailure.ConnectionFailed.Message" xml:space="preserve">
+    <value>エミュレーターへの接続に失敗しました。</value>
+  </data>
+  <data name="ConnectionFailure.ConnectionFailed.Suggestion" xml:space="preserve">
+    <value>「詳細エラー」を開いて core のエラー出力を確認し、エミュレーターと ADB の接続を確認してください。</value>
+  </data>
+  <data name="ConnectionFailure.FixSettings.Suggestion" xml:space="preserve">
+    <value>先に接続設定を修正してから再試行してください。</value>
+  </data>
+  <data name="ConnectionFailure.AdbCommand.Message" xml:space="preserve">
+    <value>ADB コマンドの実行に失敗しました。</value>
+  </data>
+  <data name="ConnectionFailure.AdbCommand.Suggestion" xml:space="preserve">
+    <value>「詳細エラー」を開いて ADB の出力を確認してください。ADB が実行可能であることを確認するか、エミュレーターと ADB を再起動してください。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Status.SwitchBlockedWhileRunning" xml:space="preserve">
+    <value>タスクの実行中または停止中は設定を切り替えられません。タスクが終了してから再試行してください。</value>
+  </data>
+  <data name="Settings.Connect.Hint.MuMuPathNotFound" xml:space="preserve">
+    <value>MuMu Emulator 12 のパスが見つかりません: {0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.MuMuExternalRendererMissing" xml:space="preserve">
+    <value>external_renderer_ipc.dll が選択した MuMu インストールフォルダーに見つかりません: {0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.LdPlayerPathNotFound" xml:space="preserve">
+    <value>LDPlayer のインストールパスが見つかりません: {0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.LdPlayerOpenGlMissing" xml:space="preserve">
+    <value>選択した LDPlayer パスに ldopengl64.dll が見つかりません: {0}</value>
+  </data>
+  <data name="Settings.Connect.Status.MuMuPathAutoDetected" xml:space="preserve">
+    <value>MuMu エミュレーターのパスを自動検出しました: {0}</value>
+  </data>
+  <data name="Settings.Connect.Status.LdPlayerPathAutoDetected" xml:space="preserve">
+    <value>LDPlayer エミュレーターのパスを自動検出しました: {0}</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.Start" xml:space="preserve">
+    <value>定期タスクを実行中です。完了してからタスクを開始してください。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.Start" xml:space="preserve">
+    <value>別のセッション操作を実行中です。停止するか完了を待ってからタスクを開始してください。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.RunOnce" xml:space="preserve">
+    <value>定期タスクを実行中です。完了してからタスクを単発実行してください。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.RunOnce" xml:space="preserve">
+    <value>別のセッション操作を実行中です。停止するか完了を待ってからタスクを単発実行してください。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.AccountSwitch" xml:space="preserve">
+    <value>定期タスクを実行中です。完了してからアカウントを切り替えてください。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.AccountSwitch" xml:space="preserve">
+    <value>別のセッション操作を実行中です。停止するか完了を待ってからアカウントを切り替えてください。</value>
+  </data>
+  <data name="Copilot.Error.SessionActivity.TimerActive" xml:space="preserve">
+    <value>定期タスクを実行中です。完了するまで Copilot を開始できません。</value>
+  </data>
+  <data name="Copilot.Error.SessionActivity.OtherActive" xml:space="preserve">
+    <value>別のセッション操作を実行中です。停止するか完了するまで Copilot を開始できません。</value>
+  </data>
+  <data name="Toolbox.Error.SessionActivity.TimerActive" xml:space="preserve">
+    <value>定期タスクを実行中です。完了するまで Toolbox を開始できません。</value>
+  </data>
+  <data name="Toolbox.Error.SessionActivity.OtherActive" xml:space="preserve">
+    <value>別のセッション操作を実行中です。停止するか完了するまで Toolbox を開始できません。</value>
   </data>
 </root>

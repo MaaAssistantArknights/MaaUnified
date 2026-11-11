@@ -53,15 +53,22 @@ public static class AchievementTextCatalog
     public static IReadOnlyDictionary<string, string> GetAllStrings(string? language)
     {
         var normalizedLanguage = UiLanguageCatalog.Normalize(language);
-        var lookupLanguage = string.Equals(normalizedLanguage, "pallas", StringComparison.OrdinalIgnoreCase)
-            ? "zh-cn"
-            : normalizedLanguage;
+        var isPallas = string.Equals(normalizedLanguage, "pallas", StringComparison.OrdinalIgnoreCase);
+        var lookupLanguage = isPallas ? UiLanguageCatalog.FallbackLanguage : normalizedLanguage;
         var entries = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var candidate in BuildLookupOrder(lookupLanguage).Reverse())
         {
             foreach (var (key, value) in LoadCatalog(candidate))
             {
                 entries[key] = ResolveNestedKeys(key, value, lookupLanguage, new Stack<string>());
+            }
+        }
+
+        if (isPallas)
+        {
+            foreach (var key in entries.Keys.ToArray())
+            {
+                entries[key] = UiLocalizationResourceManager.CreatePseudoLocalizedText(entries[key]);
             }
         }
 

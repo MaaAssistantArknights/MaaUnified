@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Resources;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace MAAUnified.Application.Services.Localization;
@@ -17,7 +18,20 @@ internal readonly record struct UiLocalizationLookupResult(
 public sealed class UiLocalizationResourceManager
 {
     private const string ResourceBaseName = "MAAUnified.Application.Resources.Localization.UiTexts";
+    private const string PallasLanguage = "pallas";
     private static readonly Regex InlineKeyPattern = new(@"\{key=([^}]+)\}", RegexOptions.Compiled);
+    private static readonly IReadOnlyDictionary<char, char> PallasCharacterMap =
+        new Dictionary<char, char>
+        {
+            ['a'] = 'å', ['b'] = 'ƀ', ['c'] = 'ç', ['d'] = 'ď', ['e'] = 'é', ['f'] = 'ƒ', ['g'] = 'ĝ',
+            ['h'] = 'ħ', ['i'] = 'î', ['j'] = 'ĵ', ['k'] = 'ķ', ['l'] = 'ļ', ['m'] = 'ɱ', ['n'] = 'ñ',
+            ['o'] = 'ö', ['p'] = 'þ', ['q'] = 'q', ['r'] = 'ř', ['s'] = 'ş', ['t'] = 'ţ', ['u'] = 'ü',
+            ['v'] = 'ṽ', ['w'] = 'ŵ', ['x'] = 'ẋ', ['y'] = 'ý', ['z'] = 'ž',
+            ['A'] = 'Å', ['B'] = 'Ɓ', ['C'] = 'Ç', ['D'] = 'Đ', ['E'] = 'É', ['F'] = 'Ƒ', ['G'] = 'Ĝ',
+            ['H'] = 'Ħ', ['I'] = 'Î', ['J'] = 'Ĵ', ['K'] = 'Ķ', ['L'] = 'Ł', ['M'] = 'Ḿ', ['N'] = 'Ñ',
+            ['O'] = 'Ö', ['P'] = 'Þ', ['Q'] = 'Q', ['R'] = 'Ř', ['S'] = 'Ş', ['T'] = 'Ţ', ['U'] = 'Û',
+            ['V'] = 'Ṽ', ['W'] = 'Ŵ', ['X'] = 'X', ['Y'] = 'Ý', ['Z'] = 'Ž',
+        };
     private static readonly IReadOnlyDictionary<string, CultureInfo> CultureMap =
         new Dictionary<string, CultureInfo>(StringComparer.OrdinalIgnoreCase)
         {
@@ -63,8 +77,17 @@ public sealed class UiLocalizationResourceManager
                 continue;
             }
 
+            var value = ResolveInlineKeys(rawValue, requestedLanguage, resolvingKeys);
+            if (string.Equals(requestedLanguage, PallasLanguage, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(candidate, PallasLanguage, StringComparison.OrdinalIgnoreCase))
+            {
+                // Pallas is a pseudo-locale. Its sparse resource file only carries intentional overrides;
+                // all other UI strings are generated at lookup time instead of surfacing English fallback.
+                return new UiLocalizationLookupResult(CreatePseudoLocalizedText(value), requestedLanguage, "none");
+            }
+
             return new UiLocalizationLookupResult(
-                ResolveInlineKeys(rawValue, requestedLanguage, resolvingKeys),
+                value,
                 requestedLanguage,
                 string.Equals(candidate, requestedLanguage, StringComparison.OrdinalIgnoreCase) ? "none" : candidate);
         }
@@ -147,5 +170,34 @@ public sealed class UiLocalizationResourceManager
         }
 
         chain.Add(UiLanguageCatalog.Normalize(language));
+    }
+
+    internal static string CreatePseudoLocalizedText(string value)
+    {
+        var builder = new StringBuilder(value.Length + 8);
+        var insideFormatToken = false;
+
+        foreach (var character in value)
+        {
+            if (character == '{')
+            {
+                insideFormatToken = true;
+                builder.Append(character);
+                continue;
+            }
+
+            if (character == '}')
+            {
+                insideFormatToken = false;
+                builder.Append(character);
+                continue;
+            }
+
+            builder.Append(!insideFormatToken && PallasCharacterMap.TryGetValue(character, out var replacement)
+                ? replacement
+                : character);
+        }
+
+        return $"[!! {builder} !!]";
     }
 }

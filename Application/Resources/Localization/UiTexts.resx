@@ -2414,6 +2414,24 @@
   <data name="Settings.About.OpenOfficialWebsite" xml:space="preserve">
     <value>打开官网</value>
   </data>
+  <data name="Settings.About.Bilibili" xml:space="preserve">
+    <value>bilibili</value>
+  </data>
+  <data name="Settings.About.Github" xml:space="preserve">
+    <value>源码: GitHub</value>
+  </data>
+  <data name="Settings.About.QqGroup" xml:space="preserve">
+    <value>QQ 群</value>
+  </data>
+  <data name="Settings.About.QqChannel" xml:space="preserve">
+    <value>QQ 频道</value>
+  </data>
+  <data name="Settings.About.Telegram" xml:space="preserve">
+    <value>Telegram</value>
+  </data>
+  <data name="Settings.About.Discord" xml:space="preserve">
+    <value>Discord</value>
+  </data>
   <data name="Settings.About.Status.AnnouncementDialogCancelled" xml:space="preserve">
     <value>公告弹窗已取消。</value>
   </data>
@@ -2941,6 +2959,9 @@
   </data>
   <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.SourceProfileMissing" xml:space="preserve">
     <value>当前配置不存在，请刷新后重试。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Title" xml:space="preserve">
+    <value>配置管理</value>
   </data>
   <data name="Settings.ConfigurationManager.SaveCurrent" xml:space="preserve">
     <value>保存当前配置</value>
@@ -3524,6 +3545,12 @@
   <data name="Settings.IssueReport.Status.ImageCacheClearFailed" xml:space="preserve">
     <value>清理图像缓存失败。</value>
   </data>
+  <data name="Settings.IssueReport.ClearImageCacheTip" xml:space="preserve">
+    <value>正常情况下无需手动清理。
+DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图片。
+手动清理会删除所有图片，可能导致问题排查时缺少截图依据。
+缓存文件（如地图、干员头像等）清理后需要重新生成，可能影响使用体验。</value>
+  </data>
   <data name="Settings.IssueReport.Status.ImageCacheClearFailedWithReason" xml:space="preserve">
     <value>清理图像缓存失败：{0}</value>
   </data>
@@ -3877,6 +3904,27 @@
   </data>
   <data name="Settings.Start.Dialog.SelectEmulatorPathTitle" xml:space="preserve">
     <value>选择模拟器路径</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathNoCandidates" xml:space="preserve">
+    <value>未检测到路径</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathCandidateCount" xml:space="preserve">
+    <value>已检测到 {0} 个候选路径</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathDetectedPaths" xml:space="preserve">
+    <value>已检测到的路径</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathIntro" xml:space="preserve">
+    <value>选择已检测到的模拟器可执行文件，或在下方粘贴自定义路径。</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathEmptyBody" xml:space="preserve">
+    <value>如果自动检测未找到模拟器，请在下方粘贴模拟器可执行文件路径。</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathCustomPath" xml:space="preserve">
+    <value>自定义路径</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathWatermark" xml:space="preserve">
+    <value>/path/to/emulator</value>
   </data>
   <data name="Settings.Start.EmulatorExtraArgs" xml:space="preserve">
     <value>模拟器额外参数</value>
@@ -4811,6 +4859,36 @@
   <data name="TaskQueue.Root.Waiting" xml:space="preserve">
     <value>等待中...</value>
   </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
+    <value>详细报错</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Message" xml:space="preserve">
+    <value>{0} 正在运行。请先停止当前任务，再启动任务队列。</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Message.Unknown" xml:space="preserve">
+    <value>另一个功能正在运行。请先停止当前任务，再启动任务队列。</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.Copilot" xml:space="preserve">
+    <value>自动战斗</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.TaskQueue" xml:space="preserve">
+    <value>一键长草</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.Toolbox" xml:space="preserve">
+    <value>小工具</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.WebApi" xml:space="preserve">
+    <value>Web API</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
+    <value>停止当前任务</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Title" xml:space="preserve">
+    <value>任务启动被拦截</value>
+  </data>
   <data name="TaskQueue.SelectionHint" xml:space="preserve">
     <value>从左侧任务列表选择一个任务以编辑其设置。</value>
   </data>
@@ -5729,5 +5807,272 @@
   </data>
   <data name="Settings.VersionUpdate.NightlyWarning.Cancel" xml:space="preserve">
     <value>关闭</value>
+  </data>
+  <data name="Copilot.Status.Starting" xml:space="preserve">
+    <value>启动中...</value>
+  </data>
+  <data name="Copilot.Status.ReorderSuccess" xml:space="preserve">
+    <value>已更新作业顺序。</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemSuccess" xml:space="preserve">
+    <value>已更新作业。</value>
+  </data>
+  <data name="Copilot.Error.SortStateOutOfSync" xml:space="preserve">
+    <value>作业列表顺序已变化，请重试。</value>
+  </data>
+  <data name="Copilot.Error.TaskListPersistFail" xml:space="preserve">
+    <value>Copilot 列表持久化失败。</value>
+  </data>
+  <data name="Copilot.Status.LoadSetPartialFailed" xml:space="preserve">
+    <value>以下作业加载失败：{0}</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Unavailable" xml:space="preserve">
+    <value>敏感设置存储不可用。恢复存储前，敏感设置和相关操作已禁用。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Retry" xml:space="preserve">
+    <value>重试安全存储</value>
+  </data>
+  <data name="Settings.SensitiveStorage.DiscardUnreadable" xml:space="preserve">
+    <value>丢弃不可读值并重新输入</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.PlaintextWarning" xml:space="preserve">
+    <value>敏感设置存储：{0}。当前仍使用明文模式；复制配置目录可能泄露敏感设置。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.Unavailable" xml:space="preserve">
+    <value>敏感设置存储：{0}。不可用（{1}）；敏感操作已禁用。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.CorruptUnreadable" xml:space="preserve">
+    <value>旧版加密敏感值无法解密。在确认丢弃并重新输入前，原配置会被保留。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.Available" xml:space="preserve">
+    <value>敏感设置存储：{0}。</value>
+  </data>
+  <data name="Settings.Game.YoStarResolutionGuide.Available" xml:space="preserve">
+    <value>YoStar EN 分辨率指南已可用。</value>
+  </data>
+  <data name="Settings.Game.YoStarResolutionGuide.Open" xml:space="preserve">
+    <value>打开 YoStar EN 分辨率指南</value>
+  </data>
+  <data name="Settings.Game.OverseasClientHint" xml:space="preserve">
+    <value>使用海外客户端？请查看适配帮助。</value>
+  </data>
+  <data name="Settings.Game.OverseasAdaptationGuide.Open" xml:space="preserve">
+    <value>打开海外客户端适配指南</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.Once" xml:space="preserve">
+    <value>仅执行一次</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.SkipOnce" xml:space="preserve">
+    <value>仅跳过本次</value>
+  </data>
+  <data name="TaskQueue.Guide.Title" xml:space="preserve">
+    <value>设置指引</value>
+  </data>
+  <data name="TaskQueue.Guide.Ui.Description" xml:space="preserve">
+    <value>选择适合你的界面语言、主题、背景和缩放设置。</value>
+  </data>
+  <data name="TaskQueue.Guide.Game.Description" xml:space="preserve">
+    <value>设置客户端类型，以及游戏启动和账号切换行为。</value>
+  </data>
+  <data name="TaskQueue.Guide.Connection.Description" xml:space="preserve">
+    <value>配置 ADB 路径或连接预设，并测试连接是否可用。</value>
+  </data>
+  <data name="TaskQueue.Guide.Tasks.Description" xml:space="preserve">
+    <value>选择 MAA 需要运行的任务，并调整各任务设置。</value>
+  </data>
+  <data name="TaskQueue.Guide.Performance.Description" xml:space="preserve">
+    <value>选择设备支持的性能、截图和输入选项。</value>
+  </data>
+  <data name="TaskQueue.Guide.Update.Description" xml:space="preserve">
+    <value>设置更新通道、资源更新和启动检查行为。</value>
+  </data>
+  <data name="TaskQueue.Guide.User.Description" xml:space="preserve">
+    <value>开始任务前，可查看文档、问题反馈和帮助链接。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Title" xml:space="preserve">
+    <value>敏感设置存储警告</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Message" xml:space="preserve">
+    <value>系统受保护的存储不可用。明文模式会将敏感设置（包括凭据）以未加密形式保存在独立的本地文件中。复制或同步配置目录可能泄露这些机密。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.UsePlaintext" xml:space="preserve">
+    <value>使用明文存储</value>
+  </data>
+  <data name="Copilot.Title" xml:space="preserve">
+    <value>自动战斗</value>
+  </data>
+  <data name="Toolbox.Title" xml:space="preserve">
+    <value>小工具</value>
+  </data>
+  <data name="Toolbox.OperBox.Title" xml:space="preserve">
+    <value>干员识别</value>
+  </data>
+  <data name="Toolbox.Depot.Title" xml:space="preserve">
+    <value>仓库识别</value>
+  </data>
+  <data name="Main.Close.SaveFailed" xml:space="preserve">
+    <value>{0}保存失败</value>
+  </data>
+  <data name="Common.Configuration" xml:space="preserve">
+    <value>配置</value>
+  </data>
+  <data name="Common.List.PairFormat" xml:space="preserve">
+    <value>{0}和{1}</value>
+  </data>
+  <data name="Common.List.Separator" xml:space="preserve">
+    <value>、</value>
+  </data>
+  <data name="Common.List.FinalSeparator" xml:space="preserve">
+    <value>和</value>
+  </data>
+  <data name="TaskQueue.Guide.OpenSettings" xml:space="preserve">
+    <value>打开对应设置</value>
+  </data>
+  <data name="TaskQueue.Guide.ConfigureTasks" xml:space="preserve">
+    <value>配置任务</value>
+  </data>
+  <data name="TaskQueue.Guide.Resume" xml:space="preserve">
+    <value>返回设置引导</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine" xml:space="preserve">
+    <value>{0} 配置的 {1} 导入失败，无法读取 {1} 配置。请手动修改。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.GlobalConfiguration" xml:space="preserve">
+    <value>全局</value>
+  </data>
+  <data name="Settings.Connect.Hint.MacBundledAdbNotFound" xml:space="preserve">
+    <value>内置 ADB 不存在：{0}</value>
+  </data>
+  <data name="ConnectionFailure.Generic.Message" xml:space="preserve">
+    <value>连接失败。请“检查连接设置” -&gt; “尝试重启模拟器与 ADB” -&gt; “重启电脑”。</value>
+  </data>
+  <data name="ConnectionFailure.Callback.MessageFormat" xml:space="preserve">
+    <value>连接回调：{0}</value>
+  </data>
+  <data name="ConnectionFailure.Generic.Suggestion" xml:space="preserve">
+    <value>请检查连接设置，尝试重启模拟器与 ADB；仍失败时重启电脑。</value>
+  </data>
+  <data name="ConnectionFailure.Timeout.Message" xml:space="preserve">
+    <value>连接模拟器超时。</value>
+  </data>
+  <data name="ConnectionFailure.Timeout.Suggestion" xml:space="preserve">
+    <value>请确认模拟器已启动，连接地址和端口正确，ADB 服务可用。</value>
+  </data>
+  <data name="ConnectionFailure.TouchMode.Message" xml:space="preserve">
+    <value>当前触控模式不可用。</value>
+  </data>
+  <data name="ConnectionFailure.TouchMode.Suggestion" xml:space="preserve">
+    <value>请前往连接设置切换其他触控模式后重试。</value>
+  </data>
+  <data name="ConnectionFailure.AddressPort.Message" xml:space="preserve">
+    <value>无法连接到这个地址或端口。</value>
+  </data>
+  <data name="ConnectionFailure.AddressPort.Suggestion" xml:space="preserve">
+    <value>请确认模拟器已启动，连接地址和端口正确；常见 ADB 端口为 5555，部分模拟器会使用 5554 等端口。</value>
+  </data>
+  <data name="ConnectionFailure.AdbDevice.Message" xml:space="preserve">
+    <value>ADB 未连接到可用设备。</value>
+  </data>
+  <data name="ConnectionFailure.AdbDevice.Suggestion" xml:space="preserve">
+    <value>请在 adb devices 中确认设备为 device 状态；如果显示 unauthorized 请在模拟器内授权，如果显示 offline/no devices 请重启模拟器或 ADB 后重试。</value>
+  </data>
+  <data name="ConnectionFailure.CoreUnavailable.Message" xml:space="preserve">
+    <value>连接核心尚未就绪或已释放。</value>
+  </data>
+  <data name="ConnectionFailure.CoreUnavailable.Suggestion" xml:space="preserve">
+    <value>请稍等后重试；如果持续出现，请重启应用。</value>
+  </data>
+  <data name="ConnectionFailure.CoreFailure.MessageFormat" xml:space="preserve">
+    <value>连接核心返回失败：{0}</value>
+  </data>
+  <data name="ConnectionFailure.CoreFailure.Suggestion" xml:space="preserve">
+    <value>请检查模拟器、ADB 路径和连接配置；详情中保留了 core 回调信息。</value>
+  </data>
+  <data name="ConnectionFailure.AdbTarget.Message" xml:space="preserve">
+    <value>ADB 未连接到目标设备。</value>
+  </data>
+  <data name="ConnectionFailure.AdbTarget.Suggestion" xml:space="preserve">
+    <value>请检查连接地址和端口是否正确，常见 ADB 端口为 5555；确认模拟器已启动、ADB 已开启，并与电脑在同一网络内。</value>
+  </data>
+  <data name="ConnectionFailure.AdbStart.Message" xml:space="preserve">
+    <value>ADB 启动失败。</value>
+  </data>
+  <data name="ConnectionFailure.AdbStart.Suggestion" xml:space="preserve">
+    <value>请检查连接设置中的 ADB 路径是否指向 adb 可执行文件，而不是 dmg、zip、目录或其他安装包。</value>
+  </data>
+  <data name="ConnectionFailure.InvalidConfiguration.Message" xml:space="preserve">
+    <value>连接配置无效。</value>
+  </data>
+  <data name="ConnectionFailure.InvalidConfiguration.Suggestion" xml:space="preserve">
+    <value>请检查连接地址格式、端口、连接类型和 ADB 路径后重试。</value>
+  </data>
+  <data name="ConnectionFailure.ConnectionFailed.Message" xml:space="preserve">
+    <value>连接模拟器失败。</value>
+  </data>
+  <data name="ConnectionFailure.ConnectionFailed.Suggestion" xml:space="preserve">
+    <value>请点击“详细报错”查看核心返回的错误信息，并据此检查模拟器和 ADB 连接。</value>
+  </data>
+  <data name="ConnectionFailure.FixSettings.Suggestion" xml:space="preserve">
+    <value>请先修正连接设置后再重试。</value>
+  </data>
+  <data name="ConnectionFailure.AdbCommand.Message" xml:space="preserve">
+    <value>ADB 命令执行失败。</value>
+  </data>
+  <data name="ConnectionFailure.AdbCommand.Suggestion" xml:space="preserve">
+    <value>请点击“详细报错”查看 ADB 输出；确认 ADB 可执行，或尝试重启模拟器与 ADB。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Status.SwitchBlockedWhileRunning" xml:space="preserve">
+    <value>任务运行或停止期间不能切换配置，请等待任务结束后再试。</value>
+  </data>
+  <data name="Settings.Connect.Hint.MuMuPathNotFound" xml:space="preserve">
+    <value>MuMu 模拟器路径不存在：{0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.MuMuExternalRendererMissing" xml:space="preserve">
+    <value>MuMu 模拟器路径缺少 external_renderer_ipc.dll：{0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.LdPlayerPathNotFound" xml:space="preserve">
+    <value>LDPlayer 模拟器路径不存在：{0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.LdPlayerOpenGlMissing" xml:space="preserve">
+    <value>LDPlayer 模拟器路径缺少 ldopengl64.dll：{0}</value>
+  </data>
+  <data name="Settings.Connect.Status.MuMuPathAutoDetected" xml:space="preserve">
+    <value>已自动检测到 MuMu 模拟器路径：{0}</value>
+  </data>
+  <data name="Settings.Connect.Status.LdPlayerPathAutoDetected" xml:space="preserve">
+    <value>已自动检测到 LDPlayer 模拟器路径：{0}</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.Start" xml:space="preserve">
+    <value>定时任务正在进行，请等待其完成后再启动任务。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.Start" xml:space="preserve">
+    <value>另一项会话操作正在进行，请先停止或等待其完成后再启动任务。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.RunOnce" xml:space="preserve">
+    <value>定时任务正在进行，请等待其完成后再单次运行任务。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.RunOnce" xml:space="preserve">
+    <value>另一项会话操作正在进行，请先停止或等待其完成后再单次运行任务。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.AccountSwitch" xml:space="preserve">
+    <value>定时任务正在进行，请等待其完成后再切换账号。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.AccountSwitch" xml:space="preserve">
+    <value>另一项会话操作正在进行，请先停止或等待其完成后再切换账号。</value>
+  </data>
+  <data name="Copilot.Error.SessionActivity.TimerActive" xml:space="preserve">
+    <value>定时任务正在进行，Copilot 暂时无法启动；请等待定时任务完成。</value>
+  </data>
+  <data name="Copilot.Error.SessionActivity.OtherActive" xml:space="preserve">
+    <value>另一项会话操作正在进行，Copilot 暂时无法启动；请先停止或等待该操作。</value>
+  </data>
+  <data name="Toolbox.Error.SessionActivity.TimerActive" xml:space="preserve">
+    <value>定时任务正在进行，Toolbox 暂时无法启动；请等待定时任务完成。</value>
+  </data>
+  <data name="Toolbox.Error.SessionActivity.OtherActive" xml:space="preserve">
+    <value>另一项会话操作正在进行，Toolbox 暂时无法启动；请先停止或等待该操作。</value>
   </data>
 </root>

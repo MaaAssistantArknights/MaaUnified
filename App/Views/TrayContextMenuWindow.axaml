@@ -14,7 +14,8 @@
   <StackPanel Orientation="Horizontal">
     <controls:AppPopupMenuPresenter x:Name="MenuPresenter"
                                     ItemInvoked="OnMenuItemInvoked"
-                                    SubmenuInvoked="OnSubmenuInvoked" />
+                                    SubmenuInvoked="OnSubmenuInvoked"
+                                    DismissRequested="OnMenuDismissRequested" />
     <controls:AppPopupMenuPresenter x:Name="SubmenuPresenter"
                                     Margin="4,0,0,0"
                                     IsVisible="False"

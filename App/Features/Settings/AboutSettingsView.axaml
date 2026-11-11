@@ -62,10 +62,10 @@
                   Content="{Binding RootTexts[Settings.Action.OpenOfficial]}"
                   Click="OnOpenOfficialWebsiteClick" />
           <Button Classes="app-button app-chip about-settings-link-chip"
-                  Content="bilibili"
+                  Content="{Binding RootTexts[Settings.About.Bilibili]}"
                   Click="OnOpenBilibiliClick" />
           <Button Classes="app-button app-chip about-settings-link-chip"
-                  Content="GitHub"
+                  Content="{Binding RootTexts[Settings.About.Github]}"
                   Click="OnOpenGithubClick" />
           <Button Classes="app-button app-chip about-settings-link-chip"
                   Content="{Binding RootTexts[Settings.Action.OpenCommunity]}"
@@ -74,16 +74,16 @@
                   Content="{Binding RootTexts[Settings.Action.OpenDownload]}"
                   Click="OnOpenDownloadClick" />
           <Button Classes="app-button app-chip about-settings-link-chip"
-                  Content="QQ Group"
+                  Content="{Binding RootTexts[Settings.About.QqGroup]}"
                   Click="OnOpenQqGroupClick" />
           <Button Classes="app-button app-chip about-settings-link-chip"
-                  Content="QQ Channel"
+                  Content="{Binding RootTexts[Settings.About.QqChannel]}"
                   Click="OnOpenQqChannelClick" />
           <Button Classes="app-button app-chip about-settings-link-chip"
-                  Content="Telegram"
+                  Content="{Binding RootTexts[Settings.About.Telegram]}"
                   Click="OnOpenTelegramClick" />
           <Button Classes="app-button app-chip about-settings-link-chip"
-                  Content="Discord"
+                  Content="{Binding RootTexts[Settings.About.Discord]}"
                   Click="OnOpenDiscordClick" />
         </WrapPanel>
       </StackPanel>

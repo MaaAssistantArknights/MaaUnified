@@ -83,6 +83,13 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     // WPF parity: TimerSettingsUserControlModel defaults slot i to hour (i - 1) * 3.
     private static int GetDefaultTimerHour(int slotIndex) => (slotIndex - 1) * 3;
     private const int DefaultTimerMinute = 0;
+    private const string IssueReportHelpUrl = "https://maa.plus/docs/";
+    private const string IssueReportIssueEntryUrl = "https://github.com/MaaAssistantArknights/MaaAssistantArknights/issues/new/choose";
+    private const string DefaultIssueReportClearImageCacheTip =
+        "正常情况下无需手动清理。\n" +
+        "DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图片。\n" +
+        "手动清理会删除所有图片，可能导致问题排查时缺少截图依据。\n" +
+        "缓存文件（如地图、干员头像等）清理后需要重新生成，可能影响使用体验。";
     private const string AboutOfficialWebsiteUrl = "https://maa.plus/";
     private const string AboutCommunityUrl = "https://github.com/MaaAssistantArknights/MaaAssistantArknights/discussions";
     private const string AboutDownloadUrl = "https://github.com/MaaAssistantArknights/MaaAssistantArknights/releases";
@@ -515,6 +522,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             : DefaultAboutAnnouncementTimeout;
         _uiLanguageCoordinator.LanguageChanged += OnUnifiedLanguageChanged;
         runtime.ConfigurationService.SensitiveStorageStateChanged += HandleSensitiveStorageStateChanged;
+        runtime.SessionService.SessionStateChanged += OnSessionStateChanged;
         _versionUpdateSchedulerTimer.Tick += OnVersionUpdateSchedulerTick;
         RootTexts = new RootLocalizationTextMap("Root.Localization.Settings");
         RootTexts.FallbackReported += info => _localizationFallbackReporter?.Invoke(info);
@@ -550,7 +558,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         SelectedSection = Sections[0];
         PropertyChanged += OnSettingsPropertyChanged;
         ConnectionGameSharedState.PropertyChanged += OnConnectionGameSharedStateChanged;
-        Runtime.SessionService.SessionStateChanged += OnSessionStateChangedForEditGating;
+    }
+
+    private void OnSessionStateChanged(SessionState state)
+    {
+        NotifySessionIdleChanged();
     }
 
     private void HandleSensitiveStorageStateChanged()
@@ -594,10 +606,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
         _disposed = true;
         Runtime.ConfigurationService.SensitiveStorageStateChanged -= HandleSensitiveStorageStateChanged;
-        Runtime.SessionService.SessionStateChanged -= OnSessionStateChangedForEditGating;
+        Runtime.SessionService.SessionStateChanged -= OnSessionStateChanged;
+        ConnectionGameSharedState.PropertyChanged -= OnConnectionGameSharedStateChanged;
     }
 
     public RootLocalizationTextMap RootTexts { get; }
+
+    public bool IsSessionIdle => Runtime.SessionService.CurrentState is not (SessionState.Connecting or SessionState.Running or SessionState.Stopping)
+        && !ConnectionGameSharedState.IsSessionOperationActive;
 
     public event EventHandler<GuiSettingsAppliedEventArgs>? GuiSettingsApplied;
     public event EventHandler<GuiSettingsPreviewChangedEventArgs>? GuiSettingsPreviewChanged;
@@ -1270,12 +1286,30 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             return Runtime.ConfigurationService.SensitiveStorageState switch
             {
                 SensitiveStorageState.PlaintextWarning =>
-                    $"Sensitive storage: {metadata.Backend}. Plaintext mode remains active; copying the configuration directory can expose sensitive settings.",
+                    string.Format(
+                        CultureInfo.CurrentCulture,
+                        RootTexts.GetOrDefault(
+                            "Settings.SensitiveStorage.Status.PlaintextWarning",
+                            "Sensitive storage: {0}. Plaintext mode remains active; copying the configuration directory can expose sensitive settings."),
+                        metadata.Backend),
                 SensitiveStorageState.Unavailable or SensitiveStorageState.Corrupt =>
                     CanDiscardUnreadableSensitiveValues
-                        ? "A legacy encrypted sensitive value cannot be decrypted. The original config is preserved until you confirm discarding it and re-enter the value."
-                        : $"Sensitive storage: {metadata.Backend}. Unavailable ({Runtime.ConfigurationService.SensitiveStorageErrorCode}); sensitive operations are disabled.",
-                _ => $"Sensitive storage: {metadata.Backend}.",
+                        ? RootTexts.GetOrDefault(
+                            "Settings.SensitiveStorage.Status.CorruptUnreadable",
+                            "A legacy encrypted sensitive value cannot be decrypted. The original config is preserved until you confirm discarding it and re-enter the value.")
+                        : string.Format(
+                            CultureInfo.CurrentCulture,
+                            RootTexts.GetOrDefault(
+                                "Settings.SensitiveStorage.Status.Unavailable",
+                                "Sensitive storage: {0}. Unavailable ({1}); sensitive operations are disabled."),
+                            metadata.Backend,
+                            Runtime.ConfigurationService.SensitiveStorageErrorCode),
+                _ => string.Format(
+                    CultureInfo.CurrentCulture,
+                    RootTexts.GetOrDefault(
+                        "Settings.SensitiveStorage.Status.Available",
+                        "Sensitive storage: {0}."),
+                    metadata.Backend),
             };
         }
     }
@@ -2603,7 +2637,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
     public string IssueReportClearImageCacheTip => LocalizeSettingsText(
         "Settings.IssueReport.ClearImageCacheTip",
-        "通常无需手动清理图片缓存，仅建议排障时使用。");
+        DefaultIssueReportClearImageCacheTip);
 
     public bool IsVersionUpdateMirrorChyanSource =>
         string.Equals(VersionUpdateResourceSource, "MirrorChyan", StringComparison.OrdinalIgnoreCase);
@@ -3120,20 +3154,6 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
     // WPF parity: the extra emulator arguments are editable only when an emulator path is set.
     public bool CanEditEmulatorAddCommand => EmulatorPath.Length > 0;
-
-    // WPF parity: client type and timer profile selection are editable only while idle.
-    public bool IsSessionIdle => Runtime.SessionService.CurrentState == SessionState.Idle;
-
-    private void OnSessionStateChangedForEditGating(SessionState state)
-    {
-        if (Dispatcher.UIThread.CheckAccess() || Avalonia.Application.Current is null)
-        {
-            OnPropertyChanged(nameof(IsSessionIdle));
-            return;
-        }
-
-        Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(IsSessionIdle)));
-    }
 
     public string EmulatorPath
     {
@@ -4139,6 +4159,12 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     {
         ClearConfigurationManagerStatus();
         var profileName = (ConfigurationManagerNewProfileName ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(profileName))
+        {
+            profileName = CreateDefaultConfigurationProfileName(DateTime.Now);
+            ConfigurationManagerNewProfileName = profileName;
+        }
+
         var copyFrom = string.IsNullOrWhiteSpace(ConfigurationManagerSelectedProfile)
             ? null
             : ConfigurationManagerSelectedProfile;
@@ -4276,6 +4302,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         try
         {
             ClearConfigurationManagerStatus();
+            if (RejectConfigurationProfileSwitchDuringActiveSession())
+            {
+                return;
+            }
+
             var target = ConfigurationManagerSelectedProfile;
             var current = Runtime.ConfigurationService.CurrentConfig.CurrentProfile;
             if (string.IsNullOrWhiteSpace(target)
@@ -4299,6 +4330,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 return;
             }
 
+            if (RejectConfigurationProfileSwitchDuringActiveSession())
+            {
+                return;
+            }
+
             if (BeforeConfigurationProfileSwitchAsync is not null)
             {
                 var flushResult = await BeforeConfigurationProfileSwitchAsync(cancellationToken);
@@ -4314,6 +4350,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                         updateStatus: false);
                     return;
                 }
+            }
+
+            if (RejectConfigurationProfileSwitchDuringActiveSession())
+            {
+                return;
             }
 
             var result = await Runtime.ConfigurationProfileFeatureService.SwitchProfileAsync(target, cancellationToken);
@@ -4355,6 +4396,40 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         {
             _configurationProfileSwitchSemaphore.Release();
         }
+    }
+
+    internal static string CreateDefaultConfigurationProfileName(DateTime now)
+        => now.ToString("yy/MM/dd HH:mm:ss", CultureInfo.CurrentCulture);
+
+    private bool RejectConfigurationProfileSwitchDuringActiveSession()
+    {
+        if (IsSessionIdle)
+        {
+            return false;
+        }
+
+        var message = LocalizeSettingsText(
+            "Settings.ConfigurationManager.Status.SwitchBlockedWhileRunning",
+            "任务运行或停止期间不能切换配置，请等待任务结束后再试。");
+        ConfigurationManagerErrorMessage = message;
+        ConfigurationManagerStatusMessage = LocalizeSettingsText(
+            "Settings.ConfigurationManager.Status.SwitchFailed",
+            "配置切换失败。");
+        StatusMessage = message;
+        LastErrorMessage = message;
+
+        var previousSuppressSelectionHandling = _suppressConfigurationProfileSelectionHandling;
+        _suppressConfigurationProfileSelectionHandling = true;
+        try
+        {
+            ConfigurationManagerSelectedProfile = Runtime.ConfigurationService.CurrentConfig.CurrentProfile;
+        }
+        finally
+        {
+            _suppressConfigurationProfileSelectionHandling = previousSuppressSelectionHandling;
+        }
+
+        return true;
     }
 
     public async Task SaveCurrentConfigurationAsync(CancellationToken cancellationToken = default)
@@ -6288,6 +6363,14 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             return;
         }
 
+        if (string.Equals(
+                e.PropertyName,
+                nameof(ConnectionGameSharedStateViewModel.IsSessionOperationActive),
+                StringComparison.Ordinal))
+        {
+            NotifySessionIdleChanged();
+        }
+
         if (ConnectionGameProfileSync.ShouldSyncProperty(e.PropertyName))
         {
             MarkConnectionGameDirty();
@@ -6305,6 +6388,28 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
             _ = RefreshVersionUpdateResourceInfoAsync();
         }
+    }
+
+    private void NotifySessionIdleChanged()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (Dispatcher.UIThread.CheckAccess() || Avalonia.Application.Current is null)
+        {
+            OnPropertyChanged(nameof(IsSessionIdle));
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_disposed)
+            {
+                OnPropertyChanged(nameof(IsSessionIdle));
+            }
+        });
     }
 
     private void OnUnifiedLanguageChanged(object? sender, UiLanguageChangedEventArgs e)

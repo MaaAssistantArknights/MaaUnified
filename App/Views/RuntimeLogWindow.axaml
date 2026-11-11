@@ -12,9 +12,9 @@
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaChromeHints="NoChrome"
         WindowStartupLocation="CenterOwner"
-        Title="Runtime Logs">
+        Title="{Binding RootTexts[Main.Footer.RootLogs]}">
   <controls:AppWindowFrame x:Name="DialogShell"
-                           Title="Runtime Logs"
+                           Title="{Binding RootTexts[Main.Footer.RootLogs]}"
                            Mode="ResizableDialog"
                            CapWindowHeightToOwner="True"
                            CloseRequested="OnShellCloseRequested">
@@ -54,7 +54,7 @@
     <controls:AppWindowFrame.ActionsContent>
       <Button x:Name="CloseActionButton"
               Classes="app-button app-primary"
-              Content="Close"
+              Content="{Binding RootTexts[Settings.Action.Close]}"
               Click="OnCloseClick" />
     </controls:AppWindowFrame.ActionsContent>
   </controls:AppWindowFrame>

@@ -61,7 +61,7 @@ public sealed class RemoteControlCenterPageViewModel : PageViewModelBase, IDispo
         ? string.Empty
         : Texts.GetOrDefault(
             "Settings.SensitiveStorage.Unavailable",
-            "Sensitive storage is unavailable. Remote control settings and operations are disabled until storage is restored.");
+            "Sensitive storage is unavailable. Sensitive settings and operations are disabled until storage is restored.");
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {

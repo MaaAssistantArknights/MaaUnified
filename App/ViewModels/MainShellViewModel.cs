@@ -169,7 +169,9 @@ public sealed class MainShellViewModel : ObservableObject
             _dialogService,
             NavigateToSettingsSection,
             EnsureCoreReadyForExecutionAsync,
-            StopRunOwnerFromDialogAsync);
+            StopRunOwnerFromDialogAsync,
+            gameDataReportService: null,
+            stopActiveSessionOperationAsync: StopActiveSessionOperationFromTaskQueueAsync);
         Program.RecordStartupStage("FrameworkInit.ViewModel.MainShell.TaskQueue.End", "TaskQueuePageViewModel created.");
         Program.RecordStartupStage("FrameworkInit.ViewModel.MainShell.Pages.Deferred", "Secondary page view models deferred for lazy creation.");
         var (taskQueuePendingTitle, taskQueuePendingMessage) = GetRootPagePendingText(RootPageStatusKind.TaskQueue);
@@ -1414,9 +1416,80 @@ public sealed class MainShellViewModel : ObservableObject
             _runtime,
             _dialogService,
             StopRunOwnerFromDialogAsync,
-            EnsureConnectedForSecondaryRunAsync);
+            EnsureConnectedForSecondaryRunAsync,
+            connectionState: _connectionGameSharedState);
         page.SetLanguage(CurrentShellLanguage);
         return page;
+    }
+
+    private static readonly TimeSpan ForcedScheduledStartActivityWaitTimeout = TimeSpan.FromSeconds(30);
+
+    private async Task<IDisposable?> AcquireExclusiveSessionOperationAsync(
+        string operationName,
+        CancellationToken cancellationToken)
+    {
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        waitCts.CancelAfter(ForcedScheduledStartActivityWaitTimeout);
+        try
+        {
+            return await _connectionGameSharedState.AcquireExclusiveSessionOperationAsync(
+                operationName,
+                waitCts.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
+    private async Task StopActiveSessionOperationFromTaskQueueAsync(CancellationToken cancellationToken)
+    {
+        var canceledLifecycle = _runtime.ConnectFeatureService.TryCancelActiveLifecycleOperation(
+            "TaskQueue central Stop");
+        if (!canceledLifecycle)
+        {
+            var currentOwner = _runtime.SessionService.CurrentRunOwner;
+            if (!string.IsNullOrWhiteSpace(currentOwner))
+            {
+                await StopRunOwnerFromDialogAsync(currentOwner, cancellationToken);
+                return;
+            }
+        }
+
+        if (canceledLifecycle || _connectionGameSharedState.IsSessionOperationActive)
+        {
+            using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            waitCts.CancelAfter(TimeSpan.FromSeconds(5));
+            try
+            {
+                await _connectionGameSharedState.WaitForSessionOperationsIdleAsync(waitCts.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                _runtime.LogService.Warn(
+                    "TaskQueue central Stop timed out waiting for the active session operation to settle.");
+            }
+        }
+
+        var pendingOwner = _runtime.SessionService.CurrentRunOwner;
+        if (!string.IsNullOrWhiteSpace(pendingOwner))
+        {
+            await StopRunOwnerFromDialogAsync(pendingOwner, cancellationToken);
+            return;
+        }
+
+        CurrentSessionState = _runtime.SessionService.CurrentState;
+        if (CurrentSessionState == SessionState.Running)
+        {
+            await TaskQueuePage.StopAsync(cancellationToken, userInitiated: false);
+        }
+        else if (CurrentSessionState is SessionState.Connecting or SessionState.Connected)
+        {
+            await _runtime.ConnectFeatureService.StopAsync(cancellationToken);
+        }
+
+        CurrentSessionState = _runtime.SessionService.CurrentState;
+        await SyncTrayMenuStateAsync(cancellationToken);
     }
 
     private async Task<UiOperationResult> EnsureConnectedForSecondaryRunAsync(CancellationToken cancellationToken)
@@ -2996,8 +3069,8 @@ public sealed class MainShellViewModel : ObservableObject
     private static DateTime? GetUiBuildDateTime()
     {
         return typeof(MainShellViewModel).Assembly
-            .GetCustomAttribute<BuildDateTimeAttribute>()
-            ?.BuildDateTime;
+            .GetCustomAttribute<MAAUnified.App.Properties.BuildDateTimeAttribute>()
+            ?.BuildTime.UtcDateTime;
     }
 
     private string ReadTitleSetting(string key, string fallback, bool globalOnly)
@@ -3597,7 +3670,21 @@ public sealed class MainShellViewModel : ObservableObject
             if (force)
             {
                 await AppendCloseDownForForceScheduledRestartAsync(slot, cancellationToken);
+                using var forcedStartLease = await AcquireExclusiveSessionOperationAsync(
+                    "Timer.ForceScheduledStart",
+                    cancellationToken);
+                if (forcedStartLease is null)
+                {
+                    await RecordTimerScheduleErrorAsync(
+                        $"slot={slot.Index}; timed out waiting for active session operation before forced scheduled start.",
+                        cancellationToken: cancellationToken);
+                    return;
+                }
             }
+
+            var timerStartActivityLease = _connectionGameSharedState.TryBeginExclusiveSessionOperation(
+                "Timer.ScheduledStart");
+            using var timerStartLease = timerStartActivityLease;
 
             // WPF parity (TaskQueueViewModel.HandleScheduledStart): a non-forced scheduled start
             // goes straight to LinkStart without switching or validating the configuration; the

@@ -12,6 +12,10 @@ public partial class EmulatorPathSelectionDialogView : Window, IDialogChromeAwar
 {
     private readonly ObservableCollection<string> _paths = [];
     private bool _suppressPathSynchronization;
+    private string _noCandidatesText = "No detected paths";
+    private string _candidateCountFormat = "{0} candidate path(s)";
+    private string _selectionInstruction = "Pick a detected emulator executable or paste a custom path below.";
+    private string _emptyStateBody = "Paste the emulator executable path below if auto-detection did not find one.";
 
     public EmulatorPathSelectionDialogView()
     {
@@ -101,6 +105,32 @@ public partial class EmulatorPathSelectionDialogView : Window, IDialogChromeAwar
         DialogShell.Title = chrome.GetNamedTextOrDefault(DialogTextCatalog.ChromeKeys.SectionTitle, chrome.Title);
         ConfirmButton.Content = chrome.ConfirmText ?? ConfirmButton.Content;
         CancelButton.Content = chrome.CancelText ?? CancelButton.Content;
+        _noCandidatesText = chrome.GetNamedTextOrDefault(
+            DialogTextCatalog.ChromeKeys.SelectionSummary,
+            _noCandidatesText);
+        _candidateCountFormat = chrome.GetNamedTextOrDefault(
+            DialogTextCatalog.ChromeKeys.CandidateCount,
+            _candidateCountFormat);
+        _selectionInstruction = chrome.GetNamedTextOrDefault(
+            DialogTextCatalog.ChromeKeys.SelectionInstruction,
+            _selectionInstruction);
+        _emptyStateBody = chrome.GetNamedTextOrDefault(
+            DialogTextCatalog.ChromeKeys.EmptyStateBody,
+            _emptyStateBody);
+        DetectedPathsTitleText.Text = chrome.GetNamedTextOrDefault(
+            DialogTextCatalog.ChromeKeys.SelectionListTitle,
+            "Detected paths");
+        EmptyStateTitleText.Text = chrome.GetNamedTextOrDefault(
+            DialogTextCatalog.ChromeKeys.EmptyStateTitle,
+            _noCandidatesText);
+        EmptyStateBodyText.Text = _emptyStateBody;
+        CustomPathTitleText.Text = chrome.GetNamedTextOrDefault(
+            DialogTextCatalog.ChromeKeys.CustomPathTitle,
+            "Custom path");
+        PathInput.Watermark = chrome.GetNamedTextOrDefault(
+            DialogTextCatalog.ChromeKeys.CustomPathWatermark,
+            "/path/to/emulator");
+        UpdatePathState();
     }
 
     private void OnPathInputTextChanged(object? sender, TextChangedEventArgs e)
@@ -168,19 +198,50 @@ public partial class EmulatorPathSelectionDialogView : Window, IDialogChromeAwar
 
     private void UpdatePathState()
     {
-        var currentPath = (PathInput.Text ?? string.Empty).Trim();
-        var hasCandidates = _paths.Count > 0;
+        var state = BuildViewState(
+            _paths.Count,
+            PathInput.Text,
+            _noCandidatesText,
+            _candidateCountFormat,
+            _selectionInstruction,
+            _emptyStateBody);
 
-        ConfirmButton.IsEnabled = currentPath.Length > 0;
-        PathList.IsVisible = hasCandidates;
-        EmptyStatePanel.IsVisible = !hasCandidates;
-        SelectionSummaryText.Text = hasCandidates
-            ? $"{_paths.Count} candidate path{(_paths.Count == 1 ? string.Empty : "s")}"
-            : "No detected paths";
-        DialogIntroText.Text = currentPath.Length > 0
-            ? currentPath
-            : (hasCandidates
-                ? "Pick a detected emulator executable or paste a custom path below."
-                : "Paste the emulator executable path below if auto-detection did not find one.");
+        ConfirmButton.IsEnabled = state.IsConfirmEnabled;
+        PathList.IsVisible = state.HasCandidates;
+        EmptyStatePanel.IsVisible = !state.HasCandidates;
+        SelectionSummaryText.Text = state.Summary;
+        DialogIntroText.Text = state.Intro;
+    }
+
+    internal static EmulatorPathSelectionViewState BuildViewState(
+        int candidateCount,
+        string? currentPath,
+        string noCandidatesText,
+        string candidateCountFormat,
+        string selectionInstruction,
+        string emptyStateBody)
+    {
+        var trimmedPath = (currentPath ?? string.Empty).Trim();
+        var hasCandidates = candidateCount > 0;
+        return new EmulatorPathSelectionViewState(
+            HasCandidates: hasCandidates,
+            IsConfirmEnabled: trimmedPath.Length > 0,
+            Summary: hasCandidates
+                ? string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    candidateCountFormat,
+                    candidateCount)
+                : noCandidatesText,
+            Intro: trimmedPath.Length > 0
+                ? trimmedPath
+                : hasCandidates
+                    ? selectionInstruction
+                    : emptyStateBody);
     }
 }
+
+internal readonly record struct EmulatorPathSelectionViewState(
+    bool HasCandidates,
+    bool IsConfirmEnabled,
+    string Summary,
+    string Intro);

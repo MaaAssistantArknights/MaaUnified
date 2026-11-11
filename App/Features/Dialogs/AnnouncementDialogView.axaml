@@ -23,8 +23,9 @@
           <Border Classes="app-surface app-section announcement-dialog-rail">
             <Grid RowDefinitions="*,Auto">
               <controls:AppSelectionList x:Name="SectionList"
+                                         Focusable="True"
+                                         IsTabStop="True"
                                          VisualMode="Rail"
-                                         Focusable="False"
                                          SelectionChanged="OnSectionSelectionChanged">
                 <controls:AppSelectionList.ItemTemplate>
                   <DataTemplate>

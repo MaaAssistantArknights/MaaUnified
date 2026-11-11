@@ -503,12 +503,18 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.IconButton}" />
     <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="Focusable" Value="False" />
+    <Setter Property="Focusable" Value="True" />
+    <Setter Property="IsTabStop" Value="True" />
   </Style>
 
   <Style Selector="Border.task-queue-row-action:pointerover">
     <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.SubtleBackgroundHover}" />
     <Setter Property="BorderBrush" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Border.task-queue-row-action:focus-visible">
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+    <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.InputFocus}" />
   </Style>
 
   <Style Selector="TextBlock.task-queue-row-action-glyph">

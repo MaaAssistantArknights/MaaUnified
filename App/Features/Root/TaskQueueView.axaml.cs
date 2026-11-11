@@ -69,6 +69,16 @@ public partial class TaskQueueView : UserControl
             SettingsModeSelectionSlider,
             () => VM?.IsAdvancedSettingsSelected == true ? AdvancedSettingsModeButton : GeneralSettingsModeButton);
         TaskSelectionIndicator.RenderTransform = _taskSelectionIndicatorTransform;
+        TaskListBox.AddHandler(
+            InputElement.KeyDownEvent,
+            OnTaskListKeyDown,
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
+        TaskListBox.AddHandler(
+            Control.ContextRequestedEvent,
+            OnTaskListContextRequested,
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
         TaskListBox.SelectionChanged += OnTaskListSelectionChanged;
         TaskListBox.ContainerPrepared += OnTaskListContainerPrepared;
         TaskListBox.ContainerClearing += OnTaskListContainerClearing;
@@ -483,6 +493,75 @@ public partial class TaskQueueView : UserControl
         e.Handled = true;
     }
 
+    private void OnTaskListKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (VM is null
+            || TaskListBox.SelectedItem is not TaskQueueItemViewModel task
+            || GetTaskQueueListKeyboardAction(e.Key, e.KeyModifiers, e.Source) != TaskQueueRowMenuKeyboardAction.OpenMenu)
+        {
+            return;
+        }
+
+        var row = GetTaskRowForItem(TaskListBox, task) ?? TaskListBox;
+        OpenTaskRowContextMenuForTask(task, row, PlacementMode.BottomEdgeAlignedLeft);
+        e.Handled = true;
+    }
+
+    private void OnTaskListContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (VM is null
+            || TaskListBox.SelectedItem is not TaskQueueItemViewModel task)
+        {
+            return;
+        }
+
+        if (!ShouldHandleTaskQueueListContextRequest(e.Source))
+        {
+            return;
+        }
+
+        var row = GetTaskRowForItem(TaskListBox, task) ?? TaskListBox;
+        if (e.TryGetPosition(row, out _))
+        {
+            // Pointer context requests are already handled from OnTaskRowPointerPressed.
+            return;
+        }
+
+        OpenTaskRowContextMenuForTask(task, row, PlacementMode.BottomEdgeAlignedLeft);
+        e.Handled = true;
+    }
+
+    private void OnTaskGearKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (VM is null
+            || sender is not Control { DataContext: TaskQueueItemViewModel task } control
+            || GetTaskQueueRowMenuKeyboardAction(e.Key, e.KeyModifiers) != TaskQueueRowMenuKeyboardAction.OpenMenu)
+        {
+            return;
+        }
+
+        OpenTaskRowContextMenuForTask(task, control, PlacementMode.BottomEdgeAlignedLeft);
+        e.Handled = true;
+    }
+
+    private void OnTaskGearContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (VM is null
+            || sender is not Control { DataContext: TaskQueueItemViewModel task } control)
+        {
+            return;
+        }
+
+        if (e.TryGetPosition(control, out _))
+        {
+            // Pointer context requests are already handled from OnTaskRowPointerPressed.
+            return;
+        }
+
+        OpenTaskRowContextMenuForTask(task, control, PlacementMode.BottomEdgeAlignedLeft);
+        e.Handled = true;
+    }
+
     private async void OnSelectAllClick(object? sender, RoutedEventArgs e)
     {
         if (VM is not null)
@@ -759,6 +838,11 @@ public partial class TaskQueueView : UserControl
         }
 
         await VM.PickOverlayTargetWithDialogAsync();
+    }
+
+    private void OnResumeGuideClick(object? sender, RoutedEventArgs e)
+    {
+        VM?.ResumeGuide();
     }
 
     private async void OnTaskEnabledCheckBoxPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -1386,6 +1470,58 @@ public partial class TaskQueueView : UserControl
         OpenTaskQueueActionPopup(rowControl, BuildTaskMenuItems(task), PlacementMode.Pointer);
     }
 
+    private void OpenTaskRowContextMenuForTask(
+        TaskQueueItemViewModel task,
+        Control placementTarget,
+        PlacementMode placement)
+    {
+        if (VM is null || !VM.CanEdit)
+        {
+            return;
+        }
+
+        VM.SelectedTask = task;
+        OpenTaskQueueActionPopup(placementTarget, BuildTaskMenuItems(task), placement);
+    }
+
+    internal static TaskQueueRowMenuKeyboardAction GetTaskQueueRowMenuKeyboardAction(
+        Key key,
+        KeyModifiers modifiers)
+    {
+        return key switch
+        {
+            Key.Enter or Key.Space or Key.Apps => TaskQueueRowMenuKeyboardAction.OpenMenu,
+            Key.F10 when modifiers.HasFlag(KeyModifiers.Shift) => TaskQueueRowMenuKeyboardAction.OpenMenu,
+            _ => TaskQueueRowMenuKeyboardAction.None,
+        };
+    }
+
+    internal static TaskQueueRowMenuKeyboardAction GetTaskQueueListKeyboardAction(
+        Key key,
+        KeyModifiers modifiers,
+        object? source)
+    {
+        return IsTaskQueueItemControlSource(source)
+            ? TaskQueueRowMenuKeyboardAction.None
+            : GetTaskQueueRowMenuKeyboardAction(key, modifiers);
+    }
+
+    internal static bool IsTaskQueueItemControlSource(object? source)
+    {
+        for (var control = source as Control; control is not null; control = control.Parent as Control)
+        {
+            if (control is Button or ToggleButton || control.Tag is TaskQueueItemViewModel)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal static bool ShouldHandleTaskQueueListContextRequest(object? source)
+        => !IsTaskQueueItemControlSource(source);
+
     private bool TryGetShellViewModel(out MainShellViewModel shell)
     {
         if (TopLevel.GetTopLevel(this)?.DataContext is MainShellViewModel currentShell)
@@ -1430,5 +1566,11 @@ public partial class TaskQueueView : UserControl
         MoveTaskDown,
         RenameTask,
         RemoveTask,
+    }
+
+    internal enum TaskQueueRowMenuKeyboardAction
+    {
+        None,
+        OpenMenu,
     }
 }

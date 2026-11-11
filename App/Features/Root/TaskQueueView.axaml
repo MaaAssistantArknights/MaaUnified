@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             xmlns:root="clr-namespace:MAAUnified.App.Features.Root"
              xmlns:taskViews="clr-namespace:MAAUnified.App.Features.TaskQueue"
              xmlns:taskVm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
              Classes="task-queue-page"
@@ -581,7 +582,24 @@
   </UserControl.Styles>
 
   <Grid ColumnDefinitions="Auto,*,Auto">
+    <root:TaskQueueGuideView Grid.ColumnSpan="3"
+                             IsVisible="{Binding IsGuideVisible}" />
+
+    <Border Grid.ColumnSpan="3"
+            Classes="app-surface app-card"
+            IsVisible="{Binding CanResumeGuide}"
+            ZIndex="10"
+            Padding="8"
+            Margin="0,8,0,0"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top">
+      <Button Classes="app-button app-secondary"
+              Content="{Binding RootTexts[TaskQueue.Guide.Resume]}"
+              Click="OnResumeGuideClick" />
+    </Border>
+
     <Grid Grid.Column="0"
+          IsVisible="{Binding IsTaskQueueContentVisible}"
           Width="{DynamicResource MAA.Size.TaskQueue.ListPanelWidth}"
           Margin="6,0,0,0">
       <Grid RowDefinitions="Auto,*,Auto">
@@ -628,6 +646,7 @@
                       <CheckBox Grid.Column="1"
                                 Classes="app-checkbox"
                                 IsChecked="{Binding IsEnabled}"
+                                Tag="{Binding}"
                                 VerticalAlignment="Center"
                                 Margin="8,0,0,0"
                                 PointerPressed="OnTaskEnabledCheckBoxPointerPressed"
@@ -641,7 +660,9 @@
                               Classes="task-queue-row-action"
                               Margin="{DynamicResource MAA.Thickness.MarginActionButtonLeft}"
                               Tag="{Binding}"
-                              PointerPressed="OnTaskGearPointerPressed">
+                              PointerPressed="OnTaskGearPointerPressed"
+                              KeyDown="OnTaskGearKeyDown"
+                              ContextRequested="OnTaskGearContextRequested">
                         <Viewbox Width="15"
                                  Height="15"
                                  HorizontalAlignment="Center"
@@ -756,14 +777,25 @@
                 Margin="0,6,0,0"
                 Classes="app-surface app-card task-queue-run-card">
           <Grid RowDefinitions="Auto,Auto">
-            <Button Classes="app-button app-primary task-queue-run-button"
-                    Classes.locked="{Binding IsOwnRunActive}"
-                    Grid.Row="0"
-                    Content="{Binding RunButtonText}"
-                    IsEnabled="{Binding CanToggleRun}"
-                    PointerEntered="OnRunButtonPointerEntered"
-                    PointerExited="OnRunButtonPointerExited"
-                    Click="OnToggleRunClick" />
+            <StackPanel Grid.Row="0"
+                        Classes="task-queue-run-actions"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        Spacing="6">
+              <Button Classes="app-button app-primary task-queue-run-button"
+                      Classes.locked="{Binding IsOwnRunActive}"
+                      Content="{Binding RunButtonText}"
+                      IsVisible="{Binding IsRunButtonVisible}"
+                      IsEnabled="{Binding CanToggleRun}"
+                      PointerEntered="OnRunButtonPointerEntered"
+                      PointerExited="OnRunButtonPointerExited"
+                      Click="OnToggleRunClick" />
+              <Button Classes="app-button app-secondary task-queue-run-button task-queue-wait-and-stop-button"
+                      Content="{Binding WaitAndStopButtonText}"
+                      IsVisible="{Binding ShowWaitAndStopButton}"
+                      IsEnabled="{Binding CanWaitAndStop}"
+                      Click="OnWaitAndStopClick" />
+            </StackPanel>
             <TextBlock Grid.Row="1"
                        Classes="app-caption long-wrap state-warning task-queue-warning-text"
                        Text="{Binding CoreInitializationMessage}"
@@ -774,6 +806,7 @@
     </Grid>
 
     <Grid Grid.Column="1"
+          IsVisible="{Binding IsTaskQueueContentVisible}"
           Margin="{DynamicResource MAA.Thickness.MarginRightSection}">
       <Grid Classes="task-queue-config-panel"
             RowDefinitions="Auto,*,Auto">
@@ -856,6 +889,7 @@
     </Grid>
 
     <Grid Grid.Column="2"
+          IsVisible="{Binding IsTaskQueueContentVisible}"
           Width="{DynamicResource MAA.Size.TaskQueue.LogPanelWidth}">
       <Grid RowDefinitions="Auto,Auto,*">
         <TextBlock Classes="section-title"

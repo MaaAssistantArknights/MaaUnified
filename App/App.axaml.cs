@@ -25,8 +25,7 @@ public partial class App : Avalonia.Application
     private static readonly TimeSpan UiLagProbeInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan UiLagLogMinInterval = TimeSpan.FromSeconds(5);
     internal static readonly TimeSpan RuntimeDisposeTimeout = TimeSpan.FromSeconds(12);
-    private static readonly string[] LegacyLocalizationResourceKeys =
-    [
+    internal static readonly string[] LegacyLocalizationResourceKeys =    [
         "AlwaysAutoDetectConnectionTip",
         "BadModules.UseSoftwareRenderingTip",
         "ExternalNotificationBarkSendKey",
@@ -69,6 +68,17 @@ public partial class App : Avalonia.Application
         "UpdateCheckTip",
         "UpdateSourceTip",
         "UseGpuForInferenceTip",
+        "SettingsGuide",
+        "PrevGuide",
+        "NextGuide",
+        "DoneGuide",
+        "UiSettings",
+        "GameSettings",
+        "ConnectionSettings",
+        "TaskSettings",
+        "PerformanceSettings",
+        "UpdateSettings",
+        "UserGuide",
     ];
     private const double UiLagThresholdMs = 120;
     private const uint FatalMessageBoxFlags = 0x00000010 | 0x00002000 | 0x00010000 | 0x00040000;
@@ -441,24 +451,20 @@ public partial class App : Avalonia.Application
     {
         var total = Stopwatch.StartNew();
         var step = Stopwatch.StartNew();
-        var entries = AchievementTextCatalog.GetAllStrings(language);
+        var catalogEntries = AchievementTextCatalog.GetAllStrings(language);
+        var entries = ResolveLegacyLocalizationResources(catalogEntries);
         ForgetTask(
             RecordAppTemporaryTimingAsync(
                 "App.LegacyLocalization.LoadCatalog",
                 step.Elapsed.TotalMilliseconds,
                 ("language", language),
-                ("entryCount", entries.Count)),
+                ("entryCount", catalogEntries.Count)),
             "App.LegacyLocalization.LoadCatalog");
 
         step.Restart();
         var appliedCount = 0;
-        foreach (var key in LegacyLocalizationResourceKeys)
+        foreach (var (key, value) in entries)
         {
-            if (!entries.TryGetValue(key, out var value))
-            {
-                continue;
-            }
-
             Resources[key] = value;
             appliedCount++;
         }
@@ -468,7 +474,7 @@ public partial class App : Avalonia.Application
                 "App.LegacyLocalization.ApplyResources",
                 step.Elapsed.TotalMilliseconds,
                 ("language", language),
-                ("entryCount", entries.Count),
+                ("entryCount", catalogEntries.Count),
                 ("allowlistCount", LegacyLocalizationResourceKeys.Length),
                 ("appliedCount", appliedCount)),
             "App.LegacyLocalization.ApplyResources");
@@ -477,10 +483,28 @@ public partial class App : Avalonia.Application
                 "App.LegacyLocalization.Total",
                 total.Elapsed.TotalMilliseconds,
                 ("language", language),
-                ("entryCount", entries.Count),
+                ("entryCount", catalogEntries.Count),
                 ("allowlistCount", LegacyLocalizationResourceKeys.Length),
                 ("appliedCount", appliedCount)),
             "App.LegacyLocalization.Total");
+    }
+
+    internal static IReadOnlyDictionary<string, string> ResolveLegacyLocalizationResources(string? language)
+        => ResolveLegacyLocalizationResources(AchievementTextCatalog.GetAllStrings(language));
+
+    private static IReadOnlyDictionary<string, string> ResolveLegacyLocalizationResources(
+        IReadOnlyDictionary<string, string> entries)
+    {
+        var resolved = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var key in LegacyLocalizationResourceKeys)
+        {
+            if (entries.TryGetValue(key, out var value))
+            {
+                resolved[key] = value;
+            }
+        }
+
+        return resolved;
     }
 
     private static Task RecordAppTemporaryTimingAsync(

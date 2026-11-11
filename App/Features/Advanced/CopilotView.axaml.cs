@@ -1,9 +1,11 @@
 using System.Diagnostics;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using MAAUnified.App.Controls;
 using MAAUnified.App.Infrastructure;
 using MAAUnified.App.ViewModels;
@@ -22,6 +24,16 @@ public partial class CopilotView : UserControl
     public CopilotView()
     {
         InitializeComponent();
+        CopilotListBox.AddHandler(
+            InputElement.KeyDownEvent,
+            OnCopilotListKeyDown,
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
+        CopilotListBox.AddHandler(
+            Control.ContextRequestedEvent,
+            OnCopilotListContextRequested,
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
     }
 
     private CopilotPageViewModel? VM => DataContext as CopilotPageViewModel;
@@ -239,6 +251,96 @@ public partial class CopilotView : UserControl
         e.Handled = true;
     }
 
+    private async void OnCopilotListKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (VM is null
+            || CopilotListBox.SelectedItem is not CopilotItemViewModel item)
+        {
+            return;
+        }
+
+        switch (GetCopilotListKeyboardAction(e.Key, e.KeyModifiers, e.Source))
+        {
+            case CopilotListItemKeyboardAction.Load:
+                e.Handled = true;
+                await VM.LoadListItemAsync(item, disableListMode: false);
+                break;
+            case CopilotListItemKeyboardAction.OpenMenu:
+                VM.SelectedItem = item;
+                OpenCopilotListActionPopup(
+                    ResolveCopilotListItemOwner(item),
+                    item,
+                    PlacementMode.BottomEdgeAlignedLeft);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    private void OnCopilotListContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (VM is null
+            || CopilotListBox.SelectedItem is not CopilotItemViewModel item)
+        {
+            return;
+        }
+
+        if (!ShouldHandleCopilotListContextRequest(e.Source))
+        {
+            return;
+        }
+
+        var owner = ResolveCopilotListItemOwner(item);
+        if (e.TryGetPosition(owner, out _))
+        {
+            // Pointer context requests are already handled by the item body or delete hotspot.
+            return;
+        }
+
+        VM.SelectedItem = item;
+        OpenCopilotListActionPopup(owner, item, PlacementMode.BottomEdgeAlignedLeft);
+        e.Handled = true;
+    }
+
+    private async void OnCopilotListItemBodyKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (VM is null
+            || sender is not Control { Tag: CopilotItemViewModel item })
+        {
+            return;
+        }
+
+        switch (GetCopilotListItemKeyboardAction(e.Key, e.KeyModifiers))
+        {
+            case CopilotListItemKeyboardAction.Load:
+                e.Handled = true;
+                await VM.LoadListItemAsync(item, disableListMode: false);
+                break;
+            case CopilotListItemKeyboardAction.OpenMenu:
+                VM.SelectedItem = item;
+                OpenCopilotListActionPopup((Control)sender, item, PlacementMode.BottomEdgeAlignedLeft);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    private void OnCopilotListItemBodyContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (VM is null || sender is not Control { Tag: CopilotItemViewModel item } control)
+        {
+            return;
+        }
+
+        if (e.TryGetPosition(control, out _))
+        {
+            // Pointer context requests are already handled by OnCopilotListItemBodyPointerPressed.
+            return;
+        }
+
+        VM.SelectedItem = item;
+        OpenCopilotListActionPopup(control, item, PlacementMode.BottomEdgeAlignedLeft);
+        e.Handled = true;
+    }
+
     private async void OnCopilotListItemCheckClick(object? sender, RoutedEventArgs e)
     {
         if (VM is null || sender is not CheckBox { DataContext: CopilotItemViewModel item } checkBox)
@@ -256,6 +358,14 @@ public partial class CopilotView : UserControl
             return;
         }
 
+        if (PointerPressedGestures.IsSecondaryClick(control, e))
+        {
+            VM.SelectedItem = item;
+            OpenCopilotListActionPopup(control, item, PlacementMode.Pointer);
+            e.Handled = true;
+            return;
+        }
+
         var point = e.GetCurrentPoint(control);
         if (!point.Properties.IsLeftButtonPressed)
         {
@@ -264,6 +374,45 @@ public partial class CopilotView : UserControl
 
         e.Handled = true;
         await VM.DeleteListItemAsync(item);
+    }
+
+    private async void OnDeleteListItemKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (VM is null || sender is not Control { Tag: CopilotItemViewModel item } control)
+        {
+            return;
+        }
+
+        switch (GetCopilotListItemKeyboardAction(e.Key, e.KeyModifiers))
+        {
+            case CopilotListItemKeyboardAction.Load:
+                e.Handled = true;
+                await VM.DeleteListItemAsync(item);
+                break;
+            case CopilotListItemKeyboardAction.OpenMenu:
+                VM.SelectedItem = item;
+                OpenCopilotListActionPopup(control, item, PlacementMode.BottomEdgeAlignedLeft);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    private void OnDeleteListItemContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (VM is null || sender is not Control { Tag: CopilotItemViewModel item } control)
+        {
+            return;
+        }
+
+        if (e.TryGetPosition(control, out _))
+        {
+            // Pointer context requests are already handled by OnDeleteListItemPointerPressed.
+            return;
+        }
+
+        VM.SelectedItem = item;
+        OpenCopilotListActionPopup(control, item, PlacementMode.BottomEdgeAlignedLeft);
+        e.Handled = true;
     }
 
     private async void OnCopilotListItemReorderRequested(object? sender, AppSelectionListItemReorderEventArgs e)
@@ -300,7 +449,10 @@ public partial class CopilotView : UserControl
         }
     }
 
-    private void OpenCopilotListActionPopup(Control owner, CopilotItemViewModel item)
+    private void OpenCopilotListActionPopup(
+        Control owner,
+        CopilotItemViewModel item,
+        PlacementMode placement = PlacementMode.Pointer)
     {
         CloseCopilotListActionPopup();
 
@@ -309,8 +461,61 @@ public partial class CopilotView : UserControl
             .Select(static menuItem => menuItem.ToMenuItem())
             .ToArray();
         CopilotListActionPopup.PlacementTarget = owner;
+        CopilotListActionPopup.Placement = placement;
         CopilotListActionPopup.IsOpen = true;
     }
+
+    private Control ResolveCopilotListItemOwner(CopilotItemViewModel item)
+    {
+        if (CopilotListBox.ContainerFromItem(item) is not Control container)
+        {
+            return CopilotListBox;
+        }
+
+        return container.GetVisualDescendants()
+                   .OfType<Border>()
+                   .FirstOrDefault(static border => border.Classes.Contains("copilot-list-item-body"))
+               ?? container;
+    }
+
+    internal static CopilotListItemKeyboardAction GetCopilotListItemKeyboardAction(
+        Key key,
+        KeyModifiers modifiers)
+    {
+        return key switch
+        {
+            Key.Enter or Key.Space => CopilotListItemKeyboardAction.Load,
+            Key.Apps => CopilotListItemKeyboardAction.OpenMenu,
+            Key.F10 when modifiers.HasFlag(KeyModifiers.Shift) => CopilotListItemKeyboardAction.OpenMenu,
+            _ => CopilotListItemKeyboardAction.None,
+        };
+    }
+
+    internal static CopilotListItemKeyboardAction GetCopilotListKeyboardAction(
+        Key key,
+        KeyModifiers modifiers,
+        object? source)
+    {
+        return IsCopilotListItemControlSource(source)
+            ? CopilotListItemKeyboardAction.None
+            : GetCopilotListItemKeyboardAction(key, modifiers);
+    }
+
+    internal static bool IsCopilotListItemControlSource(object? source)
+    {
+        for (var control = source as Control; control is not null; control = control.Parent as Control)
+        {
+            if (control is Button or ToggleButton || control.Tag is CopilotItemViewModel)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal static bool ShouldHandleCopilotListContextRequest(object? source)
+        => !IsCopilotListItemControlSource(source);
 
     private void CloseCopilotListActionPopup()
     {
@@ -480,5 +685,12 @@ public partial class CopilotView : UserControl
         LoadSingle,
         ToggleRaid,
         Delete,
+    }
+
+    internal enum CopilotListItemKeyboardAction
+    {
+        None,
+        Load,
+        OpenMenu,
     }
 }

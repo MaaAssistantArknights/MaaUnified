@@ -17,18 +17,16 @@
                            CloseRequested="OnShellCloseRequested">
     <controls:AppWindowFrame.HeaderContent>
       <TextBlock x:Name="SelectionSummaryText"
-                 Classes="app-window-subtitle long-wrap"
-                 Text="No detected paths" />
+                 Classes="app-window-subtitle long-wrap" />
     </controls:AppWindowFrame.HeaderContent>
     <controls:AppWindowFrame.Content>
       <Grid RowDefinitions="Auto,*,Auto">
         <Border Classes="app-surface app-section">
           <StackPanel Classes="app-compact-selection-intro">
-            <TextBlock Classes="section-title"
-                       Text="Detected paths" />
+            <TextBlock x:Name="DetectedPathsTitleText"
+                       Classes="section-title" />
             <TextBlock x:Name="DialogIntroText"
-                       Classes="app-window-subtitle subtle long-wrap"
-                       Text="Pick a detected emulator executable or paste a custom path below." />
+                       Classes="app-window-subtitle subtle long-wrap" />
           </StackPanel>
         </Border>
 
@@ -57,9 +55,9 @@
                   IsVisible="False">
             <StackPanel Classes="app-compact-empty-state-content">
               <TextBlock Classes="app-window-title app-compact-empty-title"
-                         Text="No detected paths" />
+                         x:Name="EmptyStateTitleText" />
               <TextBlock Classes="app-window-subtitle app-compact-empty-body"
-                         Text="Paste the emulator executable path below if auto-detection did not find one." />
+                         x:Name="EmptyStateBodyText" />
             </StackPanel>
           </Border>
         </Grid>
@@ -68,12 +66,11 @@
                 Margin="0,14,0,0"
                 Classes="app-surface app-section">
           <Grid RowDefinitions="Auto,Auto">
-            <TextBlock Classes="section-title"
-                       Text="Custom path" />
+            <TextBlock x:Name="CustomPathTitleText"
+                       Classes="section-title" />
             <controls:AppTextInput x:Name="PathInput"
                                    Grid.Row="1"
                                    Margin="0,10,0,0"
-                                   Watermark="/path/to/emulator"
                                    TextChanged="OnPathInputTextChanged"
                                    KeyDown="OnPathInputKeyDown" />
           </Grid>
@@ -86,10 +83,12 @@
         <Button x:Name="CancelButton"
                 Classes="app-button app-secondary"
                 Content="Cancel"
+                IsCancel="True"
                 Click="OnCancelClick" />
         <Button x:Name="ConfirmButton"
                 Classes="app-button app-primary"
                 Content="Confirm"
+                IsDefault="True"
                 Click="OnConfirmClick" />
       </StackPanel>
     </controls:AppWindowFrame.ActionsContent>

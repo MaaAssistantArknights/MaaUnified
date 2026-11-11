@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
@@ -13,6 +14,7 @@ using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.Localization;
 using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
@@ -1413,6 +1415,50 @@ public sealed class TaskQueueG2FeatureTests
         Assert.DoesNotContain("连接回调：无法连接到这个地址或端口。", message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task BuildConnectFailureMessage_GenericAndSpecific_ShouldUseSixLanguageResources()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        var manager = UiLocalizationResourceManager.Shared;
+
+        foreach (var language in UiLanguageCatalog.Ordered)
+        {
+            vm.SetLanguage(language);
+            var genericHint = manager.Lookup(language, "ConnectionFailure.Generic.Message").Value;
+            var callbackFormat = manager.Lookup(language, "ConnectionFailure.Callback.MessageFormat").Value;
+            var generic = InvokeBuildConnectFailureMessage(
+                vm,
+                UiOperationResult.Fail(UiErrorCode.ConnectFailed, "ConnectFailed"));
+            Assert.StartsWith(genericHint, generic, StringComparison.Ordinal);
+            Assert.Contains(
+                string.Format(CultureInfo.InvariantCulture, callbackFormat, "ConnectFailed"),
+                generic,
+                StringComparison.Ordinal);
+
+            var diagnostic = ConnectionFailureDiagnosticBuilder.Build(
+                UiOperationResult.Fail(nameof(CoreErrorCode.ConnectTimeout), "Connect timeout after 30 seconds."),
+                state: null,
+                language: language);
+            var specific = InvokeBuildConnectFailureMessage(
+                vm,
+                UiOperationResult.Fail(
+                    UiErrorCode.ConnectFailed,
+                    diagnostic.BuildDialogMessage(),
+                    diagnostic.Details));
+            Assert.StartsWith(diagnostic.Message, specific, StringComparison.Ordinal);
+            Assert.Contains(genericHint, specific, StringComparison.Ordinal);
+
+            if (string.Equals(language, "pallas", StringComparison.Ordinal))
+            {
+                Assert.StartsWith("[!! ", genericHint, StringComparison.Ordinal);
+                Assert.StartsWith("[!! ", callbackFormat, StringComparison.Ordinal);
+                Assert.NotEqual(manager.Lookup("en-us", "ConnectionFailure.Generic.Message").Value, genericHint);
+            }
+        }
+    }
+
     [Theory]
     [InlineData("zh-cn", "连接失败，正在尝试通过 ADB 重新连接。", "Connection failed")]
     [InlineData("en-us", "Connection failed. Trying to reconnect by ADB.", "连接失败")]
@@ -2129,6 +2175,65 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
+    public async Task StopAsync_RoguelikeCombatWaitEnabled_ShouldStopImmediately()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = await CreateRunningTaskQueueInRoguelikeCombatAsync(fixture);
+
+        Assert.True(vm.RoguelikeInCombatAndShowWait);
+        Assert.True(vm.ShowWaitAndStopButton);
+        Assert.False(vm.IsRunButtonVisible);
+
+        await vm.StopAsync().WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+    }
+
+    [Fact]
+    public async Task WaitAndStopAsync_RoguelikeCombatWaitEnabled_ShouldWaitForCombatEndThenStop()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = await CreateRunningTaskQueueInRoguelikeCombatAsync(fixture);
+
+        var waitTask = vm.WaitAndStopAsync();
+        Assert.True(await WaitForConditionAsync(() => vm.IsWaitingForStop));
+
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+        Assert.True(vm.CanToggleRun);
+        Assert.False(vm.ShowWaitAndStopButton);
+        Assert.True(vm.IsRunButtonVisible);
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            4,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Roguelike","what":"RoguelikeCombatEnd"}""",
+            DateTimeOffset.UtcNow));
+        await waitTask.WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.False(vm.IsWaitingForStop);
+        Assert.False(vm.RoguelikeInCombatAndShowWait);
+    }
+
+    [Fact]
+    public async Task StopAsync_DuringRoguelikeWait_ShouldCancelWaitAndStopImmediately()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = await CreateRunningTaskQueueInRoguelikeCombatAsync(fixture);
+
+        var waitTask = vm.WaitAndStopAsync();
+        Assert.True(await WaitForConditionAsync(() => vm.IsWaitingForStop));
+        Assert.True(vm.CanToggleRun);
+
+        var stopTask = vm.StopAsync();
+        await Task.WhenAll(waitTask, stopTask).WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.False(vm.IsWaitingForStop);
+        Assert.Equal(SessionState.Connected, vm.CurrentSessionState);
+    }
+
+    [Fact]
     public void DailyStageHint_ShouldFollowWpfStyleAndRenderDepotCounts()
     {
         var config = new UnifiedConfig();
@@ -2836,6 +2941,38 @@ public sealed class TaskQueueG2FeatureTests
         var leaseProperty = snapshot.GetType().GetProperty("Lease", BindingFlags.Instance | BindingFlags.Public);
         Assert.NotNull(leaseProperty);
         return (RunOwnershipLease)leaseProperty!.GetValue(snapshot)!;
+    }
+
+    private static string InvokeBuildConnectFailureMessage(
+        TaskQueuePageViewModel vm,
+        UiOperationResult result)
+    {
+        return Assert.IsType<string>(
+            typeof(TaskQueuePageViewModel)
+                .GetMethod("BuildConnectFailureMessage", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(vm, [result]));
+    }
+
+    private static async Task<TaskQueuePageViewModel> CreateRunningTaskQueueInRoguelikeCombatAsync(
+        TestFixture fixture)
+    {
+        var config = fixture.Runtime.ConfigurationService.CurrentConfig;
+        Assert.True(config.Profiles.TryGetValue(config.CurrentProfile, out var profile));
+        profile!.Values[LegacyConfigurationKeys.RoguelikeDelayAbortUntilCombatComplete] = JsonValue.Create(true);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        Assert.True((await fixture.Runtime.ConnectFeatureService.StartAsync()).Success);
+        await WaitForConditionAsync(() => vm.CurrentSessionState == SessionState.Running);
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            3,
+            "SubTaskExtraInfo",
+            """{"task_chain":"Roguelike","what":"StageInfo"}""",
+            DateTimeOffset.UtcNow));
+        return vm;
     }
 
     private static void MapCoreTaskId(UnifiedSessionService sessionService, int taskId, int taskIndex)

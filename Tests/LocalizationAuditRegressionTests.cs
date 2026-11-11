@@ -9,6 +9,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.Localization;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 
@@ -17,6 +18,23 @@ namespace MAAUnified.Tests;
 [Collection("MainShellSerial")]
 public sealed class LocalizationAuditRegressionTests
 {
+    [Fact]
+    public void Pallas_MissingOverride_GeneratesPseudoLocalizedTextWithoutFallback()
+    {
+        const string key = "BattleFormationOperUnavailable";
+        var resourceManager = UiLocalizationResourceManager.Shared;
+
+        var pallas = resourceManager.Lookup("pallas", key);
+        var english = resourceManager.Lookup("en-us", key);
+
+        Assert.Equal("none", pallas.FallbackSource);
+        Assert.NotEqual(english.Value, pallas.Value);
+        Assert.StartsWith("[!! ", pallas.Value, StringComparison.Ordinal);
+        Assert.EndsWith(" !!]", pallas.Value, StringComparison.Ordinal);
+        Assert.Contains("{0}", pallas.Value, StringComparison.Ordinal);
+        Assert.Contains("{1}", pallas.Value, StringComparison.Ordinal);
+    }
+
     private static readonly HashSet<string> RootTechnicalLiteralKeys = new(StringComparer.Ordinal)
     {
         "Settings.RemoteControl.GetTaskEndpointWatermark",

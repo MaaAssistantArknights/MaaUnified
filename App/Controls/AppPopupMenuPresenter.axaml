@@ -8,8 +8,11 @@
       <Border Classes="app-popup-menu-item-shell"
               IsEnabled="{Binding IsEnabled}"
               IsVisible="{Binding IsVisible}"
+              Focusable="{Binding IsEnabled}"
+              IsTabStop="{Binding IsEnabled}"
               Tag="{Binding}"
-              PointerPressed="OnMenuItemPointerPressed">
+              PointerPressed="OnMenuItemPointerPressed"
+              KeyDown="OnMenuItemKeyDown">
         <TextBlock Classes="app-popup-menu-item-text"
                    Text="{Binding Header}" />
       </Border>

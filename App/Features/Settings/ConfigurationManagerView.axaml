@@ -32,6 +32,7 @@
           <controls:AppSelect Classes="settings-select configuration-manager-profile-picker"
                     Width="{DynamicResource MAA.Size.Settings.ColumnWidth}"
                     HorizontalAlignment="Left"
+                    IsEnabled="{Binding IsSessionIdle}"
                     ItemsSource="{Binding ConfigurationProfiles}"
                     SelectedValueBinding="{Binding .}"
                     SelectedValue="{Binding ConfigurationManagerSelectedProfile}"
@@ -80,9 +81,10 @@
               ColumnDefinitions="Auto,Auto">
           <controls:AppActionInput Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
                                    HorizontalAlignment="Left"
-                                   Text="{Binding ConfigurationManagerNewProfileName, UpdateSourceTrigger=LostFocus}"
+                                   Text="{Binding ConfigurationManagerNewProfileName, UpdateSourceTrigger=PropertyChanged}"
                                    Watermark="{Binding RootTexts[Settings.ConfigurationManager.NewProfileWatermark]}"
                                    ActionContent="{Binding RootTexts[Settings.ConfigurationManager.SaveAsNew]}"
+                                   EditorKeyDown="OnNewProfileNameEditorKeyDown"
                                    ActionClick="OnCreateProfileClick" />
           <TextBlock Grid.Column="1"
                      Margin="8,0,0,0"

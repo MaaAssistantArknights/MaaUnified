@@ -326,6 +326,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private static readonly TimeSpan TaskStartCancelUnlockWindow = TimeSpan.FromSeconds(5);
     private const int MaxTimeoutMinutes = 11451;
     private const int MaxOverlayLogs = 200;
+    private const string GuideSaveScope = "TaskQueue.Guide.Save";
+    private const int GuideMaxStep = 7;
     private static readonly TimeSpan TaskQueueAutoSaveDelay = TimeSpan.FromMilliseconds(200);
     private const string UiMallCreditFightLastTime = "_ui_mall_credit_fight_last_time";
     private const string UiMallVisitFriendsLastTime = "_ui_mall_visit_friends_last_time";
@@ -338,6 +340,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private readonly OverlaySharedState _overlaySharedState;
     private readonly ConnectionGameSharedStateViewModel _connectionGameSharedState;
     private readonly GameDataReportService _gameDataReportService;
+    private readonly Func<CancellationToken, Task>? _stopActiveSessionOperationAsync;
+    private bool _isStoppingExternalSessionActivity;
     private Task _reportRequestTask = Task.CompletedTask;
     private readonly Action<LocalizationFallbackInfo>? _localizationFallbackReporter;
     private readonly IAppDialogService _dialogService;
@@ -433,6 +437,56 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private TaskQueueTaskPanelViewModel? _selectedTaskPanel;
     private readonly IUiLanguageCoordinator _uiLanguageCoordinator;
 
+    private bool _isGuideSuspendedForTaskEditing;
+    private int _guideStepIndex;
+
+
+    public int GuideStepIndex => _guideStepIndex;
+
+    public int GuideStepCount => GuideMaxStep;
+
+    public bool IsGuideVisible => GuideStepIndex < GuideMaxStep && !_isGuideSuspendedForTaskEditing;
+
+    public bool IsTaskQueueContentVisible => !IsGuideVisible;
+
+    public bool CanResumeGuide => _isGuideSuspendedForTaskEditing && GuideStepIndex < GuideMaxStep;
+
+    public bool IsGuideNextVisible => IsGuideVisible && GuideStepIndex < GuideMaxStep - 1;
+
+    public bool IsGuideDoneVisible => IsGuideVisible && GuideStepIndex >= GuideMaxStep - 1;
+
+    public bool CanGoToPreviousGuideStep => GuideStepIndex > 0;
+
+    public string GuideStepProgressText => $"{Math.Clamp(GuideStepIndex, 0, GuideMaxStep - 1) + 1} / {GuideMaxStep}";
+
+    public bool IsGuideStep0Visible => GuideStepIndex == 0;
+
+    public bool IsGuideStep1Visible => GuideStepIndex == 1;
+
+    public bool IsGuideStep2Visible => GuideStepIndex == 2;
+
+    public bool IsGuideStep3Visible => GuideStepIndex == 3;
+
+    public bool IsGuideStep4Visible => GuideStepIndex == 4;
+
+    public bool IsGuideStep5Visible => GuideStepIndex == 5;
+
+    public bool IsGuideStep6Visible => GuideStepIndex == 6;
+
+    public bool IsGuideStep0Current => GuideStepIndex == 0;
+
+    public bool IsGuideStep1Current => GuideStepIndex == 1;
+
+    public bool IsGuideStep2Current => GuideStepIndex == 2;
+
+    public bool IsGuideStep3Current => GuideStepIndex == 3;
+
+    public bool IsGuideStep4Current => GuideStepIndex == 4;
+
+    public bool IsGuideStep5Current => GuideStepIndex == 5;
+
+    public bool IsGuideStep6Current => GuideStepIndex == 6;
+
     public TaskQueuePageViewModel(
         MAAUnifiedRuntime runtime,
         ConnectionGameSharedStateViewModel connectionGameSharedState,
@@ -441,10 +495,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         Action<string>? navigateToSettingsSection = null,
         Func<CancellationToken, Task<bool>>? ensureCoreReadyForExecutionAsync = null,
         Func<string, CancellationToken, Task>? stopRunOwnerAsync = null,
-        GameDataReportService? gameDataReportService = null)
+        GameDataReportService? gameDataReportService = null,
+        Func<CancellationToken, Task>? stopActiveSessionOperationAsync = null)
         : base(runtime)
     {
         _gameDataReportService = gameDataReportService ?? new GameDataReportService();
+        _stopActiveSessionOperationAsync = stopActiveSessionOperationAsync;
         _connectionGameSharedState = connectionGameSharedState;
         _localizationFallbackReporter = localizationFallbackReporter;
         _dialogService = dialogService ?? NoOpAppDialogService.Instance;
@@ -472,6 +528,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             Language = ResolveLanguage(),
         };
         RootTexts.FallbackReported += info => _localizationFallbackReporter?.Invoke(info);
+        _guideStepIndex = ReadGuideStepIndex(runtime.ConfigurationService.CurrentConfig);
         _logTimestampFormat = ResolveLogTimestampFormat();
         _dailyStageHint = Texts.GetOrDefault("TaskQueue.DailyStageHintDefault", "Daily stage hints will be shown after resources are loaded.");
         _noTaskSelectedHint = RootTexts.GetOrDefault(
@@ -518,6 +575,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         {
             Dispatcher.UIThread.Post(() =>
             {
+                RefreshGuideStepFromConfig();
                 ApplyGuiSettingsFromConfig();
                 RefreshConfigValidationState(runtime.ConfigurationService.CurrentValidationIssues);
             });
@@ -817,6 +875,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         get
         {
+            if (IsExternalSessionActivityActive)
+            {
+                return RootTexts.GetOrDefault("TaskQueue.Root.Stop", "Stop");
+            }
+
             if (IsOwnRunActive)
             {
                 return _isRunButtonStopHovered || _isStartRequestActive
@@ -833,6 +896,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         || (CurrentSessionState is SessionState.Running or SessionState.Stopping
             && !IsRunOwnedByAnotherFeature);
 
+    public bool IsExternalSessionActivityActive =>
+        !_isStartRequestActive
+        && (_connectionGameSharedState.IsSessionOperationActive || IsRunOwnedByAnotherFeature);
+
     public bool IsRunOwnedByAnotherFeature
     {
         get
@@ -846,6 +913,25 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             return !string.IsNullOrWhiteSpace(currentOwner)
                 && !Runtime.SessionService.IsRunOwner(TaskQueueRunOwner);
         }
+    }
+
+    private string BuildSessionActivityBlockedMessage(string action)
+    {
+        var timerActive = _connectionGameSharedState.IsTimerSessionOperationActive;
+        var key = $"TaskQueue.Error.SessionActivity.{(timerActive ? "Timer" : "Other")}.{action}";
+        var fallback = action switch
+        {
+            "RunOnce" => timerActive
+                ? "A timed task is active. Wait for it to finish before running a single task."
+                : "Another session operation is active. Stop or wait for it before running a single task.",
+            "AccountSwitch" => timerActive
+                ? "A timed task is active. Wait for it to finish before switching accounts."
+                : "Another session operation is active. Stop or wait for it before switching accounts.",
+            _ => timerActive
+                ? "A timed task is active. Wait for it to finish before starting tasks."
+                : "Another session operation is active. Stop or wait for it before starting tasks.",
+        };
+        return Texts.GetOrDefault(key, fallback);
     }
 
     public bool HasBlockingConfigIssues
@@ -877,6 +963,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             }
         }
     }
+
+    public bool RoguelikeInCombatAndShowWait =>
+        CurrentSessionState == SessionState.Running
+        && IsOwnRunActive
+        && ShouldDelayStopUntilRoguelikeCombatComplete();
+
+    public bool ShowWaitAndStopButton => RoguelikeInCombatAndShowWait && !IsWaitingForStop;
+
+    public bool IsRunButtonVisible => !ShowWaitAndStopButton;
 
     public bool CanToggleRun =>
         !IsWaitingForStop;
@@ -1328,6 +1423,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         CancellationToken cancellationToken = default)
     {
         PrepareForConfigurationContextSwitch();
+        RefreshGuideStepFromConfig();
         await ReloadTasksAsync(
             cancellationToken,
             preferProfileSelectedIndex: true,
@@ -1339,6 +1435,138 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         RefreshStagePresentation(forceReloadStageOptions);
         UpdatePostActionSummary();
+    }
+
+    public bool OpenCurrentGuideStepTarget()
+    {
+        var sectionKey = GetGuideStepSettingsSectionKey(GuideStepIndex);
+        if (sectionKey is null)
+        {
+            _isGuideSuspendedForTaskEditing = true;
+            NotifyGuideStateChanged();
+            return true;
+        }
+
+        if (_navigateToSettingsSection is null)
+        {
+            return false;
+        }
+
+        _navigateToSettingsSection(sectionKey);
+        return true;
+    }
+
+    public void ResumeGuide()
+    {
+        if (!_isGuideSuspendedForTaskEditing)
+        {
+            return;
+        }
+
+        _isGuideSuspendedForTaskEditing = false;
+        NotifyGuideStateChanged();
+    }
+
+    internal static string? GetGuideStepSettingsSectionKey(int stepIndex)
+    {
+        return Math.Clamp(stepIndex, 0, GuideMaxStep - 1) switch
+        {
+            0 => "GUI",
+            1 => "Game",
+            2 => "Connect",
+            3 => null,
+            4 => "Performance",
+            5 => "VersionUpdate",
+            6 => "About",
+            _ => null,
+        };
+    }
+
+    public Task<bool> NextGuideStepAsync(CancellationToken cancellationToken = default)
+    {
+        var nextStep = Math.Min(GuideStepIndex + 1, GuideMaxStep - 1);
+        return SetGuideStepIndexAsync(nextStep, cancellationToken);
+    }
+
+    public Task<bool> PreviousGuideStepAsync(CancellationToken cancellationToken = default)
+    {
+        var previousStep = Math.Max(GuideStepIndex - 1, 0);
+        return SetGuideStepIndexAsync(previousStep, cancellationToken);
+    }
+
+    public Task<bool> CompleteGuideAsync(CancellationToken cancellationToken = default)
+        => SetGuideStepIndexAsync(GuideMaxStep, cancellationToken);
+
+    private async Task<bool> SetGuideStepIndexAsync(int stepIndex, CancellationToken cancellationToken)
+    {
+        var normalizedStep = Math.Clamp(stepIndex, 0, GuideMaxStep);
+        if (GuideStepIndex == normalizedStep)
+        {
+            return true;
+        }
+
+        _guideStepIndex = normalizedStep;
+        _isGuideSuspendedForTaskEditing = false;
+        NotifyGuideStateChanged();
+        Runtime.ConfigurationService.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] =
+            JsonValue.Create(normalizedStep);
+        return await RunTrackedConfigurationSaveAsync(
+            "TaskQueue.Guide",
+            RootTexts.GetOrDefault("TaskQueue.Guide.Title", "Settings guide"),
+            GuideSaveScope,
+            async ct =>
+            {
+                await Runtime.ConfigurationService.SaveAsync(ct);
+                return UiOperationResult.Ok("Settings guide step saved.");
+            },
+            cancellationToken);
+    }
+
+    private void NotifyGuideStateChanged()
+    {
+        OnPropertyChanged(nameof(GuideStepIndex));
+        OnPropertyChanged(nameof(IsGuideVisible));
+        OnPropertyChanged(nameof(IsTaskQueueContentVisible));
+        OnPropertyChanged(nameof(CanResumeGuide));
+        OnPropertyChanged(nameof(IsGuideNextVisible));
+        OnPropertyChanged(nameof(IsGuideDoneVisible));
+        OnPropertyChanged(nameof(CanGoToPreviousGuideStep));
+        OnPropertyChanged(nameof(GuideStepProgressText));
+        OnPropertyChanged(nameof(IsGuideStep0Visible));
+        OnPropertyChanged(nameof(IsGuideStep1Visible));
+        OnPropertyChanged(nameof(IsGuideStep2Visible));
+        OnPropertyChanged(nameof(IsGuideStep3Visible));
+        OnPropertyChanged(nameof(IsGuideStep4Visible));
+        OnPropertyChanged(nameof(IsGuideStep5Visible));
+        OnPropertyChanged(nameof(IsGuideStep6Visible));
+        OnPropertyChanged(nameof(IsGuideStep0Current));
+        OnPropertyChanged(nameof(IsGuideStep1Current));
+        OnPropertyChanged(nameof(IsGuideStep2Current));
+        OnPropertyChanged(nameof(IsGuideStep3Current));
+        OnPropertyChanged(nameof(IsGuideStep4Current));
+        OnPropertyChanged(nameof(IsGuideStep5Current));
+        OnPropertyChanged(nameof(IsGuideStep6Current));
+    }
+
+    private int ReadGuideStepIndex(UnifiedConfig config)
+    {
+        return Math.Clamp(
+            TryReadGlobalInt(config.GlobalValues, ConfigurationKeys.GuideStepIndex, 0),
+            0,
+            GuideMaxStep);
+    }
+
+    private void RefreshGuideStepFromConfig()
+    {
+        var persistedStep = ReadGuideStepIndex(Runtime.ConfigurationService.CurrentConfig);
+        if (persistedStep == _guideStepIndex)
+        {
+            return;
+        }
+
+        _guideStepIndex = persistedStep;
+        _isGuideSuspendedForTaskEditing = false;
+        NotifyGuideStateChanged();
     }
 
     public void SetLanguage(string language)
@@ -2871,12 +3099,80 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
+    private async Task StopActiveSessionOperationAsync(CancellationToken cancellationToken)
+    {
+        if (_isStoppingExternalSessionActivity)
+        {
+            return;
+        }
+
+        if (_stopActiveSessionOperationAsync is null && IsRunOwnedByAnotherFeature)
+        {
+            var owner = Runtime.SessionService.CurrentRunOwner;
+            if (!string.IsNullOrWhiteSpace(owner) && _stopRunOwnerAsync is not null)
+            {
+                await _stopRunOwnerAsync(owner, cancellationToken);
+                return;
+            }
+        }
+
+        if (_stopActiveSessionOperationAsync is null)
+        {
+            LastErrorMessage = BuildSessionActivityBlockedMessage("Start");
+            await RecordFailedResultAsync(
+                "TaskQueue.Stop.SessionActivity",
+                UiOperationResult.Fail(UiErrorCode.OperationAlreadyRunning, LastErrorMessage),
+                cancellationToken);
+            return;
+        }
+
+        SetStoppingExternalSessionActivity(true);
+        try
+        {
+            await _stopActiveSessionOperationAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await RecordUnhandledExceptionAsync(
+                "TaskQueue.Stop.SessionActivity",
+                ex,
+                UiErrorCode.OperationAlreadyRunning,
+                "Failed to stop the active session operation.");
+        }
+        finally
+        {
+            SetStoppingExternalSessionActivity(false);
+        }
+    }
+
+    private void SetStoppingExternalSessionActivity(bool value)
+    {
+        if (_isStoppingExternalSessionActivity == value)
+        {
+            return;
+        }
+
+        _isStoppingExternalSessionActivity = value;
+        OnPropertyChanged(nameof(CanToggleRun));
+        OnPropertyChanged(nameof(RunButtonText));
+    }
+
     public async Task ToggleRunAsync(CancellationToken cancellationToken = default)
     {
         CurrentSessionState = Runtime.SessionService.CurrentState;
         if (_isStartRequestActive)
         {
             await StopStartRequestAsync(cancellationToken);
+            return;
+        }
+
+        if (IsExternalSessionActivityActive)
+        {
+            await StopActiveSessionOperationAsync(cancellationToken);
             return;
         }
 
@@ -2985,7 +3281,18 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
+        if (_connectionGameSharedState.IsSessionOperationActive)
+        {
+            LastErrorMessage = BuildSessionActivityBlockedMessage("Start");
+            await RecordFailedResultAsync(
+                "TaskQueue.Start.SessionActivity",
+                UiOperationResult.Fail(UiErrorCode.OperationAlreadyRunning, LastErrorMessage),
+                cancellationToken);
+            return;
+        }
+
         await _runTransitionLock.WaitAsync(cancellationToken);
+        _connectionGameSharedState.TryBeginTaskStartRequest();
         var runTransitionLockHeld = true;
         CancellationTokenSource? startRequestCts = null;
         RunOwnershipLease runLease = default;
@@ -3199,6 +3506,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
         finally
         {
+            _connectionGameSharedState.EndTaskStartRequest();
             startRequestCts?.Dispose();
             if (runTransitionLockHeld)
             {
@@ -4098,6 +4406,19 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public async Task RunSelectedTaskOnceAsync(CancellationToken cancellationToken = default)
     {
+        using var runOnceActivity = _connectionGameSharedState.TryBeginSessionOperation(
+            "TaskQueue.RunOnce",
+            requireIdle: true);
+        if (runOnceActivity is null)
+        {
+            LastErrorMessage = BuildSessionActivityBlockedMessage("RunOnce");
+            await RecordFailedResultAsync(
+                "TaskQueue.RunOnce.SessionActivity",
+                UiOperationResult.Fail(UiErrorCode.OperationAlreadyRunning, LastErrorMessage),
+                cancellationToken);
+            return;
+        }
+
         var requestedTask = SelectedTask;
         if (requestedTask is null)
         {
@@ -4353,6 +4674,19 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private async Task RunAccountSwitchManualAsync(CancellationToken cancellationToken)
     {
+        using var accountSwitchActivity = _connectionGameSharedState.TryBeginSessionOperation(
+            "TaskQueue.AccountSwitch",
+            requireIdle: true);
+        if (accountSwitchActivity is null)
+        {
+            LastErrorMessage = BuildSessionActivityBlockedMessage("AccountSwitch");
+            await RecordFailedResultAsync(
+                "TaskQueue.AccountSwitch.SessionActivity",
+                UiOperationResult.Fail(UiErrorCode.OperationAlreadyRunning, LastErrorMessage),
+                cancellationToken);
+            return;
+        }
+
         await _runTransitionLock.WaitAsync(cancellationToken);
         CancellationTokenSource? startRequestCts = null;
         RunOwnershipLease runLease = default;

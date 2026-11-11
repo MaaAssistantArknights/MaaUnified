@@ -207,6 +207,11 @@
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
+    <Style Selector="Border.copilot-list-item-body:focus-visible">
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.InputFocus}" />
+    </Style>
     <Style Selector="Border.copilot-list-item-accent">
       <Setter Property="Width" Value="3" />
       <Setter Property="Background" Value="Transparent" />
@@ -553,7 +558,8 @@
                            Margin="8,6,8,8"
                            Text="{Binding BattleListText}" />
 
-                <controls:AppSelectionList Grid.Row="1"
+                <controls:AppSelectionList x:Name="CopilotListBox"
+                                           Grid.Row="1"
                                            Classes="copilot-battle-list selection-list-section-cards selection-list-no-indicator"
                                            ItemsSource="{Binding Items}"
                                            SelectedItem="{Binding SelectedItem}"
@@ -568,6 +574,9 @@
                                     Margin="10,0,0,0"
                                     Classes="app-checkbox copilot-list-item-check"
                                     IsChecked="{Binding IsChecked, Mode=OneWay}"
+                                    IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    IsHitTestVisible="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Tag="{Binding}"
                                     Click="OnCopilotListItemCheckClick">
                             <ToolTip.Tip>
                               <Grid Margin="14"
@@ -584,6 +593,12 @@
                                   Margin="8,0,0,0"
                                   Classes="copilot-list-item-body"
                                   Tag="{Binding}"
+                                  Focusable="True"
+                                  IsTabStop="True"
+                                  IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  IsHitTestVisible="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  KeyDown="OnCopilotListItemBodyKeyDown"
+                                  ContextRequested="OnCopilotListItemBodyContextRequested"
                                   Tapped="OnCopilotListItemBodyTapped"
                                   PointerPressed="OnCopilotListItemBodyPointerPressed">
                             <ToolTip.Tip>
@@ -605,6 +620,10 @@
                                   Margin="8,0,0,0"
                                   ToolTip.Tip="{Binding DataContext.DeleteButtonText, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                   Tag="{Binding}"
+                                  IsEnabled="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  IsHitTestVisible="{Binding DataContext.CanEdit, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                  KeyDown="OnDeleteListItemKeyDown"
+                                  ContextRequested="OnDeleteListItemContextRequested"
                                   PointerPressed="OnDeleteListItemPointerPressed">
                             <TextBlock Classes="task-queue-row-action-glyph"
                                        Text="×" />

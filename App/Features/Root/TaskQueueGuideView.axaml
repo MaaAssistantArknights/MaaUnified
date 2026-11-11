@@ -1,0 +1,195 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MAAUnified.App.Features.Root.TaskQueueGuideView"
+             Classes="task-queue-guide">
+  <UserControl.Styles>
+    <Style Selector="TextBlock.guide-step-title">
+      <Setter Property="FontSize" Value="20" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.guide-step-description">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="LineHeight" Value="22" />
+      <Setter Property="MaxWidth" Value="620" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.guide-step-marker">
+      <Setter Property="Width" Value="30" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="CornerRadius" Value="15" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Card}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Border.guide-step-marker.active">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+    </Style>
+
+    <Style Selector="Border.guide-step-marker TextBlock">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <Style Selector="Button.guide-open-settings">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,4,0,0" />
+      <Setter Property="MinWidth" Value="150" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="10">
+    <Border Classes="grouped-card-frame"
+            MaxWidth="900"
+            Padding="28"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center">
+      <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <TextBlock Classes="section-title"
+                   HorizontalAlignment="Center"
+                   Text="{DynamicResource SettingsGuide}" />
+
+        <StackPanel Grid.Row="1"
+                    Margin="0,14,0,22"
+                    Spacing="10"
+                    HorizontalAlignment="Center">
+          <StackPanel Orientation="Horizontal"
+                      Spacing="8"
+                      HorizontalAlignment="Center">
+            <Border Classes="guide-step-marker" Classes.active="{Binding IsGuideStep0Current}">
+              <TextBlock Text="1" />
+            </Border>
+            <Border Classes="guide-step-marker" Classes.active="{Binding IsGuideStep1Current}">
+              <TextBlock Text="2" />
+            </Border>
+            <Border Classes="guide-step-marker" Classes.active="{Binding IsGuideStep2Current}">
+              <TextBlock Text="3" />
+            </Border>
+            <Border Classes="guide-step-marker" Classes.active="{Binding IsGuideStep3Current}">
+              <TextBlock Text="4" />
+            </Border>
+            <Border Classes="guide-step-marker" Classes.active="{Binding IsGuideStep4Current}">
+              <TextBlock Text="5" />
+            </Border>
+            <Border Classes="guide-step-marker" Classes.active="{Binding IsGuideStep5Current}">
+              <TextBlock Text="6" />
+            </Border>
+            <Border Classes="guide-step-marker" Classes.active="{Binding IsGuideStep6Current}">
+              <TextBlock Text="7" />
+            </Border>
+          </StackPanel>
+          <TextBlock HorizontalAlignment="Center"
+                     Opacity="0.7"
+                     Text="{Binding GuideStepProgressText}" />
+        </StackPanel>
+
+        <Border Grid.Row="2"
+                Padding="24"
+                CornerRadius="8"
+                Background="{DynamicResource MAA.Brush.App.Surface.Card}">
+          <ScrollViewer MaxHeight="420"
+                        HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Auto">
+            <Grid>
+            <StackPanel IsVisible="{Binding IsGuideStep0Visible}" Spacing="14">
+              <TextBlock Classes="guide-step-title" Text="{DynamicResource UiSettings}" />
+              <TextBlock Classes="guide-step-description"
+                         Text="{Binding RootTexts[TaskQueue.Guide.Ui.Description]}" />
+              <Button Classes="app-button app-secondary guide-open-settings"
+                      Tag="GUI"
+                      Content="{Binding RootTexts[TaskQueue.Guide.OpenSettings]}"
+                      Click="OnOpenGuideSettingsClick" />
+            </StackPanel>
+            <StackPanel IsVisible="{Binding IsGuideStep1Visible}" Spacing="14">
+              <TextBlock Classes="guide-step-title" Text="{DynamicResource GameSettings}" />
+              <TextBlock Classes="guide-step-description"
+                         Text="{Binding RootTexts[TaskQueue.Guide.Game.Description]}" />
+              <Button Classes="app-button app-secondary guide-open-settings"
+                      Tag="Game"
+                      Content="{Binding RootTexts[TaskQueue.Guide.OpenSettings]}"
+                      Click="OnOpenGuideSettingsClick" />
+            </StackPanel>
+            <StackPanel IsVisible="{Binding IsGuideStep2Visible}" Spacing="14">
+              <TextBlock Classes="guide-step-title" Text="{DynamicResource ConnectionSettings}" />
+              <TextBlock Classes="guide-step-description"
+                         Text="{Binding RootTexts[TaskQueue.Guide.Connection.Description]}" />
+              <Button Classes="app-button app-secondary guide-open-settings"
+                      Tag="Connect"
+                      Content="{Binding RootTexts[TaskQueue.Guide.OpenSettings]}"
+                      Click="OnOpenGuideSettingsClick" />
+            </StackPanel>
+            <StackPanel IsVisible="{Binding IsGuideStep3Visible}" Spacing="14">
+              <TextBlock Classes="guide-step-title" Text="{DynamicResource TaskSettings}" />
+              <TextBlock Classes="guide-step-description"
+                         Text="{Binding RootTexts[TaskQueue.Guide.Tasks.Description]}" />
+              <Button Classes="app-button app-secondary guide-open-settings"
+                      Tag="Tasks"
+                      Content="{Binding RootTexts[TaskQueue.Guide.ConfigureTasks]}"
+                      Click="OnOpenGuideSettingsClick" />
+            </StackPanel>
+            <StackPanel IsVisible="{Binding IsGuideStep4Visible}" Spacing="14">
+              <TextBlock Classes="guide-step-title" Text="{DynamicResource PerformanceSettings}" />
+              <TextBlock Classes="guide-step-description"
+                         Text="{Binding RootTexts[TaskQueue.Guide.Performance.Description]}" />
+              <Button Classes="app-button app-secondary guide-open-settings"
+                      Tag="Performance"
+                      Content="{Binding RootTexts[TaskQueue.Guide.OpenSettings]}"
+                      Click="OnOpenGuideSettingsClick" />
+            </StackPanel>
+            <StackPanel IsVisible="{Binding IsGuideStep5Visible}" Spacing="14">
+              <TextBlock Classes="guide-step-title" Text="{DynamicResource UpdateSettings}" />
+              <TextBlock Classes="guide-step-description"
+                         Text="{Binding RootTexts[TaskQueue.Guide.Update.Description]}" />
+              <Button Classes="app-button app-secondary guide-open-settings"
+                      Tag="VersionUpdate"
+                      Content="{Binding RootTexts[TaskQueue.Guide.OpenSettings]}"
+                      Click="OnOpenGuideSettingsClick" />
+            </StackPanel>
+            <StackPanel IsVisible="{Binding IsGuideStep6Visible}" Spacing="14">
+              <TextBlock Classes="guide-step-title" Text="{DynamicResource UserGuide}" />
+              <TextBlock Classes="guide-step-description"
+                         Text="{Binding RootTexts[TaskQueue.Guide.User.Description]}" />
+              <Button Classes="app-button app-secondary guide-open-settings"
+                      Tag="About"
+                      Content="{Binding RootTexts[TaskQueue.Guide.OpenSettings]}"
+                      Click="OnOpenGuideSettingsClick" />
+            </StackPanel>
+            </Grid>
+          </ScrollViewer>
+        </Border>
+
+        <Grid Grid.Row="3"
+              Margin="0,22,0,0"
+              ColumnDefinitions="*,Auto,Auto">
+          <Button x:Name="PreviousGuideButton"
+                  Grid.Column="1"
+                  MinWidth="104"
+                  Content="{DynamicResource PrevGuide}"
+                  IsEnabled="{Binding CanGoToPreviousGuideStep}"
+                  Click="OnPreviousGuideClick" />
+          <Button x:Name="NextGuideButton"
+                  Grid.Column="2"
+                  Margin="8,0,0,0"
+                  MinWidth="104"
+                  Content="{DynamicResource NextGuide}"
+                  IsVisible="{Binding IsGuideNextVisible}"
+                  Click="OnNextGuideClick" />
+          <Button x:Name="DoneGuideButton"
+                  Grid.Column="2"
+                  Margin="8,0,0,0"
+                  MinWidth="104"
+                  Content="{DynamicResource DoneGuide}"
+                  IsVisible="{Binding IsGuideDoneVisible}"
+                  Click="OnDoneGuideClick" />
+        </Grid>
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

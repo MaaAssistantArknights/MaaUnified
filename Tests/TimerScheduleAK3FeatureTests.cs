@@ -21,7 +21,7 @@ public sealed class TimerScheduleAK3FeatureTests
     [Fact]
     public async Task Timer_Schedule_Idle_TriggersStart()
     {
-        await using var fixture = await TestFixture.CreateAsync();
+        await using var fixture = await TestFixture.CreateAsync(preconnect: false);
         var scheduledAt = BuildScheduleTime(6, 30);
         await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: false, profile: "Default");
 
@@ -68,6 +68,209 @@ public sealed class TimerScheduleAK3FeatureTests
     }
 
     [Fact]
+    public async Task Timer_Schedule_ActiveOperationWithoutForce_Skips()
+    {
+        await using var fixture = await TestFixture.CreateAsync(preconnect: false);
+        var scheduledAt = BuildScheduleTime(8, 25);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
+        using var activityLease = fixture.Shell.ConnectionGameSharedState.BeginSessionOperation("Timer.Test.ActiveOperation");
+
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+        Assert.Equal("Default", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+        Assert.True(await WaitForLogContainsAsync(
+            fixture.Runtime.DiagnosticsService.EventLogPath,
+            "reason=session-active-without-force"));
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_ExclusiveProfileSwitch_ShouldRejectLateTaskQueueStart()
+    {
+        var switchEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSwitch = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var fixture = await TestFixture.CreateAsync(
+            preconnect: false,
+            beforeProfileSwitch: async cancellationToken =>
+            {
+                switchEntered.TrySetResult(true);
+                await releaseSwitch.Task.WaitAsync(cancellationToken);
+            });
+        try
+        {
+            var scheduledAt = BuildScheduleTime(8, 27);
+            await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
+
+            var timerTask = StartEvaluateTimerScheduleTask(fixture.Shell, scheduledAt);
+            await switchEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.True(fixture.Shell.ConnectionGameSharedState.IsSessionOperationExclusiveActive);
+            Assert.True(fixture.Shell.TaskQueuePage.CanToggleRun);
+            Assert.Equal(
+                fixture.Shell.TaskQueuePage.RootTexts.GetOrDefault("TaskQueue.Root.Stop", "Stop"),
+                fixture.Shell.TaskQueuePage.RunButtonText);
+            Assert.Equal("Default", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+
+            await fixture.Shell.TaskQueuePage.StartAsync();
+
+            Assert.Equal("Default", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+            Assert.Equal(0, fixture.Bridge.StartCallCount);
+            Assert.False(fixture.Shell.TaskQueuePage.IsStartRequestActive);
+            Assert.Contains(
+                "定时任务",
+                fixture.Shell.TaskQueuePage.LastErrorMessage,
+                StringComparison.Ordinal);
+
+            releaseSwitch.TrySetResult(true);
+            await timerTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal("Night", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+            Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
+            Assert.Equal(1, fixture.Bridge.StartCallCount);
+            Assert.False(fixture.Shell.ConnectionGameSharedState.IsSessionOperationExclusiveActive);
+        }
+        finally
+        {
+            releaseSwitch.TrySetResult(true);
+        }
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_CentralStopDuringExclusiveSwitch_ShouldCancelScheduledStart()
+    {
+        var switchEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSwitch = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var fixture = await TestFixture.CreateAsync(
+            preconnect: false,
+            beforeProfileSwitch: async cancellationToken =>
+            {
+                switchEntered.TrySetResult(true);
+                await releaseSwitch.Task.WaitAsync(cancellationToken);
+            });
+        var scheduledAt = BuildScheduleTime(8, 28);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
+
+        var timerTask = StartEvaluateTimerScheduleTask(fixture.Shell, scheduledAt);
+        await switchEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True(fixture.Shell.ConnectionGameSharedState.IsTimerSessionOperationActive);
+        Assert.True(fixture.Shell.TaskQueuePage.CanToggleRun);
+        Assert.Equal(
+            fixture.Shell.TaskQueuePage.RootTexts.GetOrDefault("TaskQueue.Root.Stop", "Stop"),
+            fixture.Shell.TaskQueuePage.RunButtonText);
+
+        var centralStopTask = fixture.Shell.TaskQueuePage.ToggleRunAsync();
+        await Task.Delay(50);
+        releaseSwitch.TrySetResult(true);
+
+        await timerTask.WaitAsync(TimeSpan.FromSeconds(10));
+        await centralStopTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal("Default", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+        Assert.False(fixture.Shell.ConnectionGameSharedState.IsSessionOperationActive);
+        Assert.Equal(
+            fixture.Shell.TaskQueuePage.RootTexts.GetOrDefault("TaskQueue.Root.LinkStart", "Link Start!"),
+            fixture.Shell.TaskQueuePage.RunButtonText);
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_CentralStopBeyondFiveSeconds_ShouldNotStartAfterBlockedSwitchReleases()
+    {
+        var switchEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSwitch = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var fixture = await TestFixture.CreateAsync(
+            preconnect: false,
+            beforeProfileSwitch: async _ =>
+            {
+                switchEntered.TrySetResult(true);
+                await releaseSwitch.Task;
+            });
+        var scheduledAt = BuildScheduleTime(8, 29);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
+
+        var timerTask = StartEvaluateTimerScheduleTask(fixture.Shell, scheduledAt);
+        await switchEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var centralStopTask = fixture.Shell.TaskQueuePage.ToggleRunAsync();
+
+        await Task.Delay(TimeSpan.FromSeconds(5.2));
+        Assert.False(centralStopTask.IsCompleted);
+
+        releaseSwitch.TrySetResult(true);
+        await timerTask.WaitAsync(TimeSpan.FromSeconds(5));
+        await centralStopTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal("Default", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+        Assert.False(fixture.Shell.ConnectionGameSharedState.IsSessionOperationActive);
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_ConnectedWithoutForce_Skips()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var scheduledAt = BuildScheduleTime(8, 26);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
+        Assert.Equal(SessionState.Connected, fixture.Runtime.SessionService.CurrentState);
+
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+        Assert.Equal("Default", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+        Assert.True(await WaitForLogContainsAsync(
+            fixture.Runtime.DiagnosticsService.EventLogPath,
+            "session=Connected"));
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_ConnectedAndForce_StopsThenStarts()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var scheduledAt = BuildScheduleTime(8, 28);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: true, custom: false, profile: "Default");
+        Assert.Equal(SessionState.Connected, fixture.Runtime.SessionService.CurrentState);
+
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+
+        Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
+        Assert.True(await WaitForLogContainsAsync(
+            fixture.Runtime.DiagnosticsService.EventLogPath,
+            "Timer.Schedule.StopAndStart"));
+    }
+
+    [Fact]
+    public async Task Timer_Schedule_ForceWaitsForActiveOperationBeforeSwitchAndStart()
+    {
+        await using var fixture = await TestFixture.CreateAsync(preconnect: false);
+        var scheduledAt = BuildScheduleTime(8, 27);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: true, custom: true, profile: "Night");
+        var activityLease = fixture.Shell.ConnectionGameSharedState.BeginSessionOperation("Timer.Test.BlockingOperation");
+
+        var timerTask = InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt);
+        await Task.Delay(100);
+        Assert.False(timerTask.IsCompleted);
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+        Assert.Equal("Default", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+
+        activityLease.Dispose();
+        await timerTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal("Night", fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile);
+        Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
+        Assert.Equal(1, fixture.Bridge.StartCallCount);
+        Assert.True(await WaitForLogContainsAsync(
+            fixture.Runtime.DiagnosticsService.EventLogPath,
+            "Timer.Schedule.WaitForIdle"));
+    }
+
+    [Fact]
     public async Task Timer_Schedule_SameMinute_Deduplicated()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -79,13 +282,13 @@ public sealed class TimerScheduleAK3FeatureTests
 
         Assert.True(fixture.Shell.TaskQueuePage.IsRunning);
         Assert.Equal(1, fixture.Bridge.StartCallCount);
-        Assert.Equal(0, fixture.Bridge.StopCallCount);
+        Assert.Equal(1, fixture.Bridge.StopCallCount);
     }
 
     [Fact]
     public async Task Timer_Schedule_LogsScopes()
     {
-        await using var fixture = await TestFixture.CreateAsync();
+        await using var fixture = await TestFixture.CreateAsync(preconnect: false);
         var scheduledAt = BuildScheduleTime(10, 40);
         await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
 
@@ -104,7 +307,7 @@ public sealed class TimerScheduleAK3FeatureTests
     [Fact]
     public async Task Timer_Schedule_CustomProfileSwitch_ShouldNotLeakPostActionState()
     {
-        await using var fixture = await TestFixture.CreateAsync();
+        await using var fixture = await TestFixture.CreateAsync(preconnect: false);
         var defaultProfile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles["Default"];
         var nightProfile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles["Night"];
         defaultProfile.Values["TaskQueue.PostAction"] = new JsonObject
@@ -121,6 +324,7 @@ public sealed class TimerScheduleAK3FeatureTests
         await fixture.Shell.TaskQueuePage.ReloadConfigurationContextAsync();
 
         fixture.Shell.TaskQueuePage.PostActionModule.Shutdown = true;
+        Assert.True(await fixture.Shell.TaskQueuePage.FlushConfigurationSavesForCloseAsync());
         var scheduledAt = BuildScheduleTime(10, 41);
         await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: true, profile: "Night");
 
@@ -146,7 +350,7 @@ public sealed class TimerScheduleAK3FeatureTests
     [Fact]
     public async Task Timer_Schedule_LogsScopes_RepeatedRuns_StayStable()
     {
-        await using var fixture = await TestFixture.CreateAsync();
+        await using var fixture = await TestFixture.CreateAsync(preconnect: false);
         var expectedSwitchProfileCount = 0;
         var expectedStartCount = 0;
 
@@ -178,6 +382,7 @@ public sealed class TimerScheduleAK3FeatureTests
                 delayMs: 30));
 
             await fixture.Shell.StopAsync();
+            fixture.MoveSessionStateForTest(SessionState.Idle);
             fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile = "Default";
             await fixture.Runtime.ConfigurationService.SaveAsync();
             await fixture.Shell.TaskQueuePage.ReloadTasksAsync();
@@ -188,7 +393,7 @@ public sealed class TimerScheduleAK3FeatureTests
     [Fact]
     public async Task Timer_Schedule_InvalidProfile_LogsError()
     {
-        await using var fixture = await TestFixture.CreateAsync();
+        await using var fixture = await TestFixture.CreateAsync(preconnect: false);
         var scheduledAt = BuildScheduleTime(11, 11);
         var settings = fixture.Shell.SettingsPage;
         foreach (var slot in settings.Timers)
@@ -372,13 +577,18 @@ public sealed class TimerScheduleAK3FeatureTests
 
     private static async Task InvokeEvaluateTimerScheduleAsync(MainShellViewModel shell, DateTimeOffset now)
     {
+        await StartEvaluateTimerScheduleTask(shell, now);
+    }
+
+    private static Task StartEvaluateTimerScheduleTask(MainShellViewModel shell, DateTimeOffset now)
+    {
         var method = typeof(MainShellViewModel).GetMethod(
             "EvaluateTimerScheduleAsync",
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(method);
         var task = method!.Invoke(shell, [now, CancellationToken.None]) as Task;
         Assert.NotNull(task);
-        await task!;
+        return task!;
     }
 
     private static async Task<bool> WaitForLogContainsAsync(string path, string expected, int retry = 20, int delayMs = 30)
@@ -487,8 +697,10 @@ public sealed class TimerScheduleAK3FeatureTests
 
         public CountingBridge Bridge { get; }
 
-        public static async Task<TestFixture> CreateAsync(IAppDialogService? dialogService = null)
-        {
+        public static async Task<TestFixture> CreateAsync(
+            IAppDialogService? dialogService = null,
+            bool preconnect = true,
+            Func<CancellationToken, Task>? beforeProfileSwitch = null)        {
             var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
 
@@ -529,6 +741,10 @@ public sealed class TimerScheduleAK3FeatureTests
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
             var connect = new ConnectFeatureService(session, config, log, bridge, root);
+            var configurationProfiles = new ConfigurationProfileFeatureService(config);
+            IConfigurationProfileFeatureService runtimeConfigurationProfiles = beforeProfileSwitch is null
+                ? configurationProfiles
+                : new BeforeSwitchConfigurationProfileFeatureService(configurationProfiles, beforeProfileSwitch);
             var runtime = new MAAUnifiedRuntime
             {
                 CoreBridge = bridge,
@@ -548,7 +764,7 @@ public sealed class TimerScheduleAK3FeatureTests
                 OverlayFeatureService = new OverlayFeatureService(capability),
                 NotificationProviderFeatureService = new NotificationProviderFeatureService(),
                 SettingsFeatureService = new SettingsFeatureService(config, capability, diagnostics),
-                ConfigurationProfileFeatureService = new ConfigurationProfileFeatureService(config),
+                ConfigurationProfileFeatureService = runtimeConfigurationProfiles,
                 DialogFeatureService = new DialogFeatureService(diagnostics),
                 PostActionFeatureService = new PostActionFeatureService(
                     config,
@@ -567,12 +783,25 @@ public sealed class TimerScheduleAK3FeatureTests
                 runtime,
                 dialogService ?? new ScriptedDialogService(DialogReturnSemantic.Confirm));
             await shell.InitializeAsync();
-            var connectResult = await TestConnectionFixtureSupport.ConnectReadyAsync(runtime.ConnectFeatureService, readyAdbPath);
-            Assert.True(connectResult.Success, connectResult.Message);
+            if (preconnect)
+            {
+                var connectResult = await TestConnectionFixtureSupport.ConnectReadyAsync(runtime.ConnectFeatureService, readyAdbPath);
+                Assert.True(connectResult.Success, connectResult.Message);
+            }
+
             TestShellCleanup.StopTimerScheduler(shell);
             await shell.TaskQueuePage.ReloadTasksAsync();
 
             return new TestFixture(root, runtime, shell, bridge);
+        }
+
+        public void MoveSessionStateForTest(SessionState state)
+        {
+            var field = typeof(UnifiedSessionService).GetField(
+                "_stateMachine",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var stateMachine = Assert.IsType<SessionStateMachine>(field?.GetValue(Runtime.SessionService));
+            Assert.True(stateMachine.TryMoveTo(state), $"Expected session transition to {state}.");
         }
 
         public async Task ConfigureSingleTimerAsync(
@@ -693,6 +922,57 @@ public sealed class TimerScheduleAK3FeatureTests
                 semantic,
                 semantic == DialogReturnSemantic.Confirm ? new WarningConfirmDialogPayload(true) : null,
                 "scripted"));
+        }
+    }
+
+    private sealed class BeforeSwitchConfigurationProfileFeatureService : IConfigurationProfileFeatureService
+    {
+        private readonly IConfigurationProfileFeatureService _inner;
+        private readonly Func<CancellationToken, Task> _beforeSwitch;
+
+        public BeforeSwitchConfigurationProfileFeatureService(
+            IConfigurationProfileFeatureService inner,
+            Func<CancellationToken, Task> beforeSwitch)
+        {
+            _inner = inner;
+            _beforeSwitch = beforeSwitch;
+        }
+
+        public Task<UiOperationResult<ConfigurationProfileState>> LoadStateAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return _inner.LoadStateAsync(cancellationToken);
+        }
+
+        public Task<UiOperationResult<ConfigurationProfileState>> AddProfileAsync(
+            string profileName,
+            string? copyFrom = null,
+            CancellationToken cancellationToken = default)
+        {
+            return _inner.AddProfileAsync(profileName, copyFrom, cancellationToken);
+        }
+
+        public Task<UiOperationResult<ConfigurationProfileState>> DeleteProfileAsync(
+            string profileName,
+            CancellationToken cancellationToken = default)
+        {
+            return _inner.DeleteProfileAsync(profileName, cancellationToken);
+        }
+
+        public Task<UiOperationResult<ConfigurationProfileState>> MoveProfileAsync(
+            string profileName,
+            int offset,
+            CancellationToken cancellationToken = default)
+        {
+            return _inner.MoveProfileAsync(profileName, offset, cancellationToken);
+        }
+
+        public async Task<UiOperationResult<ConfigurationProfileState>> SwitchProfileAsync(
+            string profileName,
+            CancellationToken cancellationToken = default)
+        {
+            await _beforeSwitch(cancellationToken);
+            return await _inner.SwitchProfileAsync(profileName, cancellationToken);
         }
     }
 

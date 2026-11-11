@@ -11,8 +11,9 @@
                                  SelectedItem="{Binding SelectedSection}"
                                  SelectionChanged="OnSectionSelectionChanged"
                                  Classes="settings-rail"
-                                 VisualMode="Rail"
-                                 Focusable="False">
+                                 Focusable="True"
+                                 IsTabStop="True"
+                                 VisualMode="Rail">
         <controls:AppSelectionList.ItemTemplate>
           <DataTemplate DataType="settingsVm:SettingsSectionViewModel">
             <Border Classes="app-selection-list-item-shell settings-rail-item">
@@ -36,11 +37,13 @@
           <Border x:Name="SectionTimer"
                   Classes="settings-section-anchor" />
           <Border x:Name="SectionPerformance"
-                  Classes="settings-section-anchor" />
+                  Classes="settings-section-anchor"
+                  IsEnabled="{Binding IsSessionIdle}" />
           <Border x:Name="SectionGame"
                   Classes="settings-section-anchor" />
           <Border x:Name="SectionConnect"
-                  Classes="settings-section-anchor" />
+                  Classes="settings-section-anchor"
+                  IsEnabled="{Binding IsSessionIdle}" />
           <Border x:Name="SectionStart"
                   Classes="settings-section-anchor" />
           <Border x:Name="SectionRemoteControl"

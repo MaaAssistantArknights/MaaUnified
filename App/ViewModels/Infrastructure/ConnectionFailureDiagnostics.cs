@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Services.Localization;
 using MAAUnified.CoreBridge;
 
 namespace MAAUnified.App.ViewModels.Infrastructure;
@@ -102,6 +103,8 @@ public sealed record ConnectionFailureDiagnostic(
 
 public static class ConnectionFailureDiagnosticBuilder
 {
+    private const string TextScope = "ConnectionFailureDiagnosticBuilder";
+
     public static ConnectionFailureDiagnostic Build(
         UiOperationResult connectResult,
         ConnectionGameSharedStateViewModel? state,
@@ -112,7 +115,10 @@ public static class ConnectionFailureDiagnosticBuilder
         var attempts = candidateFailures?.ToList() ?? [];
         var details = BuildDetails(connectResult, state, attempts, adbCommandFailure);
         var fallbackMessage = BuildGenericMessage(state, language);
-        var fallbackSuggestion = Select(language, "请检查连接设置，尝试重启模拟器与 ADB；仍失败时重启电脑。", "Check connection settings, try restarting the emulator and ADB, then reboot if it still fails.");
+        var fallbackSuggestion = Text(
+            language,
+            "ConnectionFailure.Generic.Suggestion",
+            "Check connection settings, try restarting the emulator and ADB, then reboot if it still fails.");
 
         var code = connectResult.Error?.Code ?? string.Empty;
         var messageText = connectResult.Message ?? string.Empty;
@@ -124,8 +130,8 @@ public static class ConnectionFailureDiagnosticBuilder
             return new ConnectionFailureDiagnostic(
                 true,
                 ConnectionFailureCategory.ConnectTimeout,
-                Select(language, "连接模拟器超时。", "Connecting to the emulator timed out."),
-                Select(language, "请确认模拟器已启动，连接地址和端口正确，ADB 服务可用。", "Make sure the emulator is running, the address and port are correct, and ADB is available."),
+                Text(language, "ConnectionFailure.Timeout.Message", "Connecting to the emulator timed out."),
+                Text(language, "ConnectionFailure.Timeout.Suggestion", "Make sure the emulator is running, the address and port are correct, and ADB is available."),
                 details);
         }
 
@@ -134,8 +140,8 @@ public static class ConnectionFailureDiagnosticBuilder
             return new ConnectionFailureDiagnostic(
                 true,
                 ConnectionFailureCategory.TouchModeUnavailable,
-                Select(language, "当前触控模式不可用。", "The current touch mode is not available."),
-                Select(language, "请前往连接设置切换其他触控模式后重试。", "Switch to another touch mode in connection settings, then try again."),
+                Text(language, "ConnectionFailure.TouchMode.Message", "The current touch mode is not available."),
+                Text(language, "ConnectionFailure.TouchMode.Suggestion", "Switch to another touch mode in connection settings, then try again."),
                 details);
         }
 
@@ -144,8 +150,8 @@ public static class ConnectionFailureDiagnosticBuilder
             return new ConnectionFailureDiagnostic(
                 true,
                 ConnectionFailureCategory.AddressOrPortUnavailable,
-                Select(language, "无法连接到这个地址或端口。", "Could not connect to this address or port."),
-                Select(language, "请确认模拟器已启动，连接地址和端口正确；常见 ADB 端口为 5555，部分模拟器会使用 5554 等端口。", "Make sure the emulator is running and the address and port are correct; common ADB ports include 5555, while some emulators use ports such as 5554."),
+                Text(language, "ConnectionFailure.AddressPort.Message", "Could not connect to this address or port."),
+                Text(language, "ConnectionFailure.AddressPort.Suggestion", "Make sure the emulator is running and the address and port are correct; common ADB ports include 5555, while some emulators use ports such as 5554."),
                 details);
         }
 
@@ -154,8 +160,8 @@ public static class ConnectionFailureDiagnosticBuilder
             return new ConnectionFailureDiagnostic(
                 true,
                 ConnectionFailureCategory.AdbDeviceUnavailable,
-                Select(language, "ADB 未连接到可用设备。", "ADB is not connected to an available device."),
-                Select(language, "请在 adb devices 中确认设备为 device 状态；如果显示 unauthorized 请在模拟器内授权，如果显示 offline/no devices 请重启模拟器或 ADB 后重试。", "Check adb devices and make sure the target is in the device state. If it shows unauthorized, authorize it in the emulator; if it shows offline/no devices, restart the emulator or ADB and try again."),
+                Text(language, "ConnectionFailure.AdbDevice.Message", "ADB is not connected to an available device."),
+                Text(language, "ConnectionFailure.AdbDevice.Suggestion", "Check adb devices and make sure the target is in the device state. If it shows unauthorized, authorize it in the emulator; if it shows offline/no devices, restart the emulator or ADB and try again."),
                 details);
         }
 
@@ -164,8 +170,8 @@ public static class ConnectionFailureDiagnosticBuilder
             return new ConnectionFailureDiagnostic(
                 true,
                 ConnectionFailureCategory.CoreUnavailable,
-                Select(language, "连接核心尚未就绪或已释放。", "The connection core is not ready or has been disposed."),
-                Select(language, "请稍等后重试；如果持续出现，请重启应用。", "Try again after a moment; restart the app if it keeps happening."),
+                Text(language, "ConnectionFailure.CoreUnavailable.Message", "The connection core is not ready or has been disposed."),
+                Text(language, "ConnectionFailure.CoreUnavailable.Suggestion", "Try again after a moment; restart the app if it keeps happening."),
                 details);
         }
 
@@ -174,8 +180,11 @@ public static class ConnectionFailureDiagnosticBuilder
             return new ConnectionFailureDiagnostic(
                 true,
                 ConnectionFailureCategory.CoreConnectFailed,
-                Select(language, $"连接核心返回失败：{messageText.Trim()}", $"The connection core reported a failure: {messageText.Trim()}"),
-                Select(language, "请检查模拟器、ADB 路径和连接配置；详情中保留了 core 回调信息。", "Check the emulator, ADB path, and connection config; core callback details are preserved below."),
+                string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    Text(language, "ConnectionFailure.CoreFailure.MessageFormat", "The connection core reported a failure: {0}"),
+                    messageText.Trim()),
+                Text(language, "ConnectionFailure.CoreFailure.Suggestion", "Check the emulator, ADB path, and connection config; core callback details are preserved below."),
                 details);
         }
 
@@ -184,8 +193,8 @@ public static class ConnectionFailureDiagnosticBuilder
             return new ConnectionFailureDiagnostic(
                 true,
                 ConnectionFailureCategory.AdbDeviceUnavailable,
-                Select(language, "ADB 未连接到目标设备。", "ADB did not connect to the target device."),
-                Select(language, "请检查连接地址和端口是否正确，常见 ADB 端口为 5555；确认模拟器已启动、ADB 已开启，并与电脑在同一网络内。", "Check that the address and port are correct; common ADB port is 5555. Make sure the emulator is running, ADB is enabled, and the device is on the same network."),
+                Text(language, "ConnectionFailure.AdbTarget.Message", "ADB did not connect to the target device."),
+                Text(language, "ConnectionFailure.AdbTarget.Suggestion", "Check that the address and port are correct; common ADB port is 5555. Make sure the emulator is running, ADB is enabled, and the device is on the same network."),
                 details);
         }
 
@@ -198,8 +207,8 @@ public static class ConnectionFailureDiagnosticBuilder
                 return new ConnectionFailureDiagnostic(
                     true,
                     ConnectionFailureCategory.AdbCommandFailed,
-                    Select(language, "ADB 启动失败。", "ADB failed to start."),
-                    Select(language, "请检查连接设置中的 ADB 路径是否指向 adb 可执行文件，而不是 dmg、zip、目录或其他安装包。", "Check that the ADB path points to the adb executable, not a dmg, zip, folder, or installer package."),
+                    Text(language, "ConnectionFailure.AdbStart.Message", "ADB failed to start."),
+                    Text(language, "ConnectionFailure.AdbStart.Suggestion", "Check that the ADB path points to the adb executable, not a dmg, zip, folder, or installer package."),
                     details);
             }
 
@@ -208,16 +217,16 @@ public static class ConnectionFailureDiagnosticBuilder
                 return new ConnectionFailureDiagnostic(
                     true,
                     ConnectionFailureCategory.AddressOrPortUnavailable,
-                    Select(language, "连接配置无效。", "The connection configuration is invalid."),
-                    Select(language, "请检查连接地址格式、端口、连接类型和 ADB 路径后重试。", "Check the address format, port, connection type, and ADB path, then try again."),
+                    Text(language, "ConnectionFailure.InvalidConfiguration.Message", "The connection configuration is invalid."),
+                    Text(language, "ConnectionFailure.InvalidConfiguration.Suggestion", "Check the address format, port, connection type, and ADB path, then try again."),
                     details);
             }
 
             return new ConnectionFailureDiagnostic(
                 true,
                 ConnectionFailureCategory.CoreConnectFailed,
-                Select(language, "连接失败。", "Connection failed."),
-                Select(language, "请点击“详细报错”查看核心返回的错误信息，并据此检查模拟器和 ADB 连接。", "Open error details to inspect the core error output, then check the emulator and ADB connection."),
+                Text(language, "ConnectionFailure.ConnectionFailed.Message", "Connection failed."),
+                Text(language, "ConnectionFailure.ConnectionFailed.Suggestion", "Open error details to inspect the core error output, then check the emulator and ADB connection."),
                 details);
         }
 
@@ -240,7 +249,7 @@ public static class ConnectionFailureDiagnosticBuilder
                 true,
                 ClassifySettingsHint(settingsHint),
                 BuildSpecificSettingsMessage(settingsHint, language),
-                Select(language, "请先修正连接设置后再重试。", "Fix the connection settings first, then try again."),
+                Text(language, "ConnectionFailure.FixSettings.Suggestion", "Fix the connection settings first, then try again."),
                 details);
         }
 
@@ -256,9 +265,9 @@ public static class ConnectionFailureDiagnosticBuilder
     {
         var segments = new List<string>
         {
-            Select(
+            Text(
                 language,
-                "连接失败。请“检查连接设置” -> “尝试重启模拟器与 ADB” -> “重启电脑”。",
+                "ConnectionFailure.Generic.Message",
                 "Connection failed. Check connection settings -> try restarting the emulator and ADB -> reboot the computer."),
         };
 
@@ -275,38 +284,38 @@ public static class ConnectionFailureDiagnosticBuilder
     {
         if (LooksLikeAdbExecutablePathProblem(failure))
         {
-            return Select(language, "ADB 启动失败。", "ADB failed to start.");
+            return Text(language, "ConnectionFailure.AdbStart.Message", "ADB failed to start.");
         }
 
         if (LooksLikeAdbDeviceUnavailable(failure))
         {
-            return Select(language, "ADB 未连接到目标设备。", "ADB did not connect to the target device.");
+            return Text(language, "ConnectionFailure.AdbTarget.Message", "ADB did not connect to the target device.");
         }
 
-        return Select(language, "ADB 命令执行失败。", "ADB command failed.");
+        return Text(language, "ConnectionFailure.AdbCommand.Message", "ADB command failed.");
     }
 
     private static string BuildAdbCommandFailureSuggestion(AdbCommandFailureInfo failure, string? language)
     {
         if (LooksLikeAdbExecutablePathProblem(failure))
         {
-            return Select(
+            return Text(
                 language,
-                "请检查连接设置中的 ADB 路径是否指向 adb 可执行文件，而不是 dmg、zip、目录或其他安装包。",
+                "ConnectionFailure.AdbStart.Suggestion",
                 "Check that the ADB path points to the adb executable, not a dmg, zip, folder, or installer package.");
         }
 
         if (LooksLikeAdbDeviceUnavailable(failure))
         {
-            return Select(
+            return Text(
                 language,
-                "请检查连接地址和端口是否正确，常见 ADB 端口为 5555；确认模拟器已启动、ADB 已开启，并与电脑在同一网络内。",
+                "ConnectionFailure.AdbTarget.Suggestion",
                 "Check that the address and port are correct; common ADB port is 5555. Make sure the emulator is running, ADB is enabled, and the device is on the same network.");
         }
 
-        return Select(
+        return Text(
             language,
-            "请点击“详细报错”查看 ADB 输出；确认 ADB 可执行，或尝试重启模拟器与 ADB。",
+            "ConnectionFailure.AdbCommand.Suggestion",
             "Open error details to inspect ADB output; make sure ADB is executable, or restart the emulator and ADB.");
     }
 
@@ -412,10 +421,10 @@ public static class ConnectionFailureDiagnosticBuilder
     private static string BuildSpecificSettingsMessage(string settingsHint, string? language)
     {
         var normalized = settingsHint.Trim();
-        return Select(
-            language,
-            $"连接失败：{normalized}",
-            $"Connection failed: {normalized}");
+        return string.Format(
+            System.Globalization.CultureInfo.CurrentCulture,
+            Text(language, "Settings.Connect.Error.ConnectFailed", "Connection failed: {0}"),
+            normalized);
     }
 
     private static string BuildDetails(
@@ -581,6 +590,9 @@ public static class ConnectionFailureDiagnosticBuilder
     private static string Flatten(string value)
         => value.ReplaceLineEndings(" ").Trim();
 
-    private static string Select(string? language, string zh, string en)
-        => DialogTextCatalog.UseChinese(language) ? zh : en;
+    private static string Text(string? language, string key, string fallback)
+    {
+        return UiLocalizer.Create(UiLanguageCatalog.Normalize(language))
+            .GetOrDefault(key, fallback, TextScope);
+    }
 }

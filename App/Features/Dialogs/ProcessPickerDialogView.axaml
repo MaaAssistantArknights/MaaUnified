@@ -132,10 +132,12 @@
         <Button x:Name="CancelButton"
                 Classes="app-button app-secondary"
                 Content="Cancel"
+                IsCancel="True"
                 Click="OnCancelClick" />
         <Button x:Name="ConfirmButton"
                 Classes="app-button app-primary"
                 Content="Select"
+                IsDefault="True"
                 Click="OnConfirmClick" />
       </StackPanel>
     </controls:AppWindowFrame.ActionsContent>

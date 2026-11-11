@@ -213,6 +213,8 @@ public interface IConnectFeatureService
 
     Task<UiOperationResult> StopAsync(CancellationToken cancellationToken = default);
 
+    bool TryCancelActiveLifecycleOperation(string reason) => false;
+
     Task<UiOperationResult> WaitAndStopAsync(TimeSpan wait, CancellationToken cancellationToken = default);
 
     Task<UiOperationResult<ImportReport>> ImportLegacyConfigAsync(ImportSource source, bool manualImport, CancellationToken cancellationToken = default);

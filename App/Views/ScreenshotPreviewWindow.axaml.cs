@@ -18,11 +18,21 @@ public partial class ScreenshotPreviewWindow : Window
 
     public void SetPreview(Bitmap bitmap, string title, string subtitle, string? statusText = null)
     {
-        UpdateChrome(title, subtitle, statusText);
+        SetPreview(bitmap, title, subtitle, statusText, closeText: null);
+    }
+
+    public void SetPreview(Bitmap bitmap, string title, string subtitle, string? statusText, string? closeText)
+    {
+        UpdateChrome(title, subtitle, statusText, closeText);
         ReplacePreviewBitmap(bitmap);
     }
 
     public void UpdateChrome(string title, string subtitle, string? statusText = null)
+    {
+        UpdateChrome(title, subtitle, statusText, closeText: null);
+    }
+
+    public void UpdateChrome(string title, string subtitle, string? statusText, string? closeText)
     {
         Title = title;
         DialogShell.Title = title;
@@ -31,6 +41,10 @@ public partial class ScreenshotPreviewWindow : Window
         PreviewHeaderText.IsVisible = !string.IsNullOrWhiteSpace(subtitle);
         PreviewStatusText.Text = statusText ?? string.Empty;
         PreviewStatusText.IsVisible = false;
+        if (!string.IsNullOrWhiteSpace(closeText))
+        {
+            CloseActionButton.Content = closeText;
+        }
     }
 
     private void OnCloseClick(object? sender, RoutedEventArgs e)

@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Threading;
 
 namespace MAAUnified.App.Controls;
 
@@ -15,6 +17,8 @@ public sealed class AppPopupMenu : Popup
     {
         _presenter = new AppPopupMenuPresenter();
         _presenter.ItemInvoked += OnPresenterItemInvoked;
+        _presenter.DismissRequested += OnPresenterDismissRequested;
+        Opened += OnOpened;
 
         Classes.Set("app-popup-menu", true);
         IsLightDismissEnabled = true;
@@ -50,7 +54,39 @@ public sealed class AppPopupMenu : Popup
         }
         finally
         {
-            IsOpen = false;
+            CloseAndRestoreFocus();
         }
+    }
+
+    private void OnPresenterDismissRequested(object? sender, EventArgs e)
+    {
+        CloseAndRestoreFocus();
+    }
+
+    private void OnOpened(object? sender, EventArgs e)
+    {
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (IsOpen)
+                {
+                    _presenter.FocusFirstEnabledItem();
+                }
+            },
+            DispatcherPriority.Input);
+    }
+
+    private void CloseAndRestoreFocus()
+    {
+        var owner = PlacementTarget as Control;
+        IsOpen = false;
+        if (owner is null)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(
+            () => owner.Focus(NavigationMethod.Directional, KeyModifiers.None),
+            DispatcherPriority.Input);
     }
 }

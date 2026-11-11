@@ -35,11 +35,11 @@
               IsVisible="{Binding ConnectionGameSharedState.IsYoStarEnClientType}">
         <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow">
           <TextBlock Classes="app-body"
-                     Text="YoStar EN resolution guide is available."
+                     Text="{Binding RootTexts[Settings.Game.YoStarResolutionGuide.Available]}"
                      TextWrapping="Wrap" />
           <Button Classes="app-button app-secondary"
                   HorizontalAlignment="Left"
-                  Content="Open YoStar EN Resolution Guide"
+                  Content="{Binding RootTexts[Settings.Game.YoStarResolutionGuide.Open]}"
                   Click="OnOpenYoStarResolutionGuideClick" />
         </controls:AdaptiveSpacingStackPanel>
       </Border>
@@ -48,11 +48,11 @@
               IsVisible="{Binding ConnectionGameSharedState.ShowOverseasClientHint}">
         <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow">
           <TextBlock Classes="app-body"
-                     Text="Using an overseas client? See adaptation help."
+                     Text="{Binding RootTexts[Settings.Game.OverseasClientHint]}"
                      TextWrapping="Wrap" />
           <Button Classes="app-button app-secondary"
                   HorizontalAlignment="Left"
-                  Content="Open Overseas Adaptation Guide"
+                  Content="{Binding RootTexts[Settings.Game.OverseasAdaptationGuide.Open]}"
                   Click="OnOpenOverseasAdaptationGuideClick" />
         </controls:AdaptiveSpacingStackPanel>
       </Border>

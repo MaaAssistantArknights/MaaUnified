@@ -15,7 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <AssemblyAttribute Include="MAAUnified.App.Infrastructure.BuildDateTimeAttribute">
+    <AssemblyAttribute Include="MAAUnified.App.Properties.BuildDateTimeAttribute">
       <_Parameter1>$([System.DateTime]::UtcNow.ToString("O"))</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>

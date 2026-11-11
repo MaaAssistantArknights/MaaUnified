@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using Avalonia.Threading;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Orchestration;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.CoreBridge;
 using MAAUnified.Compat.Runtime;
@@ -284,7 +285,11 @@ public sealed partial class CopilotPageViewModel
         set => SelectedTypeIndex = value;
     }
 
-    public bool CanEdit => !IsRunning;
+    public bool CanEdit =>
+        !_isStartRequestActive
+        && !IsRunning
+        && CurrentSessionState != SessionState.Connecting
+        && _connectionState?.IsSessionOperationActive != true;
 
     public bool ShowClipboardSetButton => CopilotTabIndex is 0 or 2;
 

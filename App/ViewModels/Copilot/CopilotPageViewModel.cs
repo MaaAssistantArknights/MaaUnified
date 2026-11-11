@@ -16,6 +16,8 @@ using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
+using MAAUnified.App.ViewModels.Settings;
+
 namespace MAAUnified.App.ViewModels.Copilot;
 
 internal readonly record struct CopilotCallbackPayload(
@@ -68,13 +70,17 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
     private readonly ConcurrentQueue<SessionCallbackEnvelope> _pendingSessionCallbacks = new();
     private int _callbackDrainScheduled;
 
+    private readonly ConnectionGameSharedStateViewModel? _connectionState;
+
     public CopilotPageViewModel(
         MAAUnifiedRuntime runtime,
         IAppDialogService? dialogService = null,
         Func<string, CancellationToken, Task>? stopRunOwnerAsync = null,
-        Func<CancellationToken, Task<UiOperationResult>>? ensureConnectedAsync = null)
+        Func<CancellationToken, Task<UiOperationResult>>? ensureConnectedAsync = null,
+        ConnectionGameSharedStateViewModel? connectionState = null)
         : base(runtime)
     {
+        _connectionState = connectionState;
         _dialogService = dialogService ?? NoOpAppDialogService.Instance;
         _stopRunOwnerAsync = stopRunOwnerAsync;
         _ensureConnectedAsync = ensureConnectedAsync;
@@ -231,12 +237,48 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         }
     }
 
+    public bool IsExternalSessionActivityActive
+    {
+        get
+        {
+            if (_isStartRequestActive)
+            {
+                return false;
+            }
+
+            if (CurrentSessionState == SessionState.Connecting || IsRunOwnedByAnotherFeature)
+            {
+                return true;
+            }
+
+            return CurrentSessionState is not (SessionState.Running or SessionState.Stopping)
+                && _connectionState?.IsSessionOperationActive == true;
+        }
+    }
+
+    private bool IsRunOwnedByAnotherFeature
+    {
+        get
+        {
+            if (CurrentSessionState is not (SessionState.Connecting or SessionState.Running or SessionState.Stopping))
+            {
+                return false;
+            }
+
+            var currentOwner = Runtime.SessionService.CurrentRunOwner;
+            return !string.IsNullOrWhiteSpace(currentOwner)
+                && !Runtime.SessionService.IsRunOwner(CopilotRunOwner);
+        }
+    }
+
     public bool ShowStartButton => !IsRunning;
 
     public bool ShowStopButton => IsRunning;
 
     public bool CanStart =>
         !_isStartRequestActive
+        && _connectionState?.IsSessionOperationActive != true
+        && !IsExternalSessionActivityActive
         && (CurrentSessionState == SessionState.Connected
             || (CurrentSessionState == SessionState.Idle && _ensureConnectedAsync is not null)
             || CurrentSessionState is SessionState.Running or SessionState.Stopping
@@ -736,13 +778,34 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
     {
         if (!CanStart)
         {
-            LastErrorMessage = BuildSessionStateNotAllowedMessage(
-                CurrentSessionState,
-                T("Copilot.Action.Start", "启动"),
-                "start");
+            var sessionActivityBlocked = _connectionState?.IsSessionOperationActive == true
+                || IsExternalSessionActivityActive;
+            LastErrorMessage = sessionActivityBlocked
+                ? BuildSessionActivityBlockedMessage()
+                : BuildSessionStateNotAllowedMessage(
+                    CurrentSessionState,
+                    T("Copilot.Action.Start", "启动"),
+                    "start");
             await RecordFailedResultAsync(
                 "Copilot.Start",
-                UiOperationResult.Fail(UiErrorCode.TaskQueueEditBlocked, LastErrorMessage),
+                UiOperationResult.Fail(
+                    sessionActivityBlocked
+                        ? UiErrorCode.OperationAlreadyRunning
+                        : UiErrorCode.TaskQueueEditBlocked,
+                    LastErrorMessage),
+                cancellationToken);
+            return;
+        }
+
+        using var copilotActivity = _connectionState?.TryBeginSessionOperation(
+            "Copilot.Start",
+            requireIdle: true);
+        if (_connectionState is not null && copilotActivity is null)
+        {
+            LastErrorMessage = BuildSessionActivityBlockedMessage();
+            await RecordFailedResultAsync(
+                "Copilot.Start.SessionActivity",
+                UiOperationResult.Fail(UiErrorCode.OperationAlreadyRunning, LastErrorMessage),
                 cancellationToken);
             return;
         }
@@ -1005,6 +1068,18 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
     private static string ResolveCopilotTaskChain(string type)
     {
         return ResolveCopilotTaskType(type);
+    }
+
+
+    private string BuildSessionActivityBlockedMessage()
+    {
+        return _connectionState?.IsTimerSessionOperationActive == true
+            ? T(
+                "Copilot.Error.SessionActivity.TimerActive",
+                "A timed task is active. Wait for it to finish before starting Copilot.")
+            : T(
+                "Copilot.Error.SessionActivity.OtherActive",
+                "Another session operation is active. Stop or wait for it before starting Copilot.");
     }
 
     private string BuildSessionStateNotAllowedMessage(

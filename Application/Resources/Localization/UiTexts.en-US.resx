@@ -2413,6 +2413,24 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.About.OpenOfficialWebsite" xml:space="preserve">
     <value>Open official website</value>
   </data>
+  <data name="Settings.About.Bilibili" xml:space="preserve">
+    <value>bilibili</value>
+  </data>
+  <data name="Settings.About.Github" xml:space="preserve">
+    <value>Source code: GitHub</value>
+  </data>
+  <data name="Settings.About.QqGroup" xml:space="preserve">
+    <value>QQ group</value>
+  </data>
+  <data name="Settings.About.QqChannel" xml:space="preserve">
+    <value>QQ channel</value>
+  </data>
+  <data name="Settings.About.Telegram" xml:space="preserve">
+    <value>Telegram</value>
+  </data>
+  <data name="Settings.About.Discord" xml:space="preserve">
+    <value>Discord</value>
+  </data>
   <data name="Settings.About.Status.AnnouncementDialogCancelled" xml:space="preserve">
     <value>Announcement dialog cancelled.</value>
   </data>
@@ -2940,6 +2958,9 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.SourceProfileMissing" xml:space="preserve">
     <value>The current profile is missing. Refresh the list and try again.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Title" xml:space="preserve">
+    <value>Configuration Manager</value>
   </data>
   <data name="Settings.ConfigurationManager.SaveCurrent" xml:space="preserve">
     <value>Save current profile</value>
@@ -3523,6 +3544,12 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.IssueReport.Status.ImageCacheClearFailed" xml:space="preserve">
     <value>Failed to clear image cache.</value>
   </data>
+  <data name="Settings.IssueReport.ClearImageCacheTip" xml:space="preserve">
+    <value>Manual cleanup is usually unnecessary.
+Images in the DEBUG directory have a quantity limit, and old images are automatically cleaned when exceeded.
+Manual cleanup deletes all images, which may result in missing screenshots for troubleshooting.
+Cache files (such as maps, operator avatars, etc.) need to be regenerated after clearing, which may affect user experience.</value>
+  </data>
   <data name="Settings.IssueReport.Status.ImageCacheClearFailedWithReason" xml:space="preserve">
     <value>Failed to clear image cache: {0}</value>
   </data>
@@ -3876,6 +3903,27 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.Start.Dialog.SelectEmulatorPathTitle" xml:space="preserve">
     <value>Select Emulator Path</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathNoCandidates" xml:space="preserve">
+    <value>No detected paths</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathCandidateCount" xml:space="preserve">
+    <value>{0} candidate path(s)</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathDetectedPaths" xml:space="preserve">
+    <value>Detected paths</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathIntro" xml:space="preserve">
+    <value>Pick a detected emulator executable or paste a custom path below.</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathEmptyBody" xml:space="preserve">
+    <value>Paste the emulator executable path below if auto-detection did not find one.</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathCustomPath" xml:space="preserve">
+    <value>Custom path</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathWatermark" xml:space="preserve">
+    <value>/path/to/emulator</value>
   </data>
   <data name="Settings.Start.EmulatorExtraArgs" xml:space="preserve">
     <value>Extra emulator arguments</value>
@@ -4809,6 +4857,36 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="TaskQueue.Root.Waiting" xml:space="preserve">
     <value>Waiting...</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
+    <value>Error details</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Message" xml:space="preserve">
+    <value>{0} is still running. Stop the current task before starting tasks.</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Message.Unknown" xml:space="preserve">
+    <value>Another feature is still running. Stop the current task before starting tasks.</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.Copilot" xml:space="preserve">
+    <value>Copilot</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.TaskQueue" xml:space="preserve">
+    <value>Farming</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.Toolbox" xml:space="preserve">
+    <value>Toolbox</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.WebApi" xml:space="preserve">
+    <value>Web API</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
+    <value>Stop current task</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Title" xml:space="preserve">
+    <value>Task start blocked</value>
   </data>
   <data name="TaskQueue.SelectionHint" xml:space="preserve">
     <value>Select a task from the left list to edit its settings.</value>
@@ -5749,5 +5827,272 @@ A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created b
   </data>
   <data name="Settings.VersionUpdate.NightlyWarning.Cancel" xml:space="preserve">
     <value>Close</value>
+  </data>
+  <data name="Copilot.Status.Starting" xml:space="preserve">
+    <value>Starting...</value>
+  </data>
+  <data name="Copilot.Status.ReorderSuccess" xml:space="preserve">
+    <value>Reordered the copilot list.</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemSuccess" xml:space="preserve">
+    <value>Copilot item updated.</value>
+  </data>
+  <data name="Copilot.Error.SortStateOutOfSync" xml:space="preserve">
+    <value>The copilot list order changed. Try again.</value>
+  </data>
+  <data name="Copilot.Error.TaskListPersistFail" xml:space="preserve">
+    <value>The copilot list could not be saved.</value>
+  </data>
+  <data name="Copilot.Status.LoadSetPartialFailed" xml:space="preserve">
+    <value>Failed to load the following copilot items: {0}</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Unavailable" xml:space="preserve">
+    <value>Sensitive storage is unavailable. Sensitive settings and operations are disabled until storage is restored.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Retry" xml:space="preserve">
+    <value>Retry secure storage</value>
+  </data>
+  <data name="Settings.SensitiveStorage.DiscardUnreadable" xml:space="preserve">
+    <value>Discard unreadable value and re-enter</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.PlaintextWarning" xml:space="preserve">
+    <value>Sensitive storage: {0}. Plaintext mode remains active; copying the configuration directory can expose sensitive settings.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.Unavailable" xml:space="preserve">
+    <value>Sensitive storage: {0}. Unavailable ({1}); sensitive operations are disabled.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.CorruptUnreadable" xml:space="preserve">
+    <value>A legacy encrypted sensitive value cannot be decrypted. The original config is preserved until you confirm discarding it and re-enter the value.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.Available" xml:space="preserve">
+    <value>Sensitive storage: {0}.</value>
+  </data>
+  <data name="Settings.Game.YoStarResolutionGuide.Available" xml:space="preserve">
+    <value>YoStar EN resolution guide is available.</value>
+  </data>
+  <data name="Settings.Game.YoStarResolutionGuide.Open" xml:space="preserve">
+    <value>Open YoStar EN Resolution Guide</value>
+  </data>
+  <data name="Settings.Game.OverseasClientHint" xml:space="preserve">
+    <value>Using an overseas client? See adaptation help.</value>
+  </data>
+  <data name="Settings.Game.OverseasAdaptationGuide.Open" xml:space="preserve">
+    <value>Open Overseas Adaptation Guide</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.Once" xml:space="preserve">
+    <value>Run once</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.SkipOnce" xml:space="preserve">
+    <value>Skip once</value>
+  </data>
+  <data name="TaskQueue.Guide.Title" xml:space="preserve">
+    <value>Settings Guide</value>
+  </data>
+  <data name="TaskQueue.Guide.Ui.Description" xml:space="preserve">
+    <value>Choose the interface language, theme, background, and scaling options that suit you.</value>
+  </data>
+  <data name="TaskQueue.Guide.Game.Description" xml:space="preserve">
+    <value>Configure the client type, game startup, and account-switching behavior.</value>
+  </data>
+  <data name="TaskQueue.Guide.Connection.Description" xml:space="preserve">
+    <value>Set the ADB path or a connection preset, then test whether the connection works.</value>
+  </data>
+  <data name="TaskQueue.Guide.Tasks.Description" xml:space="preserve">
+    <value>Choose the tasks MAA should run and adjust the settings for each task.</value>
+  </data>
+  <data name="TaskQueue.Guide.Performance.Description" xml:space="preserve">
+    <value>Select the performance, capture, and input options supported by your device.</value>
+  </data>
+  <data name="TaskQueue.Guide.Update.Description" xml:space="preserve">
+    <value>Set update channels, resource updates, and startup check behavior.</value>
+  </data>
+  <data name="TaskQueue.Guide.User.Description" xml:space="preserve">
+    <value>Review documentation, issue reporting, and help links before starting a task.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Title" xml:space="preserve">
+    <value>Sensitive storage warning</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Message" xml:space="preserve">
+    <value>System-protected storage is unavailable. Plaintext mode stores sensitive settings, including credentials, unencrypted in a separate local file. Copying or syncing the configuration directory can expose those secrets.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.UsePlaintext" xml:space="preserve">
+    <value>Use plaintext</value>
+  </data>
+  <data name="Copilot.Title" xml:space="preserve">
+    <value>Copilot</value>
+  </data>
+  <data name="Toolbox.Title" xml:space="preserve">
+    <value>Toolbox</value>
+  </data>
+  <data name="Toolbox.OperBox.Title" xml:space="preserve">
+    <value>Operator</value>
+  </data>
+  <data name="Toolbox.Depot.Title" xml:space="preserve">
+    <value>Depot</value>
+  </data>
+  <data name="Main.Close.SaveFailed" xml:space="preserve">
+    <value>Failed to save {0}.</value>
+  </data>
+  <data name="Common.Configuration" xml:space="preserve">
+    <value>Configuration</value>
+  </data>
+  <data name="Common.List.PairFormat" xml:space="preserve">
+    <value>{0} and {1}</value>
+  </data>
+  <data name="Common.List.Separator" xml:space="preserve">
+    <value>, </value>
+  </data>
+  <data name="Common.List.FinalSeparator" xml:space="preserve">
+    <value> and </value>
+  </data>
+  <data name="TaskQueue.Guide.OpenSettings" xml:space="preserve">
+    <value>Open settings</value>
+  </data>
+  <data name="TaskQueue.Guide.ConfigureTasks" xml:space="preserve">
+    <value>Configure tasks</value>
+  </data>
+  <data name="TaskQueue.Guide.Resume" xml:space="preserve">
+    <value>Return to settings guide</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine" xml:space="preserve">
+    <value>Failed to import {1} in {0}. The {1} configuration could not be read. Please edit it manually.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.GlobalConfiguration" xml:space="preserve">
+    <value>Global</value>
+  </data>
+  <data name="Settings.Connect.Hint.MacBundledAdbNotFound" xml:space="preserve">
+    <value>Bundled ADB was not found: {0}</value>
+  </data>
+  <data name="ConnectionFailure.Generic.Message" xml:space="preserve">
+    <value>Connection failed. Check connection settings -&gt; try restarting the emulator and ADB -&gt; reboot the computer.</value>
+  </data>
+  <data name="ConnectionFailure.Callback.MessageFormat" xml:space="preserve">
+    <value>Connection callback: {0}</value>
+  </data>
+  <data name="ConnectionFailure.Generic.Suggestion" xml:space="preserve">
+    <value>Check connection settings, try restarting the emulator and ADB, then reboot if it still fails.</value>
+  </data>
+  <data name="ConnectionFailure.Timeout.Message" xml:space="preserve">
+    <value>Connecting to the emulator timed out.</value>
+  </data>
+  <data name="ConnectionFailure.Timeout.Suggestion" xml:space="preserve">
+    <value>Make sure the emulator is running, the address and port are correct, and ADB is available.</value>
+  </data>
+  <data name="ConnectionFailure.TouchMode.Message" xml:space="preserve">
+    <value>The current touch mode is not available.</value>
+  </data>
+  <data name="ConnectionFailure.TouchMode.Suggestion" xml:space="preserve">
+    <value>Switch to another touch mode in connection settings, then try again.</value>
+  </data>
+  <data name="ConnectionFailure.AddressPort.Message" xml:space="preserve">
+    <value>Could not connect to this address or port.</value>
+  </data>
+  <data name="ConnectionFailure.AddressPort.Suggestion" xml:space="preserve">
+    <value>Make sure the emulator is running and the address and port are correct; common ADB ports include 5555, while some emulators use ports such as 5554.</value>
+  </data>
+  <data name="ConnectionFailure.AdbDevice.Message" xml:space="preserve">
+    <value>ADB is not connected to an available device.</value>
+  </data>
+  <data name="ConnectionFailure.AdbDevice.Suggestion" xml:space="preserve">
+    <value>Check adb devices and make sure the target is in the device state. If it shows unauthorized, authorize it in the emulator; if it shows offline/no devices, restart the emulator or ADB and try again.</value>
+  </data>
+  <data name="ConnectionFailure.CoreUnavailable.Message" xml:space="preserve">
+    <value>The connection core is not ready or has been disposed.</value>
+  </data>
+  <data name="ConnectionFailure.CoreUnavailable.Suggestion" xml:space="preserve">
+    <value>Try again after a moment; restart the app if it keeps happening.</value>
+  </data>
+  <data name="ConnectionFailure.CoreFailure.MessageFormat" xml:space="preserve">
+    <value>The connection core reported a failure: {0}</value>
+  </data>
+  <data name="ConnectionFailure.CoreFailure.Suggestion" xml:space="preserve">
+    <value>Check the emulator, ADB path, and connection config; core callback details are preserved below.</value>
+  </data>
+  <data name="ConnectionFailure.AdbTarget.Message" xml:space="preserve">
+    <value>ADB did not connect to the target device.</value>
+  </data>
+  <data name="ConnectionFailure.AdbTarget.Suggestion" xml:space="preserve">
+    <value>Check that the address and port are correct; common ADB port is 5555. Make sure the emulator is running, ADB is enabled, and the device is on the same network.</value>
+  </data>
+  <data name="ConnectionFailure.AdbStart.Message" xml:space="preserve">
+    <value>ADB failed to start.</value>
+  </data>
+  <data name="ConnectionFailure.AdbStart.Suggestion" xml:space="preserve">
+    <value>Check that the ADB path points to the adb executable, not a dmg, zip, folder, or installer package.</value>
+  </data>
+  <data name="ConnectionFailure.InvalidConfiguration.Message" xml:space="preserve">
+    <value>The connection configuration is invalid.</value>
+  </data>
+  <data name="ConnectionFailure.InvalidConfiguration.Suggestion" xml:space="preserve">
+    <value>Check the address format, port, connection type, and ADB path, then try again.</value>
+  </data>
+  <data name="ConnectionFailure.ConnectionFailed.Message" xml:space="preserve">
+    <value>Failed to connect to the emulator.</value>
+  </data>
+  <data name="ConnectionFailure.ConnectionFailed.Suggestion" xml:space="preserve">
+    <value>Open error details to inspect the core error output, then check the emulator and ADB connection.</value>
+  </data>
+  <data name="ConnectionFailure.FixSettings.Suggestion" xml:space="preserve">
+    <value>Fix the connection settings first, then try again.</value>
+  </data>
+  <data name="ConnectionFailure.AdbCommand.Message" xml:space="preserve">
+    <value>ADB command failed.</value>
+  </data>
+  <data name="ConnectionFailure.AdbCommand.Suggestion" xml:space="preserve">
+    <value>Open error details to inspect ADB output; make sure ADB is executable, or restart the emulator and ADB.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Status.SwitchBlockedWhileRunning" xml:space="preserve">
+    <value>The profile cannot be switched while a task is running or stopping. Wait for it to finish and try again.</value>
+  </data>
+  <data name="Settings.Connect.Hint.MuMuPathNotFound" xml:space="preserve">
+    <value>MuMu emulator path does not exist: {0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.MuMuExternalRendererMissing" xml:space="preserve">
+    <value>MuMu emulator path is missing external_renderer_ipc.dll: {0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.LdPlayerPathNotFound" xml:space="preserve">
+    <value>LDPlayer emulator path does not exist: {0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.LdPlayerOpenGlMissing" xml:space="preserve">
+    <value>LDPlayer emulator path is missing ldopengl64.dll: {0}</value>
+  </data>
+  <data name="Settings.Connect.Status.MuMuPathAutoDetected" xml:space="preserve">
+    <value>MuMu emulator path auto-detected: {0}</value>
+  </data>
+  <data name="Settings.Connect.Status.LdPlayerPathAutoDetected" xml:space="preserve">
+    <value>LDPlayer emulator path auto-detected: {0}</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.Start" xml:space="preserve">
+    <value>A scheduled task is active. Wait for it to finish before starting tasks.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.Start" xml:space="preserve">
+    <value>Another session operation is active. Stop or wait for it before starting tasks.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.RunOnce" xml:space="preserve">
+    <value>A scheduled task is active. Wait for it to finish before running a single task.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.RunOnce" xml:space="preserve">
+    <value>Another session operation is active. Stop or wait for it before running a single task.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.AccountSwitch" xml:space="preserve">
+    <value>A scheduled task is active. Wait for it to finish before switching accounts.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.AccountSwitch" xml:space="preserve">
+    <value>Another session operation is active. Stop or wait for it before switching accounts.</value>
+  </data>
+  <data name="Copilot.Error.SessionActivity.TimerActive" xml:space="preserve">
+    <value>A scheduled task is active. Copilot cannot start until it finishes.</value>
+  </data>
+  <data name="Copilot.Error.SessionActivity.OtherActive" xml:space="preserve">
+    <value>Another session operation is active. Copilot cannot start until it is stopped or finishes.</value>
+  </data>
+  <data name="Toolbox.Error.SessionActivity.TimerActive" xml:space="preserve">
+    <value>A scheduled task is active. Toolbox cannot start until it finishes.</value>
+  </data>
+  <data name="Toolbox.Error.SessionActivity.OtherActive" xml:space="preserve">
+    <value>Another session operation is active. Toolbox cannot start until it is stopped or finishes.</value>
   </data>
 </root>

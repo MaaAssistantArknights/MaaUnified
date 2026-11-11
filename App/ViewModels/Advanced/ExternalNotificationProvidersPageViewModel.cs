@@ -41,7 +41,7 @@ public sealed class ExternalNotificationProvidersPageViewModel : PageViewModelBa
         ? string.Empty
         : T(
             "Settings.SensitiveStorage.Unavailable",
-            "Sensitive storage is unavailable. External notification settings and operations are disabled until storage is restored.");
+            "Sensitive storage is unavailable. Sensitive settings and operations are disabled until storage is restored.");
 
     public string SelectedProvider
     {

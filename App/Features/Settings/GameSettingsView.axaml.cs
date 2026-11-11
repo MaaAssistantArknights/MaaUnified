@@ -89,7 +89,16 @@ public partial class GameSettingsView : UserControl
     private string ResolveDocLanguage()
     {
         var language = VM?.ConnectionGameSharedState.RootTexts.Language;
+        return ResolveDocLanguage(language);
+    }
+
+    internal static string ResolveDocLanguage(string? language)
+    {
         var normalized = (language ?? "en-us").Trim().ToLowerInvariant();
-        return normalized;
+        return normalized switch
+        {
+            "zh-cn" or "zh-tw" or "en-us" or "ja-jp" or "ko-kr" => normalized,
+            _ => "en-us",
+        };
     }
 }

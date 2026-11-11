@@ -3274,7 +3274,7 @@ public partial class MainWindow : Window
             sourceScope,
             MAAUnified.Application.Models.UiOperationResult.Fail(
                 MAAUnified.Application.Models.UiErrorCode.SettingsSaveFailed,
-                $"{JoinChineseNames(failedNames)}保存失败"),
+                BuildConfigurationSaveFailureMessage(failedNames, vm.RootTexts)),
             cancellationToken);
         return false;
     }
@@ -3353,7 +3353,21 @@ public partial class MainWindow : Window
         }
     }
 
-    private static string JoinChineseNames(IReadOnlyList<string> names)
+    internal static string BuildConfigurationSaveFailureMessage(
+        IReadOnlyList<string> names,
+        RootLocalizationTextMap texts)
+    {
+        ArgumentNullException.ThrowIfNull(texts);
+        var joinedNames = JoinLocalizedNames(names, texts);
+        return string.Format(
+            CultureInfo.CurrentCulture,
+            texts.GetOrDefault("Main.Close.SaveFailed", "Failed to save {0}."),
+            joinedNames);
+    }
+
+    internal static string JoinLocalizedNames(
+        IReadOnlyList<string> names,
+        RootLocalizationTextMap texts)
     {
         var cleanNames = names
             .Where(static name => !string.IsNullOrWhiteSpace(name))
@@ -3361,10 +3375,17 @@ public partial class MainWindow : Window
             .ToArray();
         return cleanNames.Length switch
         {
-            0 => "配置",
+            0 => texts.GetOrDefault("Common.Configuration", "Configuration"),
             1 => cleanNames[0],
-            2 => $"{cleanNames[0]}和{cleanNames[1]}",
-            _ => string.Concat(string.Join("、", cleanNames.Take(cleanNames.Length - 1)), "和", cleanNames[^1]),
+            2 => string.Format(
+                CultureInfo.CurrentCulture,
+                texts.GetOrDefault("Common.List.PairFormat", "{0} and {1}"),
+                cleanNames[0],
+                cleanNames[1]),
+            _ => string.Concat(
+                string.Join(texts.GetOrDefault("Common.List.Separator", ", "), cleanNames.Take(cleanNames.Length - 1)),
+                texts.GetOrDefault("Common.List.FinalSeparator", " and "),
+                cleanNames[^1]),
         };
     }
 

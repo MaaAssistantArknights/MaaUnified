@@ -191,6 +191,7 @@
                       Classes="settings-select"
                       Width="{DynamicResource MAA.Size.Settings.FieldCenteredWidth}"
                       HorizontalAlignment="Left"
+                      IsEnabled="{Binding IsSessionIdle}"
                       ItemsSource="{Binding InverseClearModeOptions}"
                       SelectedItem="{Binding SelectedInverseClearModeOption, Mode=TwoWay}">
               <controls:AppSelect.ItemTemplate>

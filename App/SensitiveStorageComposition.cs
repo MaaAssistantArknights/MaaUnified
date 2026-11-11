@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Layout;
 using Avalonia.Threading;
+using MAAUnified.Application.Services.Localization;
 using MAAUnified.Application.Security;
 using MAAUnified.SecureStorage.System;
 
@@ -41,7 +42,9 @@ internal static class SensitiveStorageComposition
     }
 #endif
 
-    public static SensitiveSettingsService Create(string runtimeBaseDirectory)
+    public static SensitiveSettingsService Create(
+        string runtimeBaseDirectory,
+        Func<string?>? languageProvider = null)
     {
         var backends = new List<ISensitiveSettingsBackend>
         {
@@ -51,10 +54,23 @@ internal static class SensitiveStorageComposition
 #if MAA_UNIFIED_LINUX_SECURE_STORAGE
         backends.Add(new MAAUnified.SecureStorage.Linux.SqlCipherStorageBackend(runtimeBaseDirectory));
 #endif
-        return new SensitiveSettingsService(backends, new AvaloniaPlaintextConsent());
+        return new SensitiveSettingsService(backends, new AvaloniaPlaintextConsent(languageProvider));
     }
 
-    internal sealed class AvaloniaPlaintextConsent : IPlaintextSensitiveStorageConsent
+    internal sealed record PlaintextConsentDialogTexts(
+        string Title,
+        string Message,
+        string CancelButton,
+        string ConfirmButton);
+
+    internal sealed record PlaintextConsentDialogElements(
+        Window Dialog,
+        TextBlock MessageText,
+        Button CancelButton,
+        Button ConfirmButton);
+
+    internal sealed class AvaloniaPlaintextConsent(Func<string?>? languageProvider = null)
+        : IPlaintextSensitiveStorageConsent
     {
         public async Task<bool> ConfirmAsync(CancellationToken cancellationToken = default)
         {
@@ -92,38 +108,70 @@ internal static class SensitiveStorageComposition
                 cancellationToken);
         }
 
-        private static async Task<bool> ShowDialogAsync(CancellationToken cancellationToken)
+        internal static PlaintextConsentDialogTexts GetDialogTexts(string? language)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop
-                || desktop.MainWindow is not { } owner)
-            {
-                return false;
-            }
+            var normalizedLanguage = UiLanguageCatalog.Normalize(language);
+            var localizer = UiLocalizer.Create(normalizedLanguage);
+            return new PlaintextConsentDialogTexts(
+                localizer.GetOrDefault(
+                    "Settings.SensitiveStorage.PlaintextConsent.Title",
+                    "Sensitive storage warning",
+                    "SensitiveStorage.PlaintextConsent"),
+                localizer.GetOrDefault(
+                    "Settings.SensitiveStorage.PlaintextConsent.Message",
+                    "System-protected storage is unavailable. Plaintext mode stores sensitive settings, including credentials, unencrypted in a separate local file. Copying or syncing the configuration directory can expose those secrets.",
+                    "SensitiveStorage.PlaintextConsent"),
+                localizer.GetOrDefault(
+                    "Settings.SensitiveStorage.PlaintextConsent.Cancel",
+                    "Cancel",
+                    "SensitiveStorage.PlaintextConsent"),
+                localizer.GetOrDefault(
+                    "Settings.SensitiveStorage.PlaintextConsent.UsePlaintext",
+                    "Use plaintext",
+                    "SensitiveStorage.PlaintextConsent"));
+        }
 
+        internal static PlaintextConsentDialogElements CreateDialog(string? language)
+        {
+            var texts = GetDialogTexts(language);
             var dialog = new Window
             {
-                Title = "Sensitive storage warning",
+                Title = texts.Title,
                 Width = 520,
                 SizeToContent = SizeToContent.Height,
                 CanResize = false,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
             };
-            var cancel = new Button { Content = "Cancel", MinWidth = 88 };
-            var confirm = new Button { Content = "Use plaintext", MinWidth = 116 };
+            var message = new TextBlock
+            {
+                Name = "PlaintextConsentMessage",
+                Text = texts.Message,
+                TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+            };
+            var cancel = new Button
+            {
+                Name = "PlaintextConsentCancelButton",
+                Content = texts.CancelButton,
+                MinWidth = 88,
+                IsCancel = true,
+                IsDefault = true,
+            };
+            var confirm = new Button
+            {
+                Name = "PlaintextConsentConfirmButton",
+                Content = texts.ConfirmButton,
+                MinWidth = 116,
+            };
             cancel.Click += (_, _) => dialog.Close(false);
             confirm.Click += (_, _) => dialog.Close(true);
+            dialog.Opened += (_, _) => cancel.Focus();
             dialog.Content = new StackPanel
             {
                 Margin = new Thickness(20),
                 Spacing = 16,
                 Children =
                 {
-                    new TextBlock
-                    {
-                        Text = "Secure storage is unavailable. Plaintext mode stores sensitive settings in a separate local file. Copying the configuration directory can expose those settings.",
-                        TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-                    },
+                    message,
                     new StackPanel
                     {
                         Orientation = Orientation.Horizontal,
@@ -133,6 +181,32 @@ internal static class SensitiveStorageComposition
                     },
                 },
             };
+            return new PlaintextConsentDialogElements(dialog, message, cancel, confirm);
+        }
+
+        private string ResolveCurrentLanguage()
+        {
+            var providedLanguage = languageProvider?.Invoke();
+            if (!string.IsNullOrWhiteSpace(providedLanguage))
+            {
+                return providedLanguage.Trim();
+            }
+
+            return MAAUnified.App.App.Runtime is { } runtime
+                ? runtime.UiLanguageCoordinator.CurrentLanguage
+                : UiLanguageCatalog.DefaultLanguage;
+        }
+
+        private async Task<bool> ShowDialogAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Avalonia.Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop
+                || desktop.MainWindow is not { } owner)
+            {
+                return false;
+            }
+
+            var dialog = CreateDialog(ResolveCurrentLanguage()).Dialog;
             using var cancellationRegistration = cancellationToken.Register(
                 static state => Dispatcher.UIThread.Post(
                     () => ((Window)state!).Close(false),

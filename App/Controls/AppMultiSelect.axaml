@@ -2,7 +2,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
              x:Class="MAAUnified.App.Controls.AppMultiSelect"
-             x:Name="Root">
+             x:Name="Root"
+             Focusable="True"
+             IsTabStop="True"
+             KeyDown="OnKeyDown">
   <UserControl.Styles>
     <Style Selector="Border.app-multi-select-shell">
       <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.Background}" />
@@ -24,6 +27,12 @@
       <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderHover}" />
     </Style>
     <Style Selector="Border.app-multi-select-shell.open">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundHover}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MAA.App.BoxShadow.InputFocus}" />
+    </Style>
+    <Style Selector="Border.app-multi-select-shell.focused">
       <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.BackgroundHover}" />
       <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
       <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
@@ -203,6 +212,7 @@
            Placement="BottomEdgeAlignedLeft"
            VerticalOffset="4"
            IsLightDismissEnabled="True"
+           KeyDown="OnPopupKeyDown"
            Closed="OnPopupClosed">
       <Border Classes="app-multi-select-panel"
               MinWidth="{Binding Bounds.Width, ElementName=ShellBorder}"

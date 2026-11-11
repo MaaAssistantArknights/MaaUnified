@@ -20,6 +20,7 @@ namespace MAAUnified.App.Features.Settings;
 public partial class ConfigurationManagerView : UserControl
 {
     private bool _suppressProfileSelectionChanged;
+    private bool _isAddingConfigurationProfile;
 
     public ConfigurationManagerView()
     {
@@ -44,10 +45,49 @@ public partial class ConfigurationManagerView : UserControl
 
     private async void OnCreateProfileClick(object? sender, RoutedEventArgs e)
     {
-        if (VM is not null)
+        await AddConfigurationProfileOnceAsync();
+    }
+
+    private async void OnNewProfileNameEditorKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (!ShouldSubmitConfigurationProfile(e.Key) || e.Handled)
         {
-            await VM.AddConfigurationProfileAsync();
+            return;
         }
+
+        e.Handled = true;
+        await AddConfigurationProfileOnceAsync();
+    }
+
+    internal static bool ShouldSubmitConfigurationProfile(Key key) => key == Key.Enter;
+
+    private async Task AddConfigurationProfileOnceAsync()
+    {
+        if (VM is not { } vm
+            || !TryBeginConfigurationProfileSubmission(ref _isAddingConfigurationProfile))
+        {
+            return;
+        }
+
+        try
+        {
+            await vm.AddConfigurationProfileAsync();
+        }
+        finally
+        {
+            _isAddingConfigurationProfile = false;
+        }
+    }
+
+    internal static bool TryBeginConfigurationProfileSubmission(ref bool isAdding)
+    {
+        if (isAdding)
+        {
+            return false;
+        }
+
+        isAdding = true;
+        return true;
     }
 
     private async void OnDeleteCurrentProfileClick(object? sender, RoutedEventArgs e)
@@ -446,7 +486,7 @@ public partial class ConfigurationManagerView : UserControl
         var discardAndImport = await ShowWarningDialogAsync(
             language,
             text("Settings.ConfigurationManager.Dialog.ImportUnreadableValuesTitle"),
-            BuildUnreadableImportedValuesMessage(report, language, text),
+            BuildUnreadableImportedValuesMessage(report, text),
             confirmText: text("Settings.Action.ImportAnyway"),
             cancelText: text("Settings.Action.Cancel"),
             sourceScope: "Settings.ConfigurationManager.ImportUnreadableValues.Dialog");
@@ -459,19 +499,17 @@ public partial class ConfigurationManagerView : UserControl
             request with { AllowDiscardUnreadableSensitiveValues = true });
     }
 
-    private static string BuildUnreadableImportedValuesMessage(
+    internal static string BuildUnreadableImportedValuesMessage(
         ImportReport report,
-        string? language,
         Func<string, string> text)
     {
-        var useChinese = string.IsNullOrWhiteSpace(language)
-                         || language.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
         var builder = new StringBuilder();
+        var lineFormat = text("Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine");
         foreach (var value in report.UnreadableValues)
         {
             var displayName = ResolveImportedValueDisplayName(value, text);
             var configurationName = string.IsNullOrWhiteSpace(value.ConfigurationName)
-                ? (useChinese ? "全局" : "Global")
+                ? text("Settings.ConfigurationManager.Dialog.GlobalConfiguration")
                 : value.ConfigurationName.Trim();
 
             if (builder.Length > 0)
@@ -479,27 +517,11 @@ public partial class ConfigurationManagerView : UserControl
                 builder.AppendLine();
             }
 
-            if (useChinese)
-            {
-                builder
-                    .Append(configurationName)
-                    .Append(" 配置的 ")
-                    .Append(displayName)
-                    .Append(" 导入失败，无法读取 ")
-                    .Append(displayName)
-                    .Append(" 配置。请手动修改。");
-            }
-            else
-            {
-                builder
-                    .Append("Failed to import ")
-                    .Append(displayName)
-                    .Append(" in ")
-                    .Append(configurationName)
-                    .Append(". The ")
-                    .Append(displayName)
-                    .Append(" configuration could not be read. Please edit it manually.");
-            }
+            builder.Append(string.Format(
+                CultureInfo.CurrentCulture,
+                lineFormat,
+                configurationName,
+                displayName));
         }
 
         return builder.ToString();

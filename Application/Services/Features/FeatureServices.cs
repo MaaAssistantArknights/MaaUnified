@@ -621,6 +621,20 @@ public sealed class ConnectFeatureService : IConnectFeatureService
         return UiOperationResult.FromCore(result, "Task execution stopped.");
     }
 
+    public bool TryCancelActiveLifecycleOperation(string reason)
+    {
+        var activeOperation = GetActiveLifecycleOperation();
+        if (string.IsNullOrWhiteSpace(activeOperation)
+            || string.Equals(activeOperation, "Stop", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        CancelActiveLifecycleOperation(
+            string.IsNullOrWhiteSpace(reason) ? "UI stop requested" : reason.Trim());
+        return true;
+    }
+
     public UiOperationResult<IReadOnlyList<CoreConnectionInfo>> BuildCurrentProfileConnectionCandidates(
         bool includeConfiguredAddress = true)
     {

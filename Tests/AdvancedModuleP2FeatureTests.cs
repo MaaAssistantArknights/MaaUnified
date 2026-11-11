@@ -494,8 +494,8 @@ public sealed class AdvancedModuleP2FeatureTests
         await remoteControl.TestConnectivityAsync();
 
         Assert.Empty(providers.Providers);
-        Assert.Contains("Sensitive storage", providers.LastErrorMessage, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Sensitive storage", remoteControl.WarningMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(providers.SensitiveStorageWarningMessage, providers.LastErrorMessage);
+        Assert.Equal(remoteControl.SensitiveStorageWarningMessage, remoteControl.WarningMessage);
     }
 
     [Fact]

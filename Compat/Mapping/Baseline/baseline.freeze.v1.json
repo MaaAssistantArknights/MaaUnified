@@ -6385,14 +6385,17 @@
       "owner_item_id": "Settings.Gui",
       "parity_status": "Gap",
       "priority": "P0",
-      "notes": "Frozen WPF persists guide progress; no MAAUnified runtime read/write consumer was found.",
+      "notes": "Implemented by the TaskQueue settings guide and covered by baseline evidence.",
       "evidence": {
-        "ui_path": "App/Features/Settings/GuiSettingsView.axaml",
+        "ui_path": "App/Features/Root/TaskQueueGuideView.axaml",
         "log_path": "debug/avalonia-ui-events.log",
         "scope": "Config.Guide.StepIndex",
         "case_id": "CFG-277"
       },
-      "waiver": null
+      "waiver": null,
+      "mapping_target": "UnifiedConfigurationService.CurrentConfig.GlobalValues[Guide.StepIndex]",
+      "read_path": "App/ViewModels/TaskQueue/TaskQueuePageViewModel.cs",
+      "write_path": "App/ViewModels/TaskQueue/TaskQueuePageViewModel.cs::SetGuideStepIndexAsync"
     },
     {
       "key": "Timer.ForceScheduledStart",

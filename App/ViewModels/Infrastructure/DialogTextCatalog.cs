@@ -7,6 +7,19 @@ public static class DialogTextCatalog
 {
     private static readonly IReadOnlyDictionary<string, string> EmptyNamedTexts =
         new Dictionary<string, string>(StringComparer.Ordinal);
+    private static readonly string[] SpecificConnectFailureMessageKeys =
+    [
+        "ConnectionFailure.Timeout.Message",
+        "ConnectionFailure.TouchMode.Message",
+        "ConnectionFailure.AddressPort.Message",
+        "ConnectionFailure.AdbDevice.Message",
+        "ConnectionFailure.CoreUnavailable.Message",
+        "ConnectionFailure.AdbTarget.Message",
+        "ConnectionFailure.AdbStart.Message",
+        "ConnectionFailure.InvalidConfiguration.Message",
+        "ConnectionFailure.ConnectionFailed.Message",
+        "ConnectionFailure.AdbCommand.Message",
+    ];
     private const string Scope = "DialogTextCatalog";
 
     public static class ChromeKeys
@@ -21,6 +34,12 @@ public static class DialogTextCatalog
         public const string SectionTitle = "SectionTitle";
         public const string EmptyStateTitle = "EmptyStateTitle";
         public const string EmptyStateBody = "EmptyStateBody";
+        public const string SelectionSummary = "SelectionSummary";
+        public const string CandidateCount = "CandidateCount";
+        public const string SelectionListTitle = "SelectionListTitle";
+        public const string SelectionInstruction = "SelectionInstruction";
+        public const string CustomPathTitle = "CustomPathTitle";
+        public const string CustomPathWatermark = "CustomPathWatermark";
         public const string CopyButton = "CopyButton";
         public const string IssueReportButton = "IssueReportButton";
         public const string HelpButton = "HelpButton";
@@ -221,6 +240,40 @@ public static class DialogTextCatalog
         return namedTexts.Count == 0 ? EmptyNamedTexts : namedTexts;
     }
 
+    public static DialogChromeSnapshot CreateEmulatorPathChrome(RootLocalizationTextMap texts)
+    {
+        ArgumentNullException.ThrowIfNull(texts);
+        return new DialogChromeSnapshot(
+            title: texts.GetOrDefault("Settings.Start.Dialog.SelectEmulatorPathTitle", "Select Emulator Path"),
+            confirmText: texts.GetOrDefault("Settings.Start.Dialog.SelectEmulatorPathConfirm", "Confirm"),
+            cancelText: texts.GetOrDefault("Settings.Start.Dialog.SelectEmulatorPathCancel", "Cancel"),
+            namedTexts: CreateNamedTexts(
+                (ChromeKeys.SelectionSummary, texts.GetOrDefault(
+                    "Settings.Start.Dialog.SelectEmulatorPathNoCandidates",
+                    "No detected paths")),
+                (ChromeKeys.CandidateCount, texts.GetOrDefault(
+                    "Settings.Start.Dialog.SelectEmulatorPathCandidateCount",
+                    "{0} candidate path(s)")),
+                (ChromeKeys.SelectionListTitle, texts.GetOrDefault(
+                    "Settings.Start.Dialog.SelectEmulatorPathDetectedPaths",
+                    "Detected paths")),
+                (ChromeKeys.SelectionInstruction, texts.GetOrDefault(
+                    "Settings.Start.Dialog.SelectEmulatorPathIntro",
+                    "Pick a detected emulator executable or paste a custom path below.")),
+                (ChromeKeys.EmptyStateTitle, texts.GetOrDefault(
+                    "Settings.Start.Dialog.SelectEmulatorPathNoCandidates",
+                    "No detected paths")),
+                (ChromeKeys.EmptyStateBody, texts.GetOrDefault(
+                    "Settings.Start.Dialog.SelectEmulatorPathEmptyBody",
+                    "Paste the emulator executable path below if auto-detection did not find one.")),
+                (ChromeKeys.CustomPathTitle, texts.GetOrDefault(
+                    "Settings.Start.Dialog.SelectEmulatorPathCustomPath",
+                    "Custom path")),
+                (ChromeKeys.CustomPathWatermark, texts.GetOrDefault(
+                    "Settings.Start.Dialog.SelectEmulatorPathWatermark",
+                    "/path/to/emulator"))));
+    }
+
     public static UiOperationResult LocalizeErrorResult(string? language, UiOperationResult result)
     {
         if (result.Success || result.Error is null)
@@ -289,8 +342,9 @@ public static class DialogTextCatalog
                 => Select(language, "请检查模拟器路径是否存在。", "Check whether the emulator path exists."),
 
             UiErrorCode.ConnectFailed
-                => Select(
+                => GetText(
                     language,
+                    "ConnectionFailure.Generic.Suggestion",
                     "请确认模拟器已启动，并检查连接地址、ADB 路径和连接配置后重试；如使用局域网地址，请确认设备与电脑在同一网络内。",
                     "Make sure the emulator is running, then check the connection address, ADB path, and connection profile. For LAN addresses, confirm the device and computer are on the same network."),
 
@@ -397,7 +451,11 @@ public static class DialogTextCatalog
                 => Select(language, "找不到模拟器路径。", "Emulator path was not found."),
 
             UiErrorCode.ConnectFailed
-                => Select(language, "连接模拟器失败。", "Failed to connect to the emulator."),
+                => GetText(
+                    language,
+                    "ConnectionFailure.ConnectionFailed.Message",
+                    "连接模拟器失败。",
+                    "Failed to connect to the emulator."),
 
             _ => PlatformCapabilityTextMap.FormatErrorCode(
                 UseChinese(language) ? "zh-cn" : "en-us",
@@ -438,32 +496,55 @@ public static class DialogTextCatalog
         }
 
         var message = result.Message.Trim();
-        return message.Contains("ADB 启动失败", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("ADB failed to start", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("ADB 命令执行失败", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("ADB command failed", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("ADB 未连接到目标设备", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("ADB 未连接到可用设备", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("target device", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("available device", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("ADB 路径", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("ADB path", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("内置 ADB", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("Bundled ADB", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("连接地址", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("connection address", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("地址或端口", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("address or port", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("模拟器路径", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("emulator path", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("Windows 路径", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("Windows path", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("连接模拟器超时", StringComparison.Ordinal)
-            || message.Contains("timed out", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("触控模式不可用", StringComparison.Ordinal)
-            || message.Contains("touch mode", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("连接核心", StringComparison.Ordinal)
-            || message.Contains("connection core", StringComparison.OrdinalIgnoreCase);
+        if (SplitNonEmptyLines(message).Count > 1)
+        {
+            return true;
+        }
+
+        if (string.Equals(message, "ConnectFailed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(message, "Connection failed.", StringComparison.OrdinalIgnoreCase)
+            || message.StartsWith("Connection failed. Check connection settings", StringComparison.Ordinal)
+            || message.StartsWith("连接失败。请“检查连接设置”", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        foreach (var candidateLanguage in UiLanguageCatalog.Ordered)
+        {
+            var localizer = UiLocalizer.Create(candidateLanguage);
+            if (SpecificConnectFailureMessageKeys.Any(key => StartsWithLocalizedMessagePrefix(
+                    message,
+                    localizer.GetText(key, "ConnectionFailureDiagnosticBuilder"))))
+            {
+                return true;
+            }
+
+            if (StartsWithLocalizedFormatPrefix(
+                    message,
+                    localizer.GetText("ConnectionFailure.CoreFailure.MessageFormat", "ConnectionFailureDiagnosticBuilder")))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool StartsWithLocalizedFormatPrefix(string message, string format)
+    {
+        var placeholderIndex = format.IndexOf("{0}", StringComparison.Ordinal);
+        if (placeholderIndex < 0)
+        {
+            return false;
+        }
+
+        return message.StartsWith(format[..placeholderIndex], StringComparison.Ordinal);
+    }
+
+    private static bool StartsWithLocalizedMessagePrefix(string message, string localizedMessage)
+    {
+        var prefix = localizedMessage.TrimEnd('.', '。', '!', '！');
+        return prefix.Length > 0 && message.StartsWith(prefix, StringComparison.Ordinal);
     }
 
     private static string ExtractSpecificConnectFailureMessage(string message)

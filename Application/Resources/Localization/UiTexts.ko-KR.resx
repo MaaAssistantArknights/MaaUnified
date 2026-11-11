@@ -1400,6 +1400,24 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.About.OpenOfficialWebsite" xml:space="preserve">
     <value>공식 사이트 열기</value>
   </data>
+  <data name="Settings.About.Bilibili" xml:space="preserve">
+    <value>bilibili</value>
+  </data>
+  <data name="Settings.About.Github" xml:space="preserve">
+    <value>소스 코드: GitHub</value>
+  </data>
+  <data name="Settings.About.QqGroup" xml:space="preserve">
+    <value>QQ 그룹</value>
+  </data>
+  <data name="Settings.About.QqChannel" xml:space="preserve">
+    <value>QQ 채널</value>
+  </data>
+  <data name="Settings.About.Telegram" xml:space="preserve">
+    <value>Telegram</value>
+  </data>
+  <data name="Settings.About.Discord" xml:space="preserve">
+    <value>Discord</value>
+  </data>
   <data name="Settings.About.Status.AnnouncementDialogCancelled" xml:space="preserve">
     <value>공지 대화상자를 취소했습니다.</value>
   </data>
@@ -1684,6 +1702,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="Settings.Background.StretchMode" xml:space="preserve">
     <value>배경 채우기 모드</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Title" xml:space="preserve">
+    <value>구성 관리자</value>
   </data>
   <data name="Settings.ConfigurationManager.AutoSavedCurrent" xml:space="preserve">
     <value>현재 프로필 변경 사항은 자동 저장됩니다</value>
@@ -2366,6 +2387,12 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.IssueReport.Status.ImageCacheClearFailed" xml:space="preserve">
     <value>이미지 캐시 정리에 실패했습니다.</value>
   </data>
+  <data name="Settings.IssueReport.ClearImageCacheTip" xml:space="preserve">
+    <value>일반적으로 수동 정리가 필요하지 않습니다.
+DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 시 오래된 이미지가 자동으로 정리됩니다.
+수동 정리는 모든 이미지를 삭제하므로 문제 해결 시 스크린샷이 부족할 수 있습니다.
+캐시 파일(지도, 오퍼레이터 아바타 등)은 정리 후 재생성이 필요하며 사용 경험에 영향을 줄 수 있습니다.</value>
+  </data>
   <data name="Settings.IssueReport.Status.ImageCacheClearFailedWithReason" xml:space="preserve">
     <value>이미지 캐시 정리에 실패했습니다: {0}</value>
   </data>
@@ -2548,6 +2575,27 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="Settings.Start.Dialog.SelectEmulatorPathTitle" xml:space="preserve">
     <value>에뮬레이터 경로 선택</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathNoCandidates" xml:space="preserve">
+    <value>감지된 경로가 없습니다</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathCandidateCount" xml:space="preserve">
+    <value>후보 경로 {0}개</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathDetectedPaths" xml:space="preserve">
+    <value>감지된 경로</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathIntro" xml:space="preserve">
+    <value>감지된 에뮬레이터 실행 파일을 선택하거나 아래에 사용자 지정 경로를 붙여넣으세요.</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathEmptyBody" xml:space="preserve">
+    <value>자동 감지에서 찾지 못한 경우 아래에 에뮬레이터 실행 파일 경로를 붙여넣으세요.</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathCustomPath" xml:space="preserve">
+    <value>사용자 지정 경로</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathWatermark" xml:space="preserve">
+    <value>/path/to/emulator</value>
   </data>
   <data name="Settings.Start.EmulatorExtraArgs" xml:space="preserve">
     <value>에뮬레이터 추가 인수</value>
@@ -4558,6 +4606,36 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="TaskQueue.Root.Waiting" xml:space="preserve">
     <value>전투가 끝나기를 기다리며……</value>
   </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
+    <value>취소</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
+    <value>오류 상세</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Message" xml:space="preserve">
+    <value>{0}이(가) 실행 중입니다. 현재 작업을 중지한 후 작업 큐를 시작하세요.</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Message.Unknown" xml:space="preserve">
+    <value>다른 기능이 실행 중입니다. 현재 작업을 중지한 후 작업 큐를 시작하세요.</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.Copilot" xml:space="preserve">
+    <value>자동 전투</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.TaskQueue" xml:space="preserve">
+    <value>한 번에 실행</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.Toolbox" xml:space="preserve">
+    <value>도구</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Owner.WebApi" xml:space="preserve">
+    <value>Web API</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
+    <value>현재 작업 중지</value>
+  </data>
+  <data name="TaskQueue.RunOwnerBlockedDialog.Title" xml:space="preserve">
+    <value>작업 시작이 차단되었습니다</value>
+  </data>
   <data name="TaskQueue.Root.DailyStageLabel" xml:space="preserve">
     <value>오늘 오픈된 스테이지:</value>
   </data>
@@ -4903,5 +4981,272 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="Settings.VersionUpdate.NightlyWarning.Cancel" xml:space="preserve">
     <value>닫기</value>
+  </data>
+  <data name="Copilot.Status.Starting" xml:space="preserve">
+    <value>시작 중...</value>
+  </data>
+  <data name="Copilot.Status.ReorderSuccess" xml:space="preserve">
+    <value>작업 순서를 업데이트했습니다.</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemSuccess" xml:space="preserve">
+    <value>작업을 업데이트했습니다.</value>
+  </data>
+  <data name="Copilot.Error.SortStateOutOfSync" xml:space="preserve">
+    <value>작업 목록 순서가 변경되었습니다. 다시 시도하세요.</value>
+  </data>
+  <data name="Copilot.Error.TaskListPersistFail" xml:space="preserve">
+    <value>작업 목록을 저장하지 못했습니다.</value>
+  </data>
+  <data name="Copilot.Status.LoadSetPartialFailed" xml:space="preserve">
+    <value>다음 작업을 불러오지 못했습니다: {0}</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Unavailable" xml:space="preserve">
+    <value>보안 저장소를 사용할 수 없습니다. 복원될 때까지 민감한 설정과 관련 작업이 비활성화됩니다.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Retry" xml:space="preserve">
+    <value>보안 저장소 다시 시도</value>
+  </data>
+  <data name="Settings.SensitiveStorage.DiscardUnreadable" xml:space="preserve">
+    <value>읽을 수 없는 값을 삭제하고 다시 입력</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.PlaintextWarning" xml:space="preserve">
+    <value>보안 저장소: {0}. 현재 일반 텍스트 모드가 활성화되어 있어 구성 디렉터리를 복사하면 민감한 설정이 노출될 수 있습니다.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.Unavailable" xml:space="preserve">
+    <value>보안 저장소: {0}. 사용할 수 없음({1}). 민감한 작업이 비활성화됩니다.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.CorruptUnreadable" xml:space="preserve">
+    <value>이전 암호화 민감 값을 복호화할 수 없습니다. 삭제를 확인하고 다시 입력할 때까지 원래 구성이 유지됩니다.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.Available" xml:space="preserve">
+    <value>보안 저장소: {0}.</value>
+  </data>
+  <data name="Settings.Game.YoStarResolutionGuide.Available" xml:space="preserve">
+    <value>YoStar EN 해상도 가이드를 사용할 수 있습니다.</value>
+  </data>
+  <data name="Settings.Game.YoStarResolutionGuide.Open" xml:space="preserve">
+    <value>YoStar EN 해상도 가이드 열기</value>
+  </data>
+  <data name="Settings.Game.OverseasClientHint" xml:space="preserve">
+    <value>해외 클라이언트를 사용 중인가요? 적응 도움말을 확인하세요.</value>
+  </data>
+  <data name="Settings.Game.OverseasAdaptationGuide.Open" xml:space="preserve">
+    <value>해외 클라이언트 적응 가이드 열기</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.Once" xml:space="preserve">
+    <value>이번에 한 번 실행</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.SkipOnce" xml:space="preserve">
+    <value>이번에 한 번 건너뛰기</value>
+  </data>
+  <data name="TaskQueue.Guide.Title" xml:space="preserve">
+    <value>설정 가이드</value>
+  </data>
+  <data name="TaskQueue.Guide.Ui.Description" xml:space="preserve">
+    <value>사용하기 편한 인터페이스 언어, 테마, 배경 및 배율 설정을 선택합니다.</value>
+  </data>
+  <data name="TaskQueue.Guide.Game.Description" xml:space="preserve">
+    <value>클라이언트 유형과 게임 시작 및 계정 전환 동작을 설정합니다.</value>
+  </data>
+  <data name="TaskQueue.Guide.Connection.Description" xml:space="preserve">
+    <value>ADB 경로 또는 연결 프리셋을 설정하고 연결을 테스트합니다.</value>
+  </data>
+  <data name="TaskQueue.Guide.Tasks.Description" xml:space="preserve">
+    <value>MAA에서 실행할 작업을 선택하고 각 작업 설정을 조정합니다.</value>
+  </data>
+  <data name="TaskQueue.Guide.Performance.Description" xml:space="preserve">
+    <value>기기에서 지원하는 성능, 캡처 및 입력 옵션을 선택합니다.</value>
+  </data>
+  <data name="TaskQueue.Guide.Update.Description" xml:space="preserve">
+    <value>업데이트 채널, 리소스 업데이트 및 시작 시 확인 동작을 설정합니다.</value>
+  </data>
+  <data name="TaskQueue.Guide.User.Description" xml:space="preserve">
+    <value>작업을 시작하기 전에 문서, 문제 보고 및 도움말 링크를 확인할 수 있습니다.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Title" xml:space="preserve">
+    <value>민감한 설정 저장소 경고</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Message" xml:space="preserve">
+    <value>시스템 보호 저장소를 사용할 수 없습니다. 일반 텍스트 모드는 자격 증명을 포함한 민감한 설정을 암호화하지 않고 별도의 로컬 파일에 저장합니다. 구성 디렉터리를 복사하거나 동기화하면 해당 비밀 정보가 노출될 수 있습니다.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Cancel" xml:space="preserve">
+    <value>취소</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.UsePlaintext" xml:space="preserve">
+    <value>일반 텍스트로 저장</value>
+  </data>
+  <data name="Copilot.Title" xml:space="preserve">
+    <value>자동지휘</value>
+  </data>
+  <data name="Toolbox.Title" xml:space="preserve">
+    <value>툴박스</value>
+  </data>
+  <data name="Toolbox.OperBox.Title" xml:space="preserve">
+    <value>오퍼레이터 인식</value>
+  </data>
+  <data name="Toolbox.Depot.Title" xml:space="preserve">
+    <value>창고 인식</value>
+  </data>
+  <data name="Main.Close.SaveFailed" xml:space="preserve">
+    <value>{0} 저장에 실패했습니다.</value>
+  </data>
+  <data name="Common.Configuration" xml:space="preserve">
+    <value>설정</value>
+  </data>
+  <data name="Common.List.PairFormat" xml:space="preserve">
+    <value>{0} 및 {1}</value>
+  </data>
+  <data name="Common.List.Separator" xml:space="preserve">
+    <value>, </value>
+  </data>
+  <data name="Common.List.FinalSeparator" xml:space="preserve">
+    <value> 및 </value>
+  </data>
+  <data name="TaskQueue.Guide.OpenSettings" xml:space="preserve">
+    <value>해당 설정 열기</value>
+  </data>
+  <data name="TaskQueue.Guide.ConfigureTasks" xml:space="preserve">
+    <value>작업 설정</value>
+  </data>
+  <data name="TaskQueue.Guide.Resume" xml:space="preserve">
+    <value>설정 안내로 돌아가기</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine" xml:space="preserve">
+    <value>{0}의 {1}을(를) 가져오지 못했습니다. {1} 설정을 읽을 수 없습니다. 직접 수정하세요.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.GlobalConfiguration" xml:space="preserve">
+    <value>전역</value>
+  </data>
+  <data name="Settings.Connect.Hint.MacBundledAdbNotFound" xml:space="preserve">
+    <value>내장 ADB를 찾을 수 없습니다: {0}</value>
+  </data>
+  <data name="ConnectionFailure.Generic.Message" xml:space="preserve">
+    <value>연결에 실패했습니다. 연결 설정을 확인하고 에뮬레이터와 ADB를 다시 시작한 뒤, 계속 실패하면 컴퓨터를 재부팅하세요.</value>
+  </data>
+  <data name="ConnectionFailure.Callback.MessageFormat" xml:space="preserve">
+    <value>연결 콜백: {0}</value>
+  </data>
+  <data name="ConnectionFailure.Generic.Suggestion" xml:space="preserve">
+    <value>연결 설정을 확인하고 에뮬레이터와 ADB를 다시 시작하세요. 계속 실패하면 컴퓨터를 재부팅하세요.</value>
+  </data>
+  <data name="ConnectionFailure.Timeout.Message" xml:space="preserve">
+    <value>에뮬레이터 연결 시간이 초과되었습니다.</value>
+  </data>
+  <data name="ConnectionFailure.Timeout.Suggestion" xml:space="preserve">
+    <value>에뮬레이터가 실행 중인지, 연결 주소와 포트가 올바른지, ADB를 사용할 수 있는지 확인하세요.</value>
+  </data>
+  <data name="ConnectionFailure.TouchMode.Message" xml:space="preserve">
+    <value>현재 터치 모드를 사용할 수 없습니다.</value>
+  </data>
+  <data name="ConnectionFailure.TouchMode.Suggestion" xml:space="preserve">
+    <value>연결 설정에서 다른 터치 모드로 전환한 뒤 다시 시도하세요.</value>
+  </data>
+  <data name="ConnectionFailure.AddressPort.Message" xml:space="preserve">
+    <value>이 주소 또는 포트에 연결할 수 없습니다.</value>
+  </data>
+  <data name="ConnectionFailure.AddressPort.Suggestion" xml:space="preserve">
+    <value>에뮬레이터가 실행 중인지, 연결 주소와 포트가 올바른지 확인하세요. 일반적인 ADB 포트는 5555이며 일부 에뮬레이터는 5554 등을 사용합니다.</value>
+  </data>
+  <data name="ConnectionFailure.AdbDevice.Message" xml:space="preserve">
+    <value>ADB가 사용 가능한 기기에 연결되어 있지 않습니다.</value>
+  </data>
+  <data name="ConnectionFailure.AdbDevice.Suggestion" xml:space="preserve">
+    <value>adb devices에서 대상이 device 상태인지 확인하세요. unauthorized이면 에뮬레이터에서 승인하고, offline/no devices이면 에뮬레이터 또는 ADB를 다시 시작한 뒤 재시도하세요.</value>
+  </data>
+  <data name="ConnectionFailure.CoreUnavailable.Message" xml:space="preserve">
+    <value>연결 코어가 준비되지 않았거나 해제되었습니다.</value>
+  </data>
+  <data name="ConnectionFailure.CoreUnavailable.Suggestion" xml:space="preserve">
+    <value>잠시 후 다시 시도하세요. 계속 발생하면 앱을 다시 시작하세요.</value>
+  </data>
+  <data name="ConnectionFailure.CoreFailure.MessageFormat" xml:space="preserve">
+    <value>연결 코어가 실패를 반환했습니다: {0}</value>
+  </data>
+  <data name="ConnectionFailure.CoreFailure.Suggestion" xml:space="preserve">
+    <value>에뮬레이터, ADB 경로 및 연결 설정을 확인하세요. core 콜백 정보는 아래 상세 정보에 보존됩니다.</value>
+  </data>
+  <data name="ConnectionFailure.AdbTarget.Message" xml:space="preserve">
+    <value>ADB가 대상 기기에 연결되지 않았습니다.</value>
+  </data>
+  <data name="ConnectionFailure.AdbTarget.Suggestion" xml:space="preserve">
+    <value>연결 주소와 포트가 올바른지 확인하세요. 일반적인 ADB 포트는 5555입니다. 에뮬레이터가 실행 중이고 ADB가 활성화되어 있으며 기기와 컴퓨터가 같은 네트워크에 있는지 확인하세요.</value>
+  </data>
+  <data name="ConnectionFailure.AdbStart.Message" xml:space="preserve">
+    <value>ADB 시작에 실패했습니다.</value>
+  </data>
+  <data name="ConnectionFailure.AdbStart.Suggestion" xml:space="preserve">
+    <value>연결 설정의 ADB 경로가 dmg, zip, 폴더 또는 설치 패키지가 아닌 adb 실행 파일을 가리키는지 확인하세요.</value>
+  </data>
+  <data name="ConnectionFailure.InvalidConfiguration.Message" xml:space="preserve">
+    <value>연결 설정이 올바르지 않습니다.</value>
+  </data>
+  <data name="ConnectionFailure.InvalidConfiguration.Suggestion" xml:space="preserve">
+    <value>연결 주소 형식, 포트, 연결 유형 및 ADB 경로를 확인한 뒤 다시 시도하세요.</value>
+  </data>
+  <data name="ConnectionFailure.ConnectionFailed.Message" xml:space="preserve">
+    <value>에뮬레이터 연결에 실패했습니다.</value>
+  </data>
+  <data name="ConnectionFailure.ConnectionFailed.Suggestion" xml:space="preserve">
+    <value>‘상세 오류’를 열어 core 오류 출력을 확인하고 에뮬레이터와 ADB 연결을 점검하세요.</value>
+  </data>
+  <data name="ConnectionFailure.FixSettings.Suggestion" xml:space="preserve">
+    <value>먼저 연결 설정을 수정한 뒤 다시 시도하세요.</value>
+  </data>
+  <data name="ConnectionFailure.AdbCommand.Message" xml:space="preserve">
+    <value>ADB 명령 실행에 실패했습니다.</value>
+  </data>
+  <data name="ConnectionFailure.AdbCommand.Suggestion" xml:space="preserve">
+    <value>‘상세 오류’를 열어 ADB 출력을 확인하세요. ADB가 실행 가능한지 확인하거나 에뮬레이터와 ADB를 다시 시작하세요.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Status.SwitchBlockedWhileRunning" xml:space="preserve">
+    <value>작업이 실행 중이거나 중지 중일 때는 설정을 전환할 수 없습니다. 작업이 끝난 후 다시 시도하세요.</value>
+  </data>
+  <data name="Settings.Connect.Hint.MuMuPathNotFound" xml:space="preserve">
+    <value>MuMu Emulator 12 경로를 찾을 수 없습니다: {0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.MuMuExternalRendererMissing" xml:space="preserve">
+    <value>선택한 MuMu 설치 폴더에서 external_renderer_ipc.dll을 찾을 수 없습니다: {0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.LdPlayerPathNotFound" xml:space="preserve">
+    <value>LDPlayer 에뮬레이터 경로를 찾을 수 없습니다: {0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.LdPlayerOpenGlMissing" xml:space="preserve">
+    <value>선택한 LDPlayer 경로에서 ldopengl64.dll을 찾을 수 없습니다: {0}</value>
+  </data>
+  <data name="Settings.Connect.Status.MuMuPathAutoDetected" xml:space="preserve">
+    <value>MuMu 에뮬레이터 경로를 자동 감지했습니다: {0}</value>
+  </data>
+  <data name="Settings.Connect.Status.LdPlayerPathAutoDetected" xml:space="preserve">
+    <value>LDPlayer 에뮬레이터 경로를 자동 감지했습니다: {0}</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.Start" xml:space="preserve">
+    <value>예약 작업이 실행 중입니다. 완료된 후 작업을 시작하세요.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.Start" xml:space="preserve">
+    <value>다른 세션 작업이 실행 중입니다. 중지하거나 완료될 때까지 기다린 후 작업을 시작하세요.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.RunOnce" xml:space="preserve">
+    <value>예약 작업이 실행 중입니다. 완료된 후 작업을 단일 실행하세요.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.RunOnce" xml:space="preserve">
+    <value>다른 세션 작업이 실행 중입니다. 중지하거나 완료될 때까지 기다린 후 작업을 단일 실행하세요.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.AccountSwitch" xml:space="preserve">
+    <value>예약 작업이 실행 중입니다. 완료된 후 계정을 전환하세요.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.AccountSwitch" xml:space="preserve">
+    <value>다른 세션 작업이 실행 중입니다. 중지하거나 완료될 때까지 기다린 후 계정을 전환하세요.</value>
+  </data>
+  <data name="Copilot.Error.SessionActivity.TimerActive" xml:space="preserve">
+    <value>예약 작업이 실행 중입니다. 완료될 때까지 Copilot을 시작할 수 없습니다.</value>
+  </data>
+  <data name="Copilot.Error.SessionActivity.OtherActive" xml:space="preserve">
+    <value>다른 세션 작업이 실행 중입니다. 중지하거나 완료될 때까지 기다린 후 Copilot을 시작하세요.</value>
+  </data>
+  <data name="Toolbox.Error.SessionActivity.TimerActive" xml:space="preserve">
+    <value>예약 작업이 실행 중입니다. 완료될 때까지 Toolbox를 시작할 수 없습니다.</value>
+  </data>
+  <data name="Toolbox.Error.SessionActivity.OtherActive" xml:space="preserve">
+    <value>다른 세션 작업이 실행 중입니다. 중지하거나 완료될 때까지 기다린 후 Toolbox를 시작하세요.</value>
   </data>
 </root>

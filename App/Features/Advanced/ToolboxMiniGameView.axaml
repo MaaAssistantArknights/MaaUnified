@@ -105,6 +105,7 @@
       <Button Classes="app-button app-primary toolbox-minigame-action"
               Classes.locked="{Binding IsMiniGameRunning}"
               Content="{Binding MiniGameCommandText}"
+              IsEnabled="{Binding CanStartMiniGame}"
               PointerEntered="OnMiniGameCommandPointerEntered"
               PointerExited="OnMiniGameCommandPointerExited"
               Click="OnMiniGameCommandClick" />

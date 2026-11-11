@@ -12,9 +12,9 @@
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaChromeHints="NoChrome"
         WindowStartupLocation="CenterOwner"
-        Title="Screenshot Preview">
+        Title="">
   <controls:AppWindowFrame x:Name="DialogShell"
-                           Title="Screenshot Preview"
+                           Title=""
                            Mode="ResizableDialog"
                            CapWindowHeightToOwner="True"
                            CloseRequested="OnShellCloseRequested">
@@ -28,7 +28,7 @@
       <Grid>
         <TextBlock x:Name="PreviewSectionTitleText"
                    IsVisible="False"
-                   Text="Screenshot Preview" />
+                   Text="" />
         <TextBlock x:Name="PreviewStatusText"
                    IsVisible="False"
                    Text="" />
@@ -41,7 +41,7 @@
     <controls:AppWindowFrame.ActionsContent>
       <Button x:Name="CloseActionButton"
               Classes="app-button app-primary"
-              Content="Close"
+              Content=""
               Click="OnCloseClick" />
     </controls:AppWindowFrame.ActionsContent>
   </controls:AppWindowFrame>

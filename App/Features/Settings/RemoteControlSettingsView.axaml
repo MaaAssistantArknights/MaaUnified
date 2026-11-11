@@ -27,12 +27,12 @@
                  TextWrapping="Wrap" />
       <Button Classes="app-button app-secondary"
               HorizontalAlignment="Left"
-              Content="Retry secure storage"
+              Content="{Binding RootTexts[Settings.SensitiveStorage.Retry]}"
               IsVisible="{Binding CanRetrySecureStorage}"
               Click="OnRetrySecureStorageClick" />
       <Button Classes="app-button app-secondary"
               HorizontalAlignment="Left"
-              Content="Discard unreadable value and re-enter"
+              Content="{Binding RootTexts[Settings.SensitiveStorage.DiscardUnreadable]}"
               IsVisible="{Binding CanDiscardUnreadableSensitiveValues}"
               Click="OnDiscardUnreadableSensitiveValuesClick" />
 

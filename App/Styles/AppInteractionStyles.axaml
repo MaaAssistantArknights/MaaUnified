@@ -151,6 +151,12 @@
     <Setter Property="BorderBrush" Value="Transparent" />
   </Style>
 
+  <Style Selector="Border.app-popup-menu-item-shell:focus-visible">
+    <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemBackgroundHover}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.SettingsInput.BorderFocus}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+  </Style>
+
   <Style Selector="Border.app-popup-menu-item-shell:disabled">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="Transparent" />
@@ -166,6 +172,10 @@
   </Style>
 
   <Style Selector="Border.app-popup-menu-item-shell:pointerover TextBlock.app-popup-menu-item-text">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundHover}" />
+  </Style>
+
+  <Style Selector="Border.app-popup-menu-item-shell:focus-visible TextBlock.app-popup-menu-item-text">
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ItemForegroundHover}" />
   </Style>
 

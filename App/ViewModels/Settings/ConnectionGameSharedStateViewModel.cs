@@ -76,7 +76,13 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     private string _attachWindowMouseMethod = DefaultAttachWindowInputMethod;
     private string _attachWindowKeyboardMethod = DefaultAttachWindowInputMethod;
     private string _testLinkInfo = string.Empty;
+    private LocalizedTestLinkInfo? _testLinkInfoLocalization;
     private TestLinkInfoSeverity _testLinkInfoSeverity;
+    private readonly object _sessionOperationGate = new();
+    private IDisposable? _taskStartRequestCompatibilityLease;
+    private IDisposable? _screenshotTestCompatibilityLease;
+    private IDisposable? _exclusiveSessionOperationLease;
+    private int _sessionOperationCount;
     private string _screencapCost = string.Empty;
     private string _fastestScreencapMethod = string.Empty;
     private long? _lastScreencapCostMin;
@@ -517,18 +523,16 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             var normalized = (value ?? string.Empty).Trim();
             if (ShowMuMuExtrasSection
                 && MuMu12ExtrasEnabled
-                && !string.IsNullOrWhiteSpace(normalized)
-                && !ValidateMuMu12EmulatorPath(normalized, out var error))
+                && FindMuMu12PathValidationFailure(normalized) is { } failure)
             {
-                if (!string.IsNullOrWhiteSpace(error))
-                {
-                    TestLinkInfo = error;
-                }
-
+                ShowPathValidationFailure(failure);
                 return;
             }
 
-            SetProperty(ref _muMu12EmulatorPath, normalized);
+            if (SetProperty(ref _muMu12EmulatorPath, normalized))
+            {
+                ClearTestLinkInfo();
+            }
         }
     }
 
@@ -572,18 +576,16 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             var normalized = (value ?? string.Empty).Trim();
             if (ShowLdPlayerExtrasSection
                 && LdPlayerExtrasEnabled
-                && !string.IsNullOrWhiteSpace(normalized)
-                && !ValidateLdPlayerEmulatorPath(normalized, out var error))
+                && FindLdPlayerPathValidationFailure(normalized) is { } failure)
             {
-                if (!string.IsNullOrWhiteSpace(error))
-                {
-                    TestLinkInfo = error;
-                }
-
+                ShowPathValidationFailure(failure);
                 return;
             }
 
-            SetProperty(ref _ldPlayerEmulatorPath, normalized);
+            if (SetProperty(ref _ldPlayerEmulatorPath, normalized))
+            {
+                ClearTestLinkInfo();
+            }
         }
     }
 
@@ -646,11 +648,314 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         get => _testLinkInfo;
         set
         {
-            if (SetProperty(ref _testLinkInfo, value ?? string.Empty))
+            _testLinkInfoLocalization = null;
+            ApplyTestLinkInfo(value);
+        }
+    }
+
+    public void SetLocalizedTestLinkInfo(
+        string key,
+        string chineseFallback,
+        string englishFallback,
+        params object[] args)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        _testLinkInfoLocalization = new LocalizedTestLinkInfo(
+            key,
+            chineseFallback,
+            englishFallback,
+            args ?? []);
+        ApplyTestLinkInfo(BuildLocalizedMessage(key, chineseFallback, englishFallback, _testLinkInfoLocalization.Args));
+    }
+
+    public void ClearTestLinkInfo()
+    {
+        _testLinkInfoLocalization = null;
+        ApplyTestLinkInfo(string.Empty);
+    }
+
+    public bool IsTaskStartRequestActive
+    {
+        get => Volatile.Read(ref _taskStartRequestCompatibilityLease) is not null;
+        set
+        {
+            if (value)
             {
-                OnPropertyChanged(nameof(HasTestLinkInfo));
-                TestLinkInfoSeverity = TestLinkInfoSeverity.Normal;
+                TryBeginTaskStartRequest();
             }
+            else
+            {
+                EndTaskStartRequest();
+            }
+        }
+    }
+
+    public bool TryBeginTaskStartRequest()
+    {
+        if (Volatile.Read(ref _taskStartRequestCompatibilityLease) is not null)
+        {
+            return false;
+        }
+
+        var lease = TryBeginSessionOperation("TaskQueue.LinkStart", requireIdle: true);
+        if (lease is null)
+        {
+            return false;
+        }
+
+        var previous = Interlocked.CompareExchange(
+            ref _taskStartRequestCompatibilityLease,
+            lease,
+            null);
+        if (previous is not null)
+        {
+            lease.Dispose();
+            return false;
+        }
+
+        OnPropertyChanged(nameof(IsTaskStartRequestActive));
+        return true;
+    }
+
+    public void EndTaskStartRequest()
+    {
+        var lease = Interlocked.Exchange(ref _taskStartRequestCompatibilityLease, null);
+        if (lease is null)
+        {
+            return;
+        }
+
+        lease.Dispose();
+        OnPropertyChanged(nameof(IsTaskStartRequestActive));
+    }
+
+    public bool IsScreenshotTestActive
+    {
+        get => Volatile.Read(ref _screenshotTestCompatibilityLease) is not null;
+        set
+        {
+            if (value)
+            {
+                TryBeginScreenshotTestActivity();
+            }
+            else
+            {
+                EndScreenshotTestActivity();
+            }
+        }
+    }
+
+    public bool TryBeginScreenshotTestActivity()
+    {
+        if (Volatile.Read(ref _screenshotTestCompatibilityLease) is not null)
+        {
+            return false;
+        }
+
+        var lease = TryBeginSessionOperation("Settings.Connect.ScreenshotTest", requireIdle: true);
+        if (lease is null)
+        {
+            return false;
+        }
+
+        var previous = Interlocked.CompareExchange(
+            ref _screenshotTestCompatibilityLease,
+            lease,
+            null);
+        if (previous is not null)
+        {
+            lease.Dispose();
+            return false;
+        }
+
+        OnPropertyChanged(nameof(IsScreenshotTestActive));
+        return true;
+    }
+
+    public void EndScreenshotTestActivity()
+    {
+        var lease = Interlocked.Exchange(ref _screenshotTestCompatibilityLease, null);
+        if (lease is null)
+        {
+            return;
+        }
+
+        lease.Dispose();
+        OnPropertyChanged(nameof(IsScreenshotTestActive));
+    }
+
+    public bool IsSessionOperationActive => Volatile.Read(ref _sessionOperationCount) > 0;
+
+    public bool IsSessionOperationExclusiveActive =>
+        Volatile.Read(ref _exclusiveSessionOperationLease) is not null;
+
+    public bool IsTimerSessionOperationActive
+    {
+        get
+        {
+            var lease = Volatile.Read(ref _exclusiveSessionOperationLease) as SessionOperationLease;
+            return lease?.OperationName.StartsWith("Timer.", StringComparison.OrdinalIgnoreCase) == true;
+        }
+    }
+
+    public IDisposable BeginSessionOperation(string operationName)
+    {
+        var lease = TryBeginSessionOperation(operationName);
+        if (lease is null)
+        {
+            throw new InvalidOperationException(
+                $"Session operation `{operationName.Trim()}` cannot start while an exclusive session operation is active.");
+        }
+
+        return lease;
+    }
+
+    public IDisposable? TryBeginSessionOperation(string operationName, bool requireIdle = false)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
+        var becameActive = false;
+        SessionOperationLease lease;
+        lock (_sessionOperationGate)
+        {
+            if (_exclusiveSessionOperationLease is not null)
+            {
+                return null;
+            }
+
+            if (requireIdle && _sessionOperationCount != 0)
+            {
+                return null;
+            }
+
+            _sessionOperationCount++;
+            becameActive = _sessionOperationCount == 1;
+            lease = new SessionOperationLease(this, operationName.Trim(), isExclusive: false);
+        }
+
+        if (becameActive)
+        {
+            OnPropertyChanged(nameof(IsSessionOperationActive));
+        }
+
+        return lease;
+    }
+
+    public IDisposable? TryBeginExclusiveSessionOperation(string operationName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
+        SessionOperationLease lease;
+        lock (_sessionOperationGate)
+        {
+            if (_sessionOperationCount != 0)
+            {
+                return null;
+            }
+
+            _sessionOperationCount = 1;
+            lease = new SessionOperationLease(this, operationName.Trim(), isExclusive: true);
+            Volatile.Write(ref _exclusiveSessionOperationLease, lease);
+        }
+
+        OnPropertyChanged(nameof(IsSessionOperationExclusiveActive));
+        OnPropertyChanged(nameof(IsTimerSessionOperationActive));
+        OnPropertyChanged(nameof(IsSessionOperationActive));
+        return lease;
+    }
+
+    internal bool IsExclusiveSessionOperationLease(IDisposable? lease)
+    {
+        return lease is not null
+               && ReferenceEquals(Volatile.Read(ref _exclusiveSessionOperationLease), lease);
+    }
+
+    public async Task<IDisposable> AcquireExclusiveSessionOperationAsync(
+        string operationName,
+        CancellationToken cancellationToken = default)
+    {
+        while (true)
+        {
+            var lease = TryBeginExclusiveSessionOperation(operationName);
+            if (lease is not null)
+            {
+                return lease;
+            }
+
+            await WaitForSessionOperationsIdleAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    public async Task WaitForSessionOperationsIdleAsync(CancellationToken cancellationToken = default)
+    {
+        while (IsSessionOperationActive)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(25), cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private void EndSessionOperation(SessionOperationLease lease)
+    {
+        var becameIdle = false;
+        var exclusiveChanged = false;
+        lock (_sessionOperationGate)
+        {
+            if (_sessionOperationCount <= 0)
+            {
+                throw new InvalidOperationException("Session operation lease count is already zero.");
+            }
+
+            if (lease.IsExclusive)
+            {
+                if (!ReferenceEquals(_exclusiveSessionOperationLease, lease))
+                {
+                    throw new InvalidOperationException("Exclusive session operation lease is no longer active.");
+                }
+
+                if (_sessionOperationCount != 1)
+                {
+                    throw new InvalidOperationException("Exclusive session operation lease cannot be nested.");
+                }
+
+                Volatile.Write(ref _exclusiveSessionOperationLease, null);
+                exclusiveChanged = true;
+            }
+
+            _sessionOperationCount--;
+            becameIdle = _sessionOperationCount == 0;
+        }
+
+        if (exclusiveChanged)
+        {
+            OnPropertyChanged(nameof(IsSessionOperationExclusiveActive));
+            OnPropertyChanged(nameof(IsTimerSessionOperationActive));
+        }
+
+        if (becameIdle)
+        {
+            OnPropertyChanged(nameof(IsSessionOperationActive));
+        }
+    }
+
+    private sealed class SessionOperationLease : IDisposable
+    {
+        private ConnectionGameSharedStateViewModel? _owner;
+
+        public SessionOperationLease(
+            ConnectionGameSharedStateViewModel owner,
+            string operationName,
+            bool isExclusive)
+        {
+            _owner = owner;
+            OperationName = operationName;
+            IsExclusive = isExclusive;
+        }
+
+        public string OperationName { get; }
+
+        public bool IsExclusive { get; }
+
+        public void Dispose()
+        {
+            Interlocked.Exchange(ref _owner, null)?.EndSessionOperation(this);
         }
     }
 
@@ -672,6 +977,15 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     public bool TestLinkInfoIsWarning => TestLinkInfoSeverity == TestLinkInfoSeverity.Warning;
 
     public bool TestLinkInfoIsError => TestLinkInfoSeverity == TestLinkInfoSeverity.Error;
+
+    private void ApplyTestLinkInfo(string? value)
+    {
+        if (SetProperty(ref _testLinkInfo, value ?? string.Empty, nameof(TestLinkInfo)))
+        {
+            OnPropertyChanged(nameof(HasTestLinkInfo));
+            TestLinkInfoSeverity = TestLinkInfoSeverity.Normal;
+        }
+    }
 
     public string ScreencapCost
     {
@@ -929,7 +1243,13 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         }
 
         MuMu12EmulatorPath = detected;
-        return string.Equals(MuMu12EmulatorPath, detected, StringComparison.Ordinal);
+        if (!string.Equals(MuMu12EmulatorPath, detected, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        ShowMuMu12AutoDetectedPathStatus();
+        return true;
     }
 
     public bool AutoDetectLdPlayerEmulatorPathIfNeeded()
@@ -946,7 +1266,51 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
         }
 
         LdPlayerEmulatorPath = detected;
-        return string.Equals(LdPlayerEmulatorPath, detected, StringComparison.Ordinal);
+        if (!string.Equals(LdPlayerEmulatorPath, detected, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        ShowLdPlayerAutoDetectedPathStatus();
+        return true;
+    }
+
+    public void ShowMuMu12AutoDetectedPathStatus()
+    {
+        SetLocalizedTestLinkInfo(
+            "Settings.Connect.Status.MuMuPathAutoDetected",
+            "已自动检测到 MuMu 模拟器路径：{0}",
+            "MuMu emulator path auto-detected: {0}",
+            MuMu12EmulatorPath);
+    }
+
+    public void ShowLdPlayerAutoDetectedPathStatus()
+    {
+        SetLocalizedTestLinkInfo(
+            "Settings.Connect.Status.LdPlayerPathAutoDetected",
+            "已自动检测到 LDPlayer 模拟器路径：{0}",
+            "LDPlayer emulator path auto-detected: {0}",
+            LdPlayerEmulatorPath);
+    }
+
+    public string BuildMuMu12AutoDetectedPathMessage(string? path = null)
+    {
+        var normalized = (path ?? MuMu12EmulatorPath ?? string.Empty).Trim();
+        return BuildLocalizedMessage(
+            "Settings.Connect.Status.MuMuPathAutoDetected",
+            "已自动检测到 MuMu 模拟器路径：{0}",
+            "MuMu emulator path auto-detected: {0}",
+            normalized);
+    }
+
+    public string BuildLdPlayerAutoDetectedPathMessage(string? path = null)
+    {
+        var normalized = (path ?? LdPlayerEmulatorPath ?? string.Empty).Trim();
+        return BuildLocalizedMessage(
+            "Settings.Connect.Status.LdPlayerPathAutoDetected",
+            "已自动检测到 LDPlayer 模拟器路径：{0}",
+            "LDPlayer emulator path auto-detected: {0}",
+            normalized);
     }
 
     public bool ValidateMuMu12EmulatorPath(out string? errorMessage)
@@ -973,70 +1337,143 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
     private bool ValidateMuMu12EmulatorPath(string path, out string? errorMessage)
     {
-        var normalized = (path ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(normalized))
-        {
-            errorMessage = null;
-            return true;
-        }
-
-        if (!Directory.Exists(normalized))
-        {
-            errorMessage = BuildLocalizedMessage(
-                "Settings.Connect.Hint.MuMuPathNotFound",
-                "MuMu 模拟器路径不存在：{0}",
-                "MuMu emulator path does not exist: {0}",
-                normalized);
-            return false;
-        }
-
-        var hasRendererIpc = MuMuExternalRendererCandidates.Any(candidate => File.Exists(Path.Combine(normalized, candidate)));
-        if (hasRendererIpc)
-        {
-            errorMessage = null;
-            return true;
-        }
-
-        errorMessage = BuildLocalizedMessage(
-            "Settings.Connect.Hint.MuMuExternalRendererMissing",
-            "MuMu 模拟器路径缺少 external_renderer_ipc.dll：{0}",
-            "MuMu emulator path is missing external_renderer_ipc.dll: {0}",
-            normalized);
-        return false;
+        var failure = FindMuMu12PathValidationFailure(path);
+        errorMessage = failure is null ? null : BuildPathValidationMessage(failure);
+        return failure is null;
     }
 
     private bool ValidateLdPlayerEmulatorPath(string path, out string? errorMessage)
     {
+        var failure = FindLdPlayerPathValidationFailure(path);
+        errorMessage = failure is null ? null : BuildPathValidationMessage(failure);
+        return failure is null;
+    }
+
+    public bool ValidateAndShowMuMu12EmulatorPathStatus()
+    {
+        var failure = ShowMuMuExtrasSection && MuMu12ExtrasEnabled
+            ? FindMuMu12PathValidationFailure(MuMu12EmulatorPath)
+            : null;
+        if (failure is not null)
+        {
+            ShowPathValidationFailure(failure);
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(MuMu12EmulatorPath))
+        {
+            ClearPathStatusIfCurrent(
+                "Settings.Connect.Hint.MuMuPathNotFound",
+                "Settings.Connect.Hint.MuMuExternalRendererMissing",
+                "Settings.Connect.Status.MuMuPathAutoDetected");
+        }
+        return true;
+    }
+
+    public bool ValidateAndShowLdPlayerEmulatorPathStatus()
+    {
+        var failure = ShowLdPlayerExtrasSection && LdPlayerExtrasEnabled
+            ? FindLdPlayerPathValidationFailure(LdPlayerEmulatorPath)
+            : null;
+        if (failure is not null)
+        {
+            ShowPathValidationFailure(failure);
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(LdPlayerEmulatorPath))
+        {
+            ClearPathStatusIfCurrent(
+                "Settings.Connect.Hint.LdPlayerPathNotFound",
+                "Settings.Connect.Hint.LdPlayerOpenGlMissing",
+                "Settings.Connect.Status.LdPlayerPathAutoDetected");
+        }
+        return true;
+    }
+
+    private static PathValidationFailure? FindMuMu12PathValidationFailure(string path)
+    {
         var normalized = (path ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(normalized))
         {
-            errorMessage = null;
-            return true;
+            return null;
         }
 
         if (!Directory.Exists(normalized))
         {
-            errorMessage = BuildLocalizedMessage(
+            return new PathValidationFailure(
+                "Settings.Connect.Hint.MuMuPathNotFound",
+                "MuMu 模拟器路径不存在：{0}",
+                "MuMu emulator path does not exist: {0}",
+                normalized);
+        }
+
+        if (MuMuExternalRendererCandidates.Any(candidate => File.Exists(Path.Combine(normalized, candidate))))
+        {
+            return null;
+        }
+
+        return new PathValidationFailure(
+            "Settings.Connect.Hint.MuMuExternalRendererMissing",
+            "MuMu 模拟器路径缺少 external_renderer_ipc.dll：{0}",
+            "MuMu emulator path is missing external_renderer_ipc.dll: {0}",
+            normalized);
+    }
+
+    private static PathValidationFailure? FindLdPlayerPathValidationFailure(string path)
+    {
+        var normalized = (path ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return null;
+        }
+
+        if (!Directory.Exists(normalized))
+        {
+            return new PathValidationFailure(
                 "Settings.Connect.Hint.LdPlayerPathNotFound",
                 "LDPlayer 模拟器路径不存在：{0}",
                 "LDPlayer emulator path does not exist: {0}",
                 normalized);
-            return false;
         }
 
-        var openGlLibraryPath = Path.Combine(normalized, LdPlayerOpenGlLibrary);
-        if (File.Exists(openGlLibraryPath))
+        if (File.Exists(Path.Combine(normalized, LdPlayerOpenGlLibrary)))
         {
-            errorMessage = null;
-            return true;
+            return null;
         }
 
-        errorMessage = BuildLocalizedMessage(
+        return new PathValidationFailure(
             "Settings.Connect.Hint.LdPlayerOpenGlMissing",
             "LDPlayer 模拟器路径缺少 ldopengl64.dll：{0}",
             "LDPlayer emulator path is missing ldopengl64.dll: {0}",
             normalized);
-        return false;
+    }
+
+    private void ShowPathValidationFailure(PathValidationFailure failure)
+    {
+        SetLocalizedTestLinkInfo(
+            failure.Key,
+            failure.ChineseFallback,
+            failure.EnglishFallback,
+            failure.Path);
+    }
+
+    private string BuildPathValidationMessage(PathValidationFailure failure)
+    {
+        return BuildLocalizedMessage(
+            failure.Key,
+            failure.ChineseFallback,
+            failure.EnglishFallback,
+            failure.Path);
+    }
+
+    private void ClearPathStatusIfCurrent(params string[] keys)
+    {
+        if (_testLinkInfoLocalization is { } status
+            && keys.Contains(status.Key, StringComparer.Ordinal))
+        {
+            ClearTestLinkInfo();
+        }
     }
 
     private void UpdateConnectAddressHistory(string address)
@@ -1395,9 +1832,19 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
     private void RefreshLocalizedConnectTexts()
     {
+        if (_testLinkInfoLocalization is { } status)
+        {
+            ApplyTestLinkInfo(BuildLocalizedMessage(
+                status.Key,
+                status.ChineseFallback,
+                status.EnglishFallback,
+                status.Args));
+        }
+
         var previousScreencapCost = ScreencapCost;
         ScreencapCost = BuildCurrentScreencapCostText();
-        if (string.Equals(TestLinkInfo, previousScreencapCost, StringComparison.Ordinal))
+        if (_testLinkInfoLocalization is null
+            && string.Equals(TestLinkInfo, previousScreencapCost, StringComparison.Ordinal))
         {
             TestLinkInfo = ScreencapCost;
         }
@@ -1483,6 +1930,18 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
     {
         return DialogTextCatalog.Select(_language, zh, en);
     }
+
+    private sealed record LocalizedTestLinkInfo(
+        string Key,
+        string ChineseFallback,
+        string EnglishFallback,
+        object[] Args);
+
+    private sealed record PathValidationFailure(
+        string Key,
+        string ChineseFallback,
+        string EnglishFallback,
+        string Path);
 
     private static IReadOnlyList<string> GetAdbFileNameCandidates()
     {

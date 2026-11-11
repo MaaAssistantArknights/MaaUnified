@@ -9,12 +9,27 @@ using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 
 namespace MAAUnified.App.Controls;
 
 public sealed class AppCopilotPathDropdownSelectionCommittedEventArgs(object? selectedItem) : EventArgs
 {
     public object? SelectedItem { get; } = selectedItem;
+}
+
+internal enum AppCopilotPathKeyboardAction
+{
+    None,
+    MovePrevious,
+    MoveNext,
+    MoveToFirst,
+    MoveToLast,
+    MoveToParent,
+    Expand,
+    Collapse,
+    Invoke,
+    Dismiss,
 }
 
 public partial class AppCopilotPathDropdown : UserControl
@@ -57,12 +72,18 @@ public partial class AppCopilotPathDropdown : UserControl
     {
         InitializeComponent();
         VisibleRowsControl.ItemsSource = _visibleRows;
+        AddHandler(
+            InputElement.KeyDownEvent,
+            OnPopupKeyDown,
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
 
         this.GetObservable(ItemsSourceProperty).Subscribe(OnItemsSourceChanged);
         this.GetObservable(IsDropDownOpenProperty).Subscribe(_ => UpdateShellState());
         this.GetObservable(IsEnabledProperty).Subscribe(_ => UpdateShellState());
         this.GetObservable(SelectedItemProperty).Subscribe(_ => RefreshCurrentRow());
         this.GetObservable(TextProperty).Subscribe(_ => RefreshCurrentRow());
+        DropDownPopup.Opened += OnPopupOpened;
         UpdateShellState();
     }
 
@@ -138,6 +159,11 @@ public partial class AppCopilotPathDropdown : UserControl
         IsDropDownOpen = false;
     }
 
+    private void OnPopupOpened(object? sender, EventArgs e)
+    {
+        Dispatcher.UIThread.Post(FocusFirstPathRow, DispatcherPriority.Input);
+    }
+
     private void OnEditorGotFocus(object? sender, GotFocusEventArgs e)
     {
         _isEditorFocused = true;
@@ -173,7 +199,7 @@ public partial class AppCopilotPathDropdown : UserControl
         if (e.Key == Key.Escape && IsDropDownOpen)
         {
             e.Handled = true;
-            IsDropDownOpen = false;
+            ClosePopupAndRestoreEditorFocus();
             return;
         }
 
@@ -184,6 +210,91 @@ public partial class AppCopilotPathDropdown : UserControl
 
         e.Handled = true;
         CommitEditorText(closePopup: true);
+    }
+
+    private void OnPopupKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (!IsDropDownOpen || e.Handled)
+        {
+            return;
+        }
+
+        var controls = GetPathRowControls();
+        var currentIndex = controls.FindIndex(static control => control.IsFocused);
+        var current = currentIndex >= 0 ? controls[currentIndex] : null;
+        var row = current?.Tag as VisiblePathRow;
+        var action = GetKeyboardAction(
+            e.Key,
+            row?.IsFolder == true,
+            row?.IsExpanded == true,
+            row?.HasChildren == true,
+            row?.Depth > 0);
+
+        switch (action)
+        {
+            case AppCopilotPathKeyboardAction.MovePrevious:
+                FocusRowAt(Math.Max(0, currentIndex - 1));
+                break;
+            case AppCopilotPathKeyboardAction.MoveNext:
+                FocusRowAt(Math.Min(controls.Count - 1, currentIndex + 1));
+                break;
+            case AppCopilotPathKeyboardAction.MoveToFirst:
+                FocusRowAt(0);
+                break;
+            case AppCopilotPathKeyboardAction.MoveToLast:
+                FocusRowAt(controls.Count - 1);
+                break;
+            case AppCopilotPathKeyboardAction.MoveToParent when row is not null:
+                MoveToParentRow(controls, currentIndex, row.Depth);
+                break;
+            case AppCopilotPathKeyboardAction.Expand when row is not null:
+                if (row.IsExpanded)
+                {
+                    FocusRowAt(currentIndex + 1);
+                }
+                else
+                {
+                    ToggleExpanded(row);
+                }
+                break;
+            case AppCopilotPathKeyboardAction.Collapse when row is not null:
+                ToggleExpanded(row);
+                break;
+            case AppCopilotPathKeyboardAction.Invoke when row is not null && current is not null:
+                OnPathRowClick(current, new RoutedEventArgs(Button.ClickEvent));
+                break;
+            case AppCopilotPathKeyboardAction.Dismiss:
+                ClosePopupAndRestoreEditorFocus();
+                break;
+            default:
+                return;
+        }
+
+        e.Handled = true;
+    }
+
+    internal static AppCopilotPathKeyboardAction GetKeyboardAction(
+        Key key,
+        bool isFolder,
+        bool isExpanded,
+        bool hasChildren,
+        bool hasParent)
+    {
+        return key switch
+        {
+            Key.Up => AppCopilotPathKeyboardAction.MovePrevious,
+            Key.Down => AppCopilotPathKeyboardAction.MoveNext,
+            Key.Home => AppCopilotPathKeyboardAction.MoveToFirst,
+            Key.End => AppCopilotPathKeyboardAction.MoveToLast,
+            Key.Enter or Key.Space => AppCopilotPathKeyboardAction.Invoke,
+            Key.Escape => AppCopilotPathKeyboardAction.Dismiss,
+            Key.Right when isFolder && hasChildren => isExpanded
+                ? AppCopilotPathKeyboardAction.MoveNext
+                : AppCopilotPathKeyboardAction.Expand,
+            Key.Left when isFolder && isExpanded => AppCopilotPathKeyboardAction.Collapse,
+            Key.Left when hasParent => AppCopilotPathKeyboardAction.MoveToParent,
+            _ => AppCopilotPathKeyboardAction.None,
+        };
     }
 
     private void OnPathRowPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -282,12 +393,12 @@ public partial class AppCopilotPathDropdown : UserControl
 
     private void CommitSelection(VisiblePathRow row)
     {
-        _ignoreNextEditorLostFocusCommit = true;
         SetCurrentValue(SelectedItemProperty, row.Item);
         SetCurrentValue(TextProperty, BuildSelectionText(row.Item));
         IsDropDownOpen = false;
         RefreshCurrentRow();
         SelectionCommitted?.Invoke(this, new AppCopilotPathDropdownSelectionCommittedEventArgs(row.Item));
+        RestoreEditorFocus();
     }
 
     private void ToggleExpanded(VisiblePathRow row)
@@ -303,6 +414,94 @@ public partial class AppCopilotPathDropdown : UserControl
         }
 
         RebuildVisibleRows();
+        FocusRowByKey(row.Key);
+    }
+
+    private void FocusFirstPathRow()
+    {
+        if (!IsDropDownOpen)
+        {
+            return;
+        }
+
+        var controls = GetPathRowControls();
+        if (controls.Count == 0)
+        {
+            return;
+        }
+
+        if (EditorTextBox.IsFocused)
+        {
+            _ignoreNextEditorLostFocusCommit = true;
+        }
+
+        controls[0].Focus(NavigationMethod.Directional, KeyModifiers.None);
+        controls[0].BringIntoView();
+    }
+
+    private void FocusRowAt(int index)
+    {
+        var controls = GetPathRowControls();
+        if (index < 0 || index >= controls.Count)
+        {
+            return;
+        }
+
+        var control = controls[index];
+        control.Focus(NavigationMethod.Directional, KeyModifiers.None);
+        control.BringIntoView();
+    }
+
+    private void FocusRowByKey(string key)
+    {
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (!IsDropDownOpen)
+                {
+                    return;
+                }
+
+                var controls = GetPathRowControls();
+                var index = controls.FindIndex(
+                    control => control.Tag is VisiblePathRow row
+                               && string.Equals(row.Key, key, StringComparison.Ordinal));
+                FocusRowAt(index);
+            },
+            DispatcherPriority.Input);
+    }
+
+    private void MoveToParentRow(IReadOnlyList<Button> controls, int currentIndex, int depth)
+    {
+        for (var index = currentIndex - 1; index >= 0; index--)
+        {
+            if (controls[index].Tag is VisiblePathRow parent && parent.Depth < depth)
+            {
+                FocusRowAt(index);
+                return;
+            }
+        }
+    }
+
+    private void ClosePopupAndRestoreEditorFocus()
+    {
+        IsDropDownOpen = false;
+        RestoreEditorFocus();
+    }
+
+    private void RestoreEditorFocus()
+    {
+        Dispatcher.UIThread.Post(
+            () => EditorTextBox.Focus(NavigationMethod.Directional, KeyModifiers.None),
+            DispatcherPriority.Input);
+    }
+
+    private List<Button> GetPathRowControls()
+    {
+        return VisibleRowsControl.GetVisualDescendants()
+            .OfType<Button>()
+            .Where(static button => button.Tag is VisiblePathRow && button.IsEffectivelyVisible)
+            .ToList();
     }
 
     private void RebuildVisibleRows()
@@ -488,7 +687,8 @@ public partial class AppCopilotPathDropdown : UserControl
             Item = item;
             Key = key;
             DisplayName = displayName;
-            Indent = Math.Max(0, depth) * RowIndentStep;
+            Depth = Math.Max(0, depth);
+            Indent = Depth * RowIndentStep;
             IsFolder = isFolder;
             HasChildren = hasChildren;
             IsExpanded = isExpanded;
@@ -504,6 +704,8 @@ public partial class AppCopilotPathDropdown : UserControl
         public string DisplayName { get; }
 
         public double Indent { get; }
+
+        public int Depth { get; }
 
         public bool IsFolder { get; }
 

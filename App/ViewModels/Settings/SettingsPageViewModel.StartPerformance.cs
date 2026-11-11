@@ -422,10 +422,7 @@ public sealed partial class SettingsPageViewModel
     {
         var candidates = BuildEmulatorPathDialogCandidates();
         var chrome = CreateSettingsDialogChrome(
-            texts => new DialogChromeSnapshot(
-                title: texts.GetOrDefault("Settings.Start.Dialog.SelectEmulatorPathTitle", "Select Emulator Path"),
-                confirmText: texts.GetOrDefault("Settings.Start.Dialog.SelectEmulatorPathConfirm", "Confirm"),
-                cancelText: texts.GetOrDefault("Settings.Start.Dialog.SelectEmulatorPathCancel", "Cancel")));
+            DialogTextCatalog.CreateEmulatorPathChrome);
         var chromeSnapshot = chrome.GetSnapshot();
         var request = new EmulatorPathDialogRequest(
             Title: chromeSnapshot.Title,

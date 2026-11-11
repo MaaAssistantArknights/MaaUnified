@@ -96,7 +96,7 @@
                        TextWrapping="Wrap" />
             <Button HorizontalAlignment="Left"
                     Classes="app-button app-secondary"
-                    Content="Discard unreadable value and re-enter"
+                    Content="{Binding RootTexts[Settings.SensitiveStorage.DiscardUnreadable]}"
                     IsVisible="{Binding CanDiscardUnreadableSensitiveValues}"
                     Click="OnDiscardUnreadableSensitiveValuesClick" />
             <Grid Classes="settings-page-labeled-action-row"
