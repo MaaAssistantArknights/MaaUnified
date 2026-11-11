@@ -82,6 +82,11 @@ public interface IMaaCoreBridge : IAsyncDisposable
     Task<CoreResult<byte[]>> CaptureImageAsync(CancellationToken cancellationToken = default)
         => GetImageAsync(cancellationToken);
 
+    // Forces a fresh screencap before reading the frame (WPF AsstGetFreshImage
+    // semantics). The default falls back to the cached-frame read.
+    Task<CoreResult<byte[]>> GetFreshImageAsync(CancellationToken cancellationToken = default)
+        => GetImageAsync(cancellationToken);
+
     Task<CoreResult<byte[]>> GetImageBgrAsync(
         bool forceScreencap = false,
         CancellationToken cancellationToken = default)

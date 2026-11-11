@@ -7,15 +7,22 @@ public sealed class WebApiTaskStore
 {
     private readonly List<WebApiTaskDefinition> _tasks = new();
     private readonly object _gate = new();
-    private int _nextId = 1;
-
     public WebApiTaskDefinition Append(WebApiTaskDefinition task)
     {
         lock (_gate)
         {
-            var entry = task with { Id = _nextId++ };
-            _tasks.Add(entry);
-            return entry;
+            if (task.Id <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(task), "WebApi task ids must come from MaaCore.");
+            }
+
+            if (_tasks.Any(item => string.Equals(item.TaskType, task.TaskType, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new InvalidOperationException($"A WebApi task of type `{task.TaskType}` already exists.");
+            }
+
+            _tasks.Add(task);
+            return task;
         }
     }
 
@@ -63,7 +70,6 @@ public sealed class WebApiTaskStore
         lock (_gate)
         {
             _tasks.Clear();
-            _nextId = 1;
         }
     }
 

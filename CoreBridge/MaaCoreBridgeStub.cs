@@ -94,6 +94,14 @@ public sealed class MaaCoreBridgeStub : IMaaCoreBridge
         return Task.FromResult(CoreResult<int>.Ok(_taskId));
     }
 
+    public Task<CoreResult<bool>> SetTaskParamsAsync(int taskId, string parametersJson, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(
+            _connected && taskId > 0 && !string.IsNullOrWhiteSpace(parametersJson)
+                ? CoreResult<bool>.Ok(true)
+                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.InvalidRequest, "Stub task parameters are invalid.")));
+    }
+
     public Task<CoreResult<bool>> StartAsync(CancellationToken cancellationToken = default)
     {
         _running = _connected;

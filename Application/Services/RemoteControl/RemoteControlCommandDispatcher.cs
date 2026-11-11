@@ -140,6 +140,35 @@ internal sealed class RemoteControlCommandDispatcher
         }
     }
 
+    // WPF parity (frozen RemoteControlService.PollJobTaskLoop): sequential
+    // commands run one at a time and wait for task completion; instant commands
+    // run on an independent loop so they are never blocked by a sequential run;
+    // unknown types are consumed silently (no dispatch, no report).
+    internal static RemoteControlCommandKind Classify(string? rawCommand)
+    {
+        return NormalizeCommand(rawCommand) switch
+        {
+            "LinkStart" or
+            "LinkStart-Base" or
+            "LinkStart-WakeUp" or
+            "LinkStart-Combat" or
+            "LinkStart-Recruiting" or
+            "LinkStart-Mall" or
+            "LinkStart-Mission" or
+            "LinkStart-AutoRoguelike" or
+            "LinkStart-Reclamation" or
+            "Toolbox-GachaOnce" or
+            "Toolbox-GachaTenTimes" or
+            "CaptureImage" or
+            "Settings-ConnectAddress" or
+            "Settings-Stage1" => RemoteControlCommandKind.Sequential,
+            "CaptureImageNow" or
+            "HeartBeat" or
+            "StopTask" => RemoteControlCommandKind.Instant,
+            _ => RemoteControlCommandKind.Unknown,
+        };
+    }
+
     private async Task<RemoteControlCommandResult> DispatchLinkStartAsync(
         RemoteControlCommandRequest request,
         string command,
@@ -160,6 +189,10 @@ internal sealed class RemoteControlCommandDispatcher
                 UiErrorCode.SessionStateNotAllowed,
                 $"Remote command `{command}` cannot start new tasks while session state is `{_sessionService!.CurrentState}`. Stop the current run first.");
         }
+
+        // WPF parity: the sequential loop waits for the running state to become
+        // idle before starting the next sequential command.
+        await WaitUntilIdleAsync(cancellationToken);
 
         var connected = await EnsureConnectedAsync(cancellationToken);
         if (!connected.Success)
@@ -203,6 +236,11 @@ internal sealed class RemoteControlCommandDispatcher
             SetRunningTaskId(commandId);
         }
 
+        // WPF parity: the report is only posted after the run finishes
+        // (`_runningState.UntilIdleAsync()` before the report), so a premature
+        // SUCCESS is never sent while the task queue is still executing.
+        await WaitUntilIdleAsync(cancellationToken);
+
         var taskType = selectedTaskTypes is { Count: 1 }
             ? selectedTaskTypes.First()
             : null;
@@ -226,14 +264,9 @@ internal sealed class RemoteControlCommandDispatcher
             return Fail(request, command, UiErrorCode.RemoteControlUnsupported, "Toolbox service is unavailable.");
         }
 
-        if (IsSessionRunningOrStopping())
-        {
-            return Fail(
-                request,
-                command,
-                UiErrorCode.SessionStateNotAllowed,
-                $"Remote command `{command}` cannot start new tasks while session state is `{_sessionService!.CurrentState}`. Stop the current run first.");
-        }
+        // WPF parity: gacha commands wait for the running state to become idle
+        // before dispatching and again before the completion report.
+        await WaitUntilIdleAsync(cancellationToken);
 
         var result = await _toolboxFeatureService.DispatchToolAsync(
             new ToolboxDispatchRequest(
@@ -255,6 +288,8 @@ internal sealed class RemoteControlCommandDispatcher
         {
             SetRunningTaskId(commandId);
         }
+
+        await WaitUntilIdleAsync(cancellationToken);
 
         return Success(
             request,
@@ -281,7 +316,10 @@ internal sealed class RemoteControlCommandDispatcher
             return Fail(request, command, connected.Error?.Code ?? UiErrorCode.RemoteControlUnsupported, connected.Message, connected.Error?.Details);
         }
 
-        var imageResult = await _coreBridge.CaptureImageAsync(cancellationToken);
+        // WPF parity: both `CaptureImage` (AsstGetFreshImageAsync) and
+        // `CaptureImageNow` (AsstGetFreshImage) force a fresh screencap before
+        // reading the frame; neither returns the stale cached frame.
+        var imageResult = await _coreBridge.GetFreshImageAsync(cancellationToken);
         if (!imageResult.Success || imageResult.Value is null || imageResult.Value.Length == 0)
         {
             return Fail(
@@ -319,11 +357,14 @@ internal sealed class RemoteControlCommandDispatcher
             ? $"Remote command `{command}` heartbeat ok. state={state}."
             : $"Remote command `{command}` heartbeat ok. state={state}; task={runningTaskId}.";
 
-        return Success(
-            request,
+        // WPF parity: the heartbeat report payload carries the running sequential task id.
+        return new RemoteControlCommandResult(
+            request.RawCommand,
             command,
+            Success: true,
             message,
-            details: string.IsNullOrWhiteSpace(runningTaskId) ? $"state={state}" : $"state={state};task={runningTaskId}");
+            Details: string.IsNullOrWhiteSpace(runningTaskId) ? $"state={state}" : $"state={state};task={runningTaskId}",
+            LegacyReportPayload: runningTaskId);
     }
 
     private async Task<RemoteControlCommandResult> DispatchStopTaskAsync(
@@ -432,13 +473,17 @@ internal sealed class RemoteControlCommandDispatcher
             }
         }
 
-        if (taskIndex < 0)
+        // WPF parity: `FightSettingsUserControlModel.Instance` (and its
+        // StagePlan) always exists in WPF, so `Settings-Stage1` succeeds even
+        // when the task queue contains no Fight task. Mirror that by always
+        // persisting the stage to the legacy global Stage1 key, and updating
+        // the Fight task params when one is present.
+        if (taskIndex >= 0)
         {
-            return Fail(request, command, UiErrorCode.TaskNotFound, "No Fight task was found for `Settings-Stage1`.");
+            var fightTask = profile.TaskQueue[taskIndex];
+            fightTask.Params["stage"] = JsonValue.Create(normalizedStage);
         }
 
-        var fightTask = profile.TaskQueue[taskIndex];
-        fightTask.Params["stage"] = JsonValue.Create(normalizedStage);
         _configService.CurrentConfig.GlobalValues[LegacyConfigurationKeys.Stage1] = JsonValue.Create(normalizedStage);
 
         try
@@ -455,7 +500,7 @@ internal sealed class RemoteControlCommandDispatcher
             command,
             $"Remote command `{command}` updated stage to `{normalizedStage}`.",
             taskType: TaskModuleTypes.Fight,
-            details: $"taskIndex={taskIndex}");
+            details: taskIndex >= 0 ? $"taskIndex={taskIndex}" : "taskIndex=none");
     }
 
     private async Task<CoreResult<int>> QueueSelectedTaskTypesAsync(
@@ -545,6 +590,40 @@ internal sealed class RemoteControlCommandDispatcher
 
         var connectResult = await _connectFeatureService.ConnectCandidatesAsync(candidates, cancellationToken);
         return connectResult.Result;
+    }
+
+    private async Task WaitUntilIdleAsync(CancellationToken cancellationToken)
+    {
+        // WPF parity: `RunningState.UntilIdleAsync()` blocks until the task
+        // queue finishes. The unified equivalent of a busy running state is
+        // SessionState.Running/Stopping; every other state counts as idle.
+        if (_sessionService is null)
+        {
+            return;
+        }
+
+        while (_sessionService.CurrentState is SessionState.Running or SessionState.Stopping)
+        {
+            var stateChanged = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            void OnStateChanged(SessionState _) => stateChanged.TrySetResult();
+
+            _sessionService.SessionStateChanged += OnStateChanged;
+            try
+            {
+                // Re-check after subscribing so a transition between the loop
+                // condition and the subscription is not missed.
+                if (_sessionService.CurrentState is not SessionState.Running and not SessionState.Stopping)
+                {
+                    return;
+                }
+
+                await stateChanged.Task.WaitAsync(cancellationToken);
+            }
+            finally
+            {
+                _sessionService.SessionStateChanged -= OnStateChanged;
+            }
+        }
     }
 
     private static string NormalizeCommand(string? rawCommand)

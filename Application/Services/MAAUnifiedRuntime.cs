@@ -283,7 +283,8 @@ public static class MAAUnifiedRuntimeFactory
             configService,
             sessionService,
             connectFeatureService,
-            appLifecycleService);
+            appLifecycleService,
+            bridge);
         var dialogFeatureService = new DialogFeatureService(diagnosticsService);
         var postActionFeatureService = new PostActionFeatureService(
             configService,

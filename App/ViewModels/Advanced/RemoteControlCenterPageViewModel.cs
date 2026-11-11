@@ -67,6 +67,7 @@ public sealed class RemoteControlCenterPageViewModel : PageViewModelBase, IDispo
     {
         GetTaskEndpoint = ReadString(ConfigurationKeys.RemoteControlGetTaskEndpointUri, string.Empty);
         ReportEndpoint = ReadString(ConfigurationKeys.RemoteControlReportStatusUri, string.Empty);
+        // WPF parity: the frozen WPF default poll interval is 1000ms.
         PollIntervalMs = ReadInt(ConfigurationKeys.RemoteControlPollIntervalMs, 1000);
         await Runtime.DiagnosticsService.RecordEventAsync("Advanced.RemoteControlCenter", "Initialized remote control center.", cancellationToken);
     }

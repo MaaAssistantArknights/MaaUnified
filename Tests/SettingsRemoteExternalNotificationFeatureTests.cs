@@ -274,7 +274,7 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
         var ctor = typeof(RemoteControlFeatureService).GetConstructor(
             BindingFlags.Instance | BindingFlags.NonPublic,
             binder: null,
-            [typeof(UnifiedConfigurationService), typeof(UnifiedSessionService), typeof(IConnectFeatureService), typeof(ITaskQueueFeatureService), typeof(IToolboxFeatureService), typeof(IMaaCoreBridge), typeof(UiLogService), typeof(Func<string, Uri, CancellationToken, Task<EndpointProbeResult>>)],
+            [typeof(UnifiedConfigurationService), typeof(UnifiedSessionService), typeof(IConnectFeatureService), typeof(ITaskQueueFeatureService), typeof(IToolboxFeatureService), typeof(IMaaCoreBridge), typeof(UiLogService), typeof(Func<string, Uri, CancellationToken, Task<EndpointProbeResult>>), typeof(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>)],
             modifiers: null);
         Assert.NotNull(ctor);
         var endpointSentinel = "https://user:REMOTE_SECRET@example.test/path?token=REMOTE_SECRET";
@@ -282,7 +282,8 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
         var remote = (RemoteControlFeatureService)ctor!.Invoke([
             null, null, null, null, null, null, null,
             (Func<string, Uri, CancellationToken, Task<EndpointProbeResult>>)((name, _, _) => Task.FromResult(
-                new EndpointProbeResult(name, endpointSentinel, false, 500, probeMessage, UiErrorCode.RemoteControlNetworkFailure)))
+                new EndpointProbeResult(name, endpointSentinel, false, 500, probeMessage, UiErrorCode.RemoteControlNetworkFailure))),
+            null
         ]);
 
         var result = await remote.TestConnectivityAsync(new RemoteControlConnectivityRequest(endpointSentinel, endpointSentinel, 1000));

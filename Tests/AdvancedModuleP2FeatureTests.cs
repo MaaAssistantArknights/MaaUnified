@@ -123,6 +123,31 @@ public sealed class AdvancedModuleP2FeatureTests
     }
 
     [Fact]
+    public async Task RemoteControlCenter_PollIntervalDefault_ShouldAlignWithWpfAndSettingsPage()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new RemoteControlCenterPageViewModel(fixture.Runtime);
+
+        // WPF parity: the frozen WPF default poll interval is 1000ms
+        // (RemoteControlUserControlModel.RemoteControlPollIntervalMs).
+        Assert.Equal(1000, vm.PollIntervalMs);
+
+        // Fallback when the profile has no interval key must stay 1000ms.
+        await vm.InitializeAsync();
+        Assert.Equal(1000, vm.PollIntervalMs);
+
+        // Cross-page consistency with the main settings page default.
+        var settings = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        Assert.Equal(1000, settings.RemotePollInterval);
+
+        // Saving an untouched page persists the WPF-compatible default.
+        await vm.SaveAsync();
+        var config = fixture.Runtime.ConfigurationService.CurrentConfig;
+        var profile = config.Profiles[config.CurrentProfile];
+        Assert.Equal("1000", profile.Values[ConfigurationKeys.RemoteControlPollIntervalMs]!.ToString());
+    }
+
+    [Fact]
     public async Task StageManager_Validate_InvalidStageCode_ShouldFailAndWriteErrorLog()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();

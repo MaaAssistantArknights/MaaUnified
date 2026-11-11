@@ -1649,6 +1649,46 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
         Func<nint, ulong, ulong> getImage)
         => ReadImageBytesWithDynamicBuffer(nullSize, initialBufferSize, getImage, "AsstGetImage");
 
+    public async Task<CoreResult<byte[]>> GetFreshImageAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var connectReady = await WaitForPendingConnectReadyAsync(cancellationToken).ConfigureAwait(false);
+        if (!connectReady.Success)
+        {
+            return CoreResult<byte[]>.Fail(connectReady.Error!);
+        }
+
+        return await RunNativeCallWithTimeoutAsync(
+            () =>
+            {
+                var status = EnsureReady();
+                if (!status.Success)
+                {
+                    return CoreResult<byte[]>.Fail(status.Error!);
+                }
+
+                var exports = _exports!;
+                if (exports.AsstAsyncScreencap is not null)
+                {
+                    // WPF parity: AsstGetFreshImage forces a blocking screencap
+                    // before reading the frame.
+                    _ = exports.AsstAsyncScreencap(_instance, 1);
+                }
+
+                var nullSize = exports.AsstGetNullSize();
+                return ReadImageBytesWithDynamicBuffer(
+                    nullSize,
+                    DefaultBgrFrameBufferSize,
+                    (buffer, bufferSize) => exports.AsstGetImage(_instance, buffer, bufferSize),
+                    "AsstGetImage");
+            },
+            DefaultScreencapTimeout,
+            "AsstAsyncScreencap/AsstGetImage",
+            CoreErrorCode.GetImageFailed,
+            cancellationToken).ConfigureAwait(false);
+    }
+
     private static CoreResult<byte[]> ReadImageBytesWithDynamicBuffer(
         ulong nullSize,
         ulong initialBufferSize,
@@ -2692,6 +2732,7 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
         TryLoadExport<AsstSetStaticOptionDelegate>(library, "AsstSetStaticOption", out var asstSetStaticOption);
         TryLoadExport<AsstSetInstanceOptionDelegate>(library, "AsstSetInstanceOption", out var asstSetInstanceOption);
         TryLoadExport<AsstSetConnectionExtrasDelegate>(library, "AsstSetConnectionExtras", out var asstSetConnectionExtras);
+        TryLoadExport<AsstSetTaskParamsDelegate>(library, "AsstSetTaskParams", out var asstSetTaskParams);
 
         if (!TryLoadExport<AsstSetUserDirDelegate>(library, "AsstSetUserDir", out var asstSetUserDir))
         {
@@ -2742,7 +2783,6 @@ public sealed class MaaCoreBridgeNative : IMaaCoreBridge, IMaaCoreBridgeRecovery
             return false;
         }
 
-        _ = TryLoadExport<AsstSetTaskParamsDelegate>(library, "AsstSetTaskParams", out var asstSetTaskParams);
 
         if (!TryLoadExport<AsstStartDelegate>(library, "AsstStart", out var asstStart))
         {

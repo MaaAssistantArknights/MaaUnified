@@ -28,9 +28,14 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
     private readonly IMaaCoreBridge? _coreBridge;
     private readonly UiLogService? _logService;
     private readonly Func<string, Uri, CancellationToken, Task<EndpointProbeResult>> _probeAsync;
+    private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _sendHttpAsync;
+    private readonly HashSet<string?> _seenTaskIds = new(StringComparer.Ordinal);
     private readonly object _pollingGate = new();
     private CancellationTokenSource? _pollingCts;
     private Task? _pollingTask;
+    private readonly Queue<(RemoteControlCommandRequest Request, RemoteControlPollingSnapshot Snapshot)> _sequentialQueue = new();
+    private readonly SemaphoreSlim _sequentialSignal = new(0);
+    private Task? _sequentialTask;
 
     public RemoteControlFeatureService()
         : this(null, null, null, null, null, null, null)
@@ -45,7 +50,8 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         IToolboxFeatureService? toolboxFeatureService,
         IMaaCoreBridge? coreBridge,
         UiLogService? logService,
-        Func<string, Uri, CancellationToken, Task<EndpointProbeResult>>? probeAsync = null)
+        Func<string, Uri, CancellationToken, Task<EndpointProbeResult>>? probeAsync = null,
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? sendHttpAsync = null)
     {
         _configService = configService;
         _sessionService = sessionService;
@@ -55,6 +61,12 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         _coreBridge = coreBridge;
         _logService = logService;
         _probeAsync = probeAsync ?? ProbeEndpointAsync;
+        _sendHttpAsync = sendHttpAsync ?? DefaultSendAsync;
+    }
+
+    private static Task<HttpResponseMessage> DefaultSendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        return HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     }
 
     public Task<CoreResult<bool>> StartRemotePollingAsync(CancellationToken cancellationToken = default)
@@ -74,6 +86,7 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
 
             _pollingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _pollingTask = Task.Run(() => RunPollingLoopAsync(_pollingCts.Token), CancellationToken.None);
+            _sequentialTask = Task.Run(() => RunSequentialExecutionLoopAsync(_pollingCts.Token), CancellationToken.None);
         }
 
         return Task.FromResult(CoreResult<bool>.Ok(true));
@@ -83,12 +96,15 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
     {
         CancellationTokenSource? pollingCts;
         Task? pollingTask;
+        Task? sequentialTask;
         lock (_pollingGate)
         {
             pollingCts = _pollingCts;
             pollingTask = _pollingTask;
+            sequentialTask = _sequentialTask;
             _pollingCts = null;
             _pollingTask = null;
+            _sequentialTask = null;
         }
 
         if (pollingCts is null)
@@ -102,6 +118,11 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
             if (pollingTask is not null)
             {
                 await pollingTask.ConfigureAwait(false);
+            }
+
+            if (sequentialTask is not null)
+            {
+                await sequentialTask.ConfigureAwait(false);
             }
         }
         catch
@@ -186,31 +207,23 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
             while (!cancellationToken.IsCancellationRequested)
             {
                 var snapshot = ReadSnapshot();
+
+                // WPF parity: wait one poll interval before every fetch, including the first one.
+                await DelayAsync(snapshot.PollIntervalMs, cancellationToken);
                 if (!snapshot.IsConfigured)
                 {
-                    await DelayAsync(snapshot.PollIntervalMs, cancellationToken);
                     continue;
                 }
 
                 try
                 {
-                    var request = await FetchTaskAsync(snapshot, cancellationToken);
-                    if (request is null)
+                    var requests = await FetchTasksAsync(snapshot, cancellationToken);
+                    if (requests.Count == 0)
                     {
-                        await DelayAsync(snapshot.PollIntervalMs, cancellationToken);
                         continue;
                     }
 
-                    var dispatcher = new RemoteControlCommandDispatcher(
-                        _configService,
-                        _sessionService,
-                        _connectFeatureService,
-                        _taskQueueFeatureService,
-                        _toolboxFeatureService,
-                        _coreBridge,
-                        _logService);
-                    var execution = await dispatcher.DispatchAsync(request, cancellationToken);
-                    await ReportAsync(snapshot, execution, cancellationToken);
+                    await RouteFetchedCommandsAsync(snapshot, requests, cancellationToken);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -220,8 +233,6 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
                 {
                     _logService?.Warn($"Remote control polling iteration failed: errorType={ex.GetType().Name}.");
                 }
-
-                await DelayAsync(snapshot.PollIntervalMs, cancellationToken);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -243,23 +254,121 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         }
     }
 
-    private async Task<RemoteControlCommandRequest?> FetchTaskAsync(
+    private RemoteControlCommandDispatcher CreateDispatcher()
+        => new(
+            _configService,
+            _sessionService,
+            _connectFeatureService,
+            _taskQueueFeatureService,
+            _toolboxFeatureService,
+            _coreBridge,
+            _logService);
+
+    // WPF parity: sequential commands are queued to the dedicated execution
+    // loop; instant commands execute immediately on the polling loop; unknown
+    // types are consumed silently without dispatch or report.
+    internal async Task RouteFetchedCommandsAsync(
+        RemoteControlPollingSnapshot snapshot,
+        IReadOnlyList<RemoteControlCommandRequest> requests,
+        CancellationToken cancellationToken)
+    {
+        foreach (var request in requests)
+        {
+            switch (RemoteControlCommandDispatcher.Classify(request.RawCommand))
+            {
+                case RemoteControlCommandKind.Instant:
+                {
+                    var dispatcher = CreateDispatcher();
+                    var execution = await dispatcher.DispatchAsync(request, cancellationToken);
+                    await ReportAsync(snapshot, request, execution, cancellationToken);
+                    break;
+                }
+
+                case RemoteControlCommandKind.Sequential:
+                    lock (_pollingGate)
+                    {
+                        _sequentialQueue.Enqueue((request, snapshot));
+                    }
+
+                    _sequentialSignal.Release();
+                    break;
+                default:
+                    continue;
+            }
+        }
+    }
+
+    // WPF parity: sequential commands run on a dedicated execution loop so the
+    // polling loop (and therefore instant commands such as StopTask) is never
+    // blocked by a long-running sequential command.
+    private async Task RunSequentialExecutionLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await _sequentialSignal.WaitAsync(cancellationToken);
+
+                (RemoteControlCommandRequest Request, RemoteControlPollingSnapshot Snapshot) item;
+                lock (_pollingGate)
+                {
+                    if (_sequentialQueue.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    item = _sequentialQueue.Dequeue();
+                }
+
+                try
+                {
+                    var dispatcher = CreateDispatcher();
+                    var execution = await dispatcher.DispatchAsync(item.Request, cancellationToken);
+                    await ReportAsync(item.Snapshot, item.Request, execution, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logService?.Warn($"Remote control sequential execution failed: errorType={ex.GetType().Name}.");
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logService?.Error($"Remote control sequential execution crashed: errorType={ex.GetType().Name}.");
+        }
+    }
+
+    internal async Task<IReadOnlyList<RemoteControlCommandRequest>> FetchTasksAsync(
         RemoteControlPollingSnapshot snapshot,
         CancellationToken cancellationToken)
     {
         if (snapshot.GetTaskEndpoint is null)
         {
-            return null;
+            return [];
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, BuildRequestUri(snapshot.GetTaskEndpoint, snapshot.UserIdentity, snapshot.DeviceIdentity));
-        request.Headers.TryAddWithoutValidation("X-User-Identity", snapshot.UserIdentity);
-        request.Headers.TryAddWithoutValidation("X-Device-Identity", snapshot.DeviceIdentity);
+        // WPF wire parity: GetTask is a JSON POST carrying the user/device identities.
+        var payload = new JsonObject
+        {
+            ["user"] = snapshot.UserIdentity,
+            ["device"] = snapshot.DeviceIdentity,
+        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, snapshot.GetTaskEndpoint)
+        {
+            Content = JsonContent.Create(payload),
+        };
 
-        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        using var response = await _sendHttpAsync(request, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NoContent)
         {
-            return null;
+            return [];
         }
 
         if (!response.IsSuccessStatusCode)
@@ -270,14 +379,31 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         var payloadText = await SafeReadBodyAsync(response, cancellationToken);
         if (string.IsNullOrWhiteSpace(payloadText))
         {
-            return null;
+            return [];
         }
 
-        return ParseCommandRequest(payloadText, snapshot);
+        return FilterNewCommands(ParseCommandRequests(payloadText, snapshot));
     }
 
-    private async Task ReportAsync(
+    private List<RemoteControlCommandRequest> FilterNewCommands(List<RemoteControlCommandRequest> requests)
+    {
+        // WPF parity: task ids that were already enqueued are skipped so a
+        // repeated delivery never re-executes a command.
+        var fresh = new List<RemoteControlCommandRequest>(requests.Count);
+        foreach (var request in requests)
+        {
+            if (_seenTaskIds.Add(request.TaskId))
+            {
+                fresh.Add(request);
+            }
+        }
+
+        return fresh;
+    }
+
+    internal async Task ReportAsync(
         RemoteControlPollingSnapshot snapshot,
+        RemoteControlCommandRequest commandRequest,
         RemoteControlCommandResult result,
         CancellationToken cancellationToken)
     {
@@ -286,35 +412,25 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
             return;
         }
 
+        // WPF wire parity: reports carry only user/device/status/task/payload.
+        var legacyPayload = result.ImageBytes is not null
+            ? Convert.ToBase64String(result.ImageBytes)
+            : result.LegacyReportPayload ?? string.Empty;
         var payload = new JsonObject
         {
-            ["command"] = result.RawCommand,
-            ["normalizedCommand"] = result.NormalizedCommand,
-            ["success"] = result.Success,
-            ["message"] = result.Message,
-            ["errorCode"] = result.ErrorCode,
-            ["details"] = result.Details,
-            ["taskType"] = result.TaskType,
-            ["coreTaskId"] = result.CoreTaskId,
-            ["userIdentity"] = snapshot.UserIdentity,
-            ["deviceIdentity"] = snapshot.DeviceIdentity,
-            ["timestamp"] = DateTimeOffset.UtcNow.ToString("O"),
-            ["imageContentType"] = result.ImageContentType,
+            ["user"] = snapshot.UserIdentity,
+            ["device"] = snapshot.DeviceIdentity,
+            ["status"] = result.Success ? "SUCCESS" : "FAILED",
+            ["task"] = commandRequest.TaskId ?? string.Empty,
+            ["payload"] = legacyPayload,
         };
 
-        if (result.ImageBytes is not null)
-        {
-            payload["imageBytesBase64"] = JsonValue.Create(Convert.ToBase64String(result.ImageBytes));
-        }
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, snapshot.ReportEndpoint)
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, snapshot.ReportEndpoint)
         {
             Content = JsonContent.Create(payload),
         };
-        request.Headers.TryAddWithoutValidation("X-User-Identity", snapshot.UserIdentity);
-        request.Headers.TryAddWithoutValidation("X-Device-Identity", snapshot.DeviceIdentity);
 
-        using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        using var response = await _sendHttpAsync(httpRequest, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             _logService?.Warn($"Remote control report failed: HTTP {(int)response.StatusCode}.");
@@ -333,6 +449,7 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         var reportEndpoint = ReadUri(config, ConfigurationKeys.RemoteControlReportStatusUri);
         var userIdentity = ReadString(config, ConfigurationKeys.RemoteControlUserIdentity, Environment.UserName);
         var deviceIdentity = ReadString(config, ConfigurationKeys.RemoteControlDeviceIdentity, Environment.MachineName);
+        // WPF parity: the legacy default poll interval is 1000 ms.
         var pollIntervalMs = ReadInt(config, ConfigurationKeys.RemoteControlPollIntervalMs, 1000);
         return new RemoteControlPollingSnapshot(getTaskEndpoint, reportEndpoint, userIdentity, deviceIdentity, pollIntervalMs);
     }
@@ -440,15 +557,6 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         return true;
     }
 
-    private static Uri BuildRequestUri(Uri baseUri, string userIdentity, string deviceIdentity)
-    {
-        var builder = new UriBuilder(baseUri);
-        var query = string.IsNullOrWhiteSpace(builder.Query) ? string.Empty : builder.Query.TrimStart('?') + "&";
-        query += $"userIdentity={Uri.EscapeDataString(userIdentity)}&deviceIdentity={Uri.EscapeDataString(deviceIdentity)}";
-        builder.Query = query;
-        return builder.Uri;
-    }
-
     private static async Task<string> SafeReadBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         try
@@ -466,81 +574,107 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         await Task.Delay(Math.Clamp(pollIntervalMs, 500, 60000), cancellationToken);
     }
 
-    private static RemoteControlCommandRequest? ParseCommandRequest(string payloadText, RemoteControlPollingSnapshot snapshot)
+    internal static List<RemoteControlCommandRequest> ParseCommandRequests(string payloadText, RemoteControlPollingSnapshot snapshot)
     {
+        var requests = new List<RemoteControlCommandRequest>();
         try
         {
             var node = JsonNode.Parse(payloadText);
-            return ParseCommandNode(node, snapshot);
+            CollectCommandNodes(node, snapshot, requests);
         }
         catch (JsonException)
         {
-            return new RemoteControlCommandRequest(payloadText.Trim(), null, snapshot.UserIdentity, snapshot.DeviceIdentity);
+            var trimmed = payloadText.Trim();
+            if (!string.IsNullOrWhiteSpace(trimmed))
+            {
+                requests.Add(new RemoteControlCommandRequest(trimmed, null, snapshot.UserIdentity, snapshot.DeviceIdentity));
+            }
         }
+
+        return requests;
     }
 
-    private static RemoteControlCommandRequest? ParseCommandNode(JsonNode? node, RemoteControlPollingSnapshot snapshot)
+    private static void CollectCommandNodes(JsonNode? node, RemoteControlPollingSnapshot snapshot, List<RemoteControlCommandRequest> requests)
     {
         if (node is null)
         {
-            return null;
+            return;
         }
 
+        // WPF parity: every entry of a batch payload is collected, not just the first one.
         if (node is JsonArray array)
         {
             foreach (var item in array)
             {
-                var parsed = ParseCommandNode(item, snapshot);
-                if (parsed is not null)
-                {
-                    return parsed;
-                }
+                CollectCommandNodes(item, snapshot, requests);
             }
 
-            return null;
+            return;
         }
 
-        if (node is JsonValue value && value.TryGetValue(out string? scalar))
+        if (node is JsonValue value)
         {
-            return string.IsNullOrWhiteSpace(scalar)
-                ? null
-                : new RemoteControlCommandRequest(scalar.Trim(), null, snapshot.UserIdentity, snapshot.DeviceIdentity);
+            if (value.TryGetValue(out string? scalar) && !string.IsNullOrWhiteSpace(scalar))
+            {
+                requests.Add(new RemoteControlCommandRequest(scalar.Trim(), null, snapshot.UserIdentity, snapshot.DeviceIdentity));
+            }
+
+            return;
         }
 
         if (node is not JsonObject obj)
         {
-            return null;
+            return;
         }
 
-        if (obj.TryGetPropertyValue("tasks", out var tasksNode) && tasksNode is not null)
+        if (obj.TryGetPropertyValue("tasks", out var tasksNode) && tasksNode is not null and not JsonValue)
         {
-            var fromTasks = ParseCommandNode(tasksNode, snapshot);
-            if (fromTasks is not null)
-            {
-                return fromTasks;
-            }
+            CollectCommandNodes(tasksNode, snapshot, requests);
+            return;
         }
 
-        if (obj.TryGetPropertyValue("task", out var taskNode) && taskNode is not null)
+        if (obj.TryGetPropertyValue("task", out var taskNode) && taskNode is not null and not JsonValue)
         {
-            var fromTask = ParseCommandNode(taskNode, snapshot);
-            if (fromTask is not null)
-            {
-                return fromTask;
-            }
+            CollectCommandNodes(taskNode, snapshot, requests);
+            return;
         }
 
         var command = ExtractString(obj, "command", "cmd", "name", "action", "task", "type");
         if (string.IsNullOrWhiteSpace(command))
         {
-            return null;
+            return;
         }
 
-        return new RemoteControlCommandRequest(
+        requests.Add(new RemoteControlCommandRequest(
             command.Trim(),
             obj.DeepClone(),
             snapshot.UserIdentity,
-            snapshot.DeviceIdentity);
+            snapshot.DeviceIdentity,
+            ResolveTaskId(obj)));
+    }
+
+    private static string? ResolveTaskId(JsonObject obj)
+    {
+        foreach (var key in new[] { "id", "taskId", "task_id", "jobId", "job_id" })
+        {
+            if (!obj.TryGetPropertyValue(key, out var node) || node is not JsonValue value)
+            {
+                continue;
+            }
+
+            if (value.TryGetValue(out string? text) && !string.IsNullOrWhiteSpace(text))
+            {
+                return text.Trim();
+            }
+
+            var raw = value.ToString();
+            if (!string.IsNullOrWhiteSpace(raw))
+            {
+                return raw.Trim();
+            }
+        }
+
+        return null;
     }
 
     private static string? ExtractString(JsonObject obj, params string[] keys)

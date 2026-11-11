@@ -8,6 +8,7 @@ using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services.WebApi;
+using MAAUnified.CoreBridge;
 
 namespace MAAUnified.Application.Services.Features;
 
@@ -22,6 +23,7 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
     private readonly UnifiedSessionService? _sessionService;
     private readonly IConnectFeatureService? _connectFeatureService;
     private readonly IAppLifecycleService? _appLifecycleService;
+    private readonly IMaaCoreBridge? _coreBridge;
     private readonly WebApiTaskStore _taskStore = new();
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private WebApiServer? _server;
@@ -40,12 +42,14 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
         UnifiedConfigurationService configService,
         UnifiedSessionService? sessionService,
         IConnectFeatureService? connectFeatureService,
-        IAppLifecycleService? appLifecycleService)
+        IAppLifecycleService? appLifecycleService,
+        IMaaCoreBridge? coreBridge = null)
     {
         _configService = configService;
         _sessionService = sessionService;
         _connectFeatureService = connectFeatureService;
         _appLifecycleService = appLifecycleService;
+        _coreBridge = coreBridge;
 
         if (_sessionService is not null)
         {
@@ -285,7 +289,7 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
             return;
         }
 
-        var type = ReadJsonString(request, "type");
+        var type = NormalizeTaskType(ReadJsonString(request, "type"));
         var parameters = ReadParamsObject(request, "params");
         if (string.IsNullOrWhiteSpace(type) || parameters is null)
         {
@@ -297,14 +301,45 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
             return;
         }
 
-        var name = ReadJsonString(request, "name");
-        var enabled = ReadJsonBool(request, "enabled") ?? true;
+        if (_coreBridge is null)
+        {
+            await WriteJsonAsync(
+                context.Response,
+                HttpStatusCode.OK,
+                BuildFailurePayload(ApiFailureCode, "WebApi core bridge is unavailable."),
+                cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (_taskStore.List().Any(task => string.Equals(task.TaskType, type, StringComparison.OrdinalIgnoreCase)))
+        {
+            await WriteJsonAsync(
+                context.Response,
+                HttpStatusCode.OK,
+                BuildFailurePayload(ApiInvalidParamsCode, $"Task type `{type}` already exists."),
+                cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var appendResult = await _coreBridge.AppendTaskAsync(
+            new CoreBridge.CoreTaskRequest(type, type, true, parameters.ToJsonString()),
+            cancellationToken).ConfigureAwait(false);
+        if (!appendResult.Success || appendResult.Value <= 0)
+        {
+            await WriteJsonAsync(
+                context.Response,
+                HttpStatusCode.OK,
+                BuildFailurePayload(ApiFailureCode, appendResult.Error?.Message ?? "Failed to append WebApi task."),
+                cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         var stored = _taskStore.Append(new WebApiTaskDefinition(
-            0,
+            appendResult.Value,
             type,
-            string.IsNullOrWhiteSpace(name) ? type : name,
+            type,
             parameters,
-            enabled));
+            true));
 
         await WriteJsonAsync(
             context.Response,
@@ -340,13 +375,39 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
             return;
         }
 
-        var updated = existing with
+        var parameters = ReadParamsObject(request, "params");
+        if (parameters is null)
         {
-            TaskType = ReadJsonString(request, "type") ?? existing.TaskType,
-            Name = ReadJsonString(request, "name") ?? existing.Name,
-            Parameters = ReadParamsObject(request, "params") ?? existing.Parameters,
-            Enabled = ReadJsonBool(request, "enabled") ?? existing.Enabled,
-        };
+            await WriteJsonAsync(
+                context.Response,
+                HttpStatusCode.OK,
+                BuildFailurePayload(ApiInvalidParamsCode, "Task params are required."),
+                cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (_coreBridge is null)
+        {
+            await WriteJsonAsync(
+                context.Response,
+                HttpStatusCode.OK,
+                BuildFailurePayload(ApiFailureCode, "WebApi core bridge is unavailable."),
+                cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var setResult = await _coreBridge.SetTaskParamsAsync(taskId.Value, parameters.ToJsonString(), cancellationToken).ConfigureAwait(false);
+        if (!setResult.Success)
+        {
+            await WriteJsonAsync(
+                context.Response,
+                HttpStatusCode.OK,
+                BuildFailurePayload(ApiFailureCode, setResult.Error?.Message ?? "Failed to modify task params."),
+                cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var updated = existing.WithParameters(parameters);
 
         _taskStore.TryModify(taskId.Value, updated);
         await WriteJsonAsync(
@@ -385,22 +446,12 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
 
     private async Task HandleStartAsync(HttpListenerContext context, CancellationToken cancellationToken)
     {
-        if (_sessionService is null || _connectFeatureService is null)
+        if (_sessionService is null)
         {
             await WriteJsonAsync(
                 context.Response,
                 HttpStatusCode.OK,
                 BuildFailurePayload(ApiFailureCode, "WebApi execution services are unavailable."),
-                cancellationToken).ConfigureAwait(false);
-            return;
-        }
-
-        if (_taskStore.IsEmpty)
-        {
-            await WriteJsonAsync(
-                context.Response,
-                HttpStatusCode.OK,
-                BuildFailurePayload(ApiInvalidParamsCode, "No WebApi tasks were queued."),
                 cancellationToken).ConfigureAwait(false);
             return;
         }
@@ -439,7 +490,6 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
                 BuildSuccessPayload(new JsonObject
                 {
                     ["status"] = true,
-                    ["appended"] = appendResult.Value,
                 }),
                 cancellationToken).ConfigureAwait(false);
         }
@@ -454,7 +504,7 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
 
     private async Task HandleStopTasksAsync(HttpListenerContext context, CancellationToken cancellationToken)
     {
-        if (_connectFeatureService is null)
+        if (_sessionService is null)
         {
             await WriteJsonAsync(
                 context.Response,
@@ -464,7 +514,9 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
             return;
         }
 
-        var result = await _connectFeatureService.StopAsync(cancellationToken).ConfigureAwait(false);
+        var result = UiOperationResult.FromCore(
+            await _sessionService.StopAsync(cancellationToken).ConfigureAwait(false),
+            "Task execution stopped.");
         if (result.Success)
         {
             _taskStore.Clear();
@@ -528,44 +580,10 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
 
     private async Task HandleDestroyAsync(HttpListenerContext context, CancellationToken cancellationToken)
     {
-        if (_connectFeatureService is not null)
-        {
-            _ = await _connectFeatureService.StopAsync(cancellationToken).ConfigureAwait(false);
-            _sessionService?.EndRun(WebApiRunOwner);
-        }
-
+        // Go's /destroy destroys the MaaCore instance but intentionally leaves its HTTP host alive.
+        // Do not cancel the listener token or exit the GUI from a request handler.
         _taskStore.Clear();
-        var stopResult = await StopAsync(cancellationToken).ConfigureAwait(false);
-        if (!stopResult.Success)
-        {
-            await WriteJsonAsync(
-                context.Response,
-                HttpStatusCode.OK,
-                BuildFailurePayload(ApiFailureCode, stopResult.Message),
-                cancellationToken).ConfigureAwait(false);
-            return;
-        }
-
-        if (_appLifecycleService is null)
-        {
-            await WriteJsonAsync(
-                context.Response,
-                HttpStatusCode.OK,
-                BuildFailurePayload(ApiFailureCode, "Application lifecycle service is unavailable."),
-                cancellationToken).ConfigureAwait(false);
-            return;
-        }
-
-        var exitResult = await _appLifecycleService.ExitAsync(cancellationToken).ConfigureAwait(false);
-        if (!exitResult.Success)
-        {
-            await WriteJsonAsync(
-                context.Response,
-                HttpStatusCode.OK,
-                BuildFailurePayload(ApiFailureCode, exitResult.Message),
-                cancellationToken).ConfigureAwait(false);
-            return;
-        }
+        _sessionService?.EndRun(WebApiRunOwner);
 
         await WriteJsonAsync(
             context.Response,
@@ -657,7 +675,38 @@ public sealed class WebApiFeatureService : IWebApiFeatureService
             normalized = normalized[..^1];
         }
 
-        return normalized.StartsWith("/", StringComparison.Ordinal) ? normalized : "/" + normalized;
+        normalized = normalized.StartsWith("/", StringComparison.Ordinal) ? normalized : "/" + normalized;
+        var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length >= 2
+            && (segments[1].Equals("task", StringComparison.OrdinalIgnoreCase)
+                || segments[1].Equals("version", StringComparison.OrdinalIgnoreCase)
+                || segments[1].Equals("destroy", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "/" + string.Join('/', segments.Skip(1));
+        }
+
+        return normalized;
+    }
+
+    private static string NormalizeTaskType(string? value)
+    {
+        var normalized = TaskModuleTypes.Normalize(value);
+        return IsKnownTaskType(normalized) ? normalized : string.Empty;
+    }
+
+    private static bool IsKnownTaskType(string? value)
+    {
+        return value is TaskModuleTypes.StartUp
+            or TaskModuleTypes.Fight
+            or TaskModuleTypes.Recruit
+            or TaskModuleTypes.Infrast
+            or TaskModuleTypes.Mall
+            or TaskModuleTypes.Award
+            or TaskModuleTypes.Roguelike
+            or TaskModuleTypes.Reclamation
+            or TaskModuleTypes.UserDataUpdate
+            or TaskModuleTypes.SingleStep
+            or TaskModuleTypes.Custom;
     }
 
     private static string? ReadJsonString(JsonObject obj, string key)
