@@ -1840,19 +1840,23 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             case "StageDrops-Stars-3":
             case "StageDrops-Stars-Adverse":
                 AddLog(GetRootText("CompleteCombat", "Complete combat"), "SUCCESS", timestamp: timestamp);
-                _ = CompleteFirstCheckedCopilotListItemAsync();
+                _ = CompleteCurrentCopilotListItemAsync();
                 break;
         }
     }
 
-    private async Task CompleteFirstCheckedCopilotListItemAsync()
+    private async Task CompleteCurrentCopilotListItemAsync()
     {
         if (!UseCopilotList)
         {
             return;
         }
 
-        var completed = Items.FirstOrDefault(item => item.IsChecked);
+        // WPF 对齐（4843310bec CopilotViewModel.CopilotTaskSuccess）：只处理 Core 回报 id 命中的条目；
+        // 旧版 Core 不回报 id 时（-1）沿用「第一个仍勾选项」兜底。
+        var completed = _currentCopilotId == -1
+            ? Items.FirstOrDefault(item => item.IsChecked)
+            : Items.FirstOrDefault(item => item.IsChecked && item.Index == _currentCopilotId);
         if (completed is null)
         {
             return;
@@ -1934,6 +1938,12 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 break;
             case "CopilotListLoadTaskFileSuccess":
                 _hasRequirementIgnored = false;
+                // WPF 对齐（4843310bec AsstProxy.cs CopilotListLoadTaskFileSuccess）：记录 Core 回报的列表项 id；
+                // 非整数或缺省视为 -1，与 WPF CurrentCopilotId 语义一致。
+                _currentCopilotId = payload.Details?["id"] is JsonValue reportedId
+                    && reportedId.TryGetValue(out int copilotItemId)
+                        ? copilotItemId
+                        : -1;
                 AddLog(
                     $"Parse {GetStringValue(payload.Details, "file_name")}[{GetStringValue(payload.Details, "stage_name")}] Success",
                     timestamp: timestamp);

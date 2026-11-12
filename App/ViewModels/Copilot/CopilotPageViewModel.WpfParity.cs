@@ -131,6 +131,7 @@ public sealed partial class CopilotPageViewModel
     private readonly HashSet<int> _recentlyRatedCopilotIds = []; // WPF 对齐：_recentlyRatedCopilotId，同一会话同一作业 id 至多成功评分一次
     private readonly object _recentlyRatedCopilotIdsGate = new();
     private bool _hasRequirementIgnored;
+    private int _currentCopilotId = -1; // WPF 对齐（4843310bec）：CopilotListLoadTaskFileSuccess 回报的当前列表项 id
     private string _lastRenderedHelpText = string.Empty;
     private IReadOnlyList<IntOption> _supportUnitUsageOptions = [];
     private IReadOnlyList<IntOption> _moduleOptions = [];
@@ -3417,6 +3418,9 @@ public sealed partial class CopilotPageViewModel
         _copilotIdList.Clear();
         foreach (var item in checkedItems)
         {
+            // WPF 对齐（4843310bec AsstCopilotTask.MultiTask.Index）：id 取列表全局序号，
+            // 而不是本次勾选项内的序号；Core 会原样回报该 id。
+            item.Index = Items.IndexOf(item);
             _copilotIdList.Add(item.CopilotId);
         }
 
@@ -3433,7 +3437,12 @@ public sealed partial class CopilotPageViewModel
                     return null;
                 }
 
-                list.Add(filePath);
+                // WPF 对齐（4843310bec AsstParadoxCopilotTask.MultiTask）：悖论列表同样下发 id
+                list.Add(new JsonObject
+                {
+                    ["id"] = item.Index,
+                    ["filename"] = filePath,
+                });
             }
 
             var paradoxRequest = new CoreTaskRequest(
@@ -3458,6 +3467,7 @@ public sealed partial class CopilotPageViewModel
 
             tasks.Add(new JsonObject
             {
+                ["id"] = item.Index,
                 ["filename"] = filePath,
                 ["stage_name"] = item.Name,
                 ["is_raid"] = item.IsRaid,

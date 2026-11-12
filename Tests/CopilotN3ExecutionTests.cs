@@ -876,6 +876,94 @@ public sealed class CopilotN3ExecutionTests
     }
 
     [Fact]
+    public async Task StartAsync_WhenUseCopilotList_ShouldSendItemIndexAsId_WpfParity()
+    {
+        // WPF 对齐（4843310bec AsstCopilotTask.MultiTask.Index）：id 取列表全局序号，乱序重排后按新位置下发
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = fixture.ViewModel;
+        AddCopilotListItems(vm, fixture.CreateCopilotFile(), ("A", 101), ("B", 102), ("C", 103));
+        vm.Items.Move(0, 2);
+        vm.UseCopilotList = true;
+
+        await vm.StartAsync();
+
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var list = Assert.IsType<JsonArray>(JsonNode.Parse(appended.ParamsJson)?["copilot_list"]);
+        Assert.Equal(["B", "C", "A"], list.Select(node => node!["stage_name"]!.GetValue<string>()).ToArray());
+        Assert.Equal([0, 1, 2], list.Select(node => node!["id"]!.GetValue<int>()).ToArray());
+        Assert.Equal([0, 1, 2], vm.Items.Select(item => item.Index).ToArray());
+    }
+
+    [Fact]
+    public async Task ListRun_WhenMiddleItemFailed_ShouldUncheckReportedItemOnly_WpfParity()
+    {
+        // WPF 对齐（4843310bec CopilotViewModel.CopilotTaskSuccess）：按 Core 回报的 id 取消勾选，
+        // 中间项战斗失败后不能误取消第一个仍勾选（失败）的条目。
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = fixture.ViewModel;
+        AddCopilotListItems(vm, fixture.CreateCopilotFile(), ("A", 101), ("B", 102), ("C", 103));
+        vm.UseCopilotList = true;
+        await vm.StartAsync();
+        var taskId = fixture.Bridge.LastAppendedTaskId;
+
+        PublishCopilotListFileLoaded(vm, taskId, 0);
+        PublishStageDropsSuccess(vm, taskId);
+        Assert.True(await WaitForAsync(() => !vm.Items[0].IsChecked));
+
+        // 中间项（id=1）战斗失败：只有加载回报，没有 StageDrops 成功；Core 继续加载第三项
+        PublishCopilotListFileLoaded(vm, taskId, 1);
+        PublishCopilotListFileLoaded(vm, taskId, 2);
+        PublishStageDropsSuccess(vm, taskId);
+
+        Assert.True(await WaitForAsync(() => !vm.Items[2].IsChecked));
+        Assert.True(vm.Items[1].IsChecked);
+        Assert.False(vm.Items[0].IsChecked);
+    }
+
+    [Fact]
+    public async Task ListRun_OutOfOrderIds_ShouldLikeOnlyAfterAllItemsOfSameCopilotSucceed_WpfParity()
+    {
+        // WPF 对齐（4843310bec）：同一 copilotId 的全部列表条目都成功后点赞；Core 回报顺序不要求与列表一致
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = fixture.ViewModel;
+        AddCopilotListItems(vm, fixture.CreateCopilotFile(), ("A", 456), ("B", 456), ("C", 456));
+        vm.UseCopilotList = true;
+        await vm.StartAsync();
+        var taskId = fixture.Bridge.LastAppendedTaskId;
+
+        PublishCopilotListFileLoaded(vm, taskId, 2);
+        PublishStageDropsSuccess(vm, taskId);
+        Assert.True(await WaitForAsync(() => !vm.Items[2].IsChecked));
+        Assert.True(vm.Items[0].IsChecked);
+        Assert.True(vm.Items[1].IsChecked);
+
+        PublishCopilotListFileLoaded(vm, taskId, 0);
+        PublishStageDropsSuccess(vm, taskId);
+        Assert.True(await WaitForAsync(() => !vm.Items[0].IsChecked));
+        Assert.True(vm.Items[1].IsChecked);
+        await Task.Delay(200);
+        Dispatcher.UIThread.RunJobs(null);
+        Assert.Equal(0, fixture.FeedbackHandler.CallCount);
+
+        PublishCopilotListFileLoaded(vm, taskId, 1);
+        PublishStageDropsSuccess(vm, taskId);
+        Assert.True(await WaitForAsync(() => !vm.Items[1].IsChecked));
+        Assert.True(await WaitForAsync(() => fixture.FeedbackHandler.CallCount == 1));
+    }
+
+    [Fact]
     public async Task ListRun_StageDropsSuccess_WhenRequirementIgnored_ShouldSkipAutoLike()
     {
         // WPF 对齐：BattleFormationOperUnavailable 置位 HasRequirementIgnored 后抑制自动点赞
@@ -1181,6 +1269,36 @@ public sealed class CopilotN3ExecutionTests
         var appended = Assert.Single(fixture.Bridge.AppendedTasks);
         Assert.Equal("ParadoxCopilot", appended.Type);
         Assert.Equal(1, fixture.Bridge.StartCallCount);
+        // WPF 对齐（4843310bec AsstParadoxCopilotTask.MultiTask）：悖论列表条目带 id 与 filename
+        var paradoxEntry = Assert.IsType<JsonObject>(
+            Assert.Single(Assert.IsType<JsonArray>(JsonNode.Parse(appended.ParamsJson)?["list"])));
+        Assert.Equal(0, paradoxEntry["id"]?.GetValue<int>());
+        Assert.False(string.IsNullOrWhiteSpace(paradoxEntry["filename"]?.GetValue<string>()));
+    }
+
+    private static void AddCopilotListItems(
+        CopilotPageViewModel viewModel,
+        string filePath,
+        params (string Name, int CopilotId)[] items)
+    {
+        foreach (var (name, copilotId) in items)
+        {
+            viewModel.Items.Add(new CopilotItemViewModel(name, "主线/故事集/SideStory", filePath)
+            {
+                CopilotId = copilotId,
+                IsChecked = true,
+                TabIndex = 0,
+            });
+        }
+    }
+
+    private static void PublishCopilotListFileLoaded(CopilotPageViewModel viewModel, int taskId, int copilotItemId)
+    {
+        viewModel.ApplyRuntimeCallback(new CoreCallbackEvent(
+            10004,
+            "SubTaskExtraInfo",
+            $$$"""{"task_chain":"Copilot","task_id":{{{taskId}}},"subtask":"CopilotTask","what":"CopilotListLoadTaskFileSuccess","details":{"file_name":"copilot.json","stage_name":"1-7","id":{{{copilotItemId}}}}}""",
+            DateTimeOffset.UtcNow));
     }
 
     private static void PublishStageDropsSuccess(CopilotPageViewModel viewModel, int taskId)

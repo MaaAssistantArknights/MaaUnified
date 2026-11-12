@@ -13,6 +13,7 @@ public sealed class CopilotItemViewModel : ObservableObject
     private bool _isChecked = true;
     private bool _isRaid;
     private int _copilotId;
+    private int _index;
     private int? _tabIndex;
     private string _raidLabel = "突袭";
     private string _inlinePayloadHint = "inline-json";
@@ -99,6 +100,14 @@ public sealed class CopilotItemViewModel : ObservableObject
     {
         get => _copilotId;
         set => SetProperty(ref _copilotId, Math.Max(0, value));
+    }
+
+    // WPF 对齐（4843310bec）：列表序号作为 id 随 Copilot 列表下发，Core 在
+    // CopilotListLoadTaskFileSuccess 中回报该值以确定刚完成的条目。
+    public int Index
+    {
+        get => _index;
+        set => SetProperty(ref _index, value);
     }
 
     public int? TabIndex
