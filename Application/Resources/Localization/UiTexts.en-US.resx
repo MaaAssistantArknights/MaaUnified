@@ -6399,6 +6399,63 @@ A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created b
   <data name="TaskQueue.Guide.Resume" xml:space="preserve">
     <value>Return to settings guide</value>
   </data>
+  <data name="TaskQueue.Guide.Agreement.Title" xml:space="preserve">
+    <value>User agreement</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Prefix" xml:space="preserve">
+    <value>Read the MAA user agreement before continuing</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Link" xml:space="preserve">
+    <value>User agreement</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Confirm" xml:space="preserve">
+    <value>I have read and agree to the user agreement</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Confirmed" xml:space="preserve">
+    <value>User agreement confirmed</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Tip" xml:space="preserve">
+    <value>The user agreement is not confirmed yet. You can continue browsing, but the task demo must be completed after confirming it.</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.RequiredForDemo" xml:space="preserve">
+    <value>Go back to the user guide step and confirm the user agreement before completing the task demo.</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Title" xml:space="preserve">
+    <value>Task setup demo</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Note" xml:space="preserve">
+    <value>The demo only changes simulated tasks in this guide; your real task queue is untouched.</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Progress" xml:space="preserve">
+    <value>{0} / {1} completed</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Next" xml:space="preserve">
+    <value>Next: {0}</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddStartUp" xml:space="preserve">
+    <value>Add a StartUp task</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddFight" xml:space="preserve">
+    <value>Add a Fight task</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.RenameFight" xml:space="preserve">
+    <value>Rename the Fight task</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.SelectStage" xml:space="preserve">
+    <value>Select an Annihilation stage</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.ReorderFight" xml:space="preserve">
+    <value>Reorder tasks</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.EnableWeekly" xml:space="preserve">
+    <value>Enable the weekly plan</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddSwitchTheme" xml:space="preserve">
+    <value>Add a Switch Theme task</value>
+  </data>
+  <data name="TaskQueue.Guide.Skip" xml:space="preserve">
+    <value>Skip guide</value>
+  </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine" xml:space="preserve">
     <value>Failed to import {1} in {0}. The {1} configuration could not be read. Please edit it manually.</value>
   </data>

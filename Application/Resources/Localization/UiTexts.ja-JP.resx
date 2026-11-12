@@ -5552,6 +5552,63 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="TaskQueue.Guide.Resume" xml:space="preserve">
     <value>設定ガイドに戻る</value>
   </data>
+  <data name="TaskQueue.Guide.Agreement.Title" xml:space="preserve">
+    <value>ユーザー規約</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Prefix" xml:space="preserve">
+    <value>MAA を使用する前に</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Link" xml:space="preserve">
+    <value>ユーザー規約</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Confirm" xml:space="preserve">
+    <value>ユーザー規約を読み、同意します</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Confirmed" xml:space="preserve">
+    <value>ユーザー規約を確認済み</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Tip" xml:space="preserve">
+    <value>ユーザー規約はまだ確認されていません。閲覧は続行できますが、タスク設定のデモを完了するには確認が必要です。</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.RequiredForDemo" xml:space="preserve">
+    <value>先に ｢使用ガイド｣ に戻ってユーザー規約を確認してから、タスク設定のデモを完了してください。</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Title" xml:space="preserve">
+    <value>タスク設定デモ</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Note" xml:space="preserve">
+    <value>デモはガイド内の模擬タスクのみを操作し、実際のタスクキューは変更しません。</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Progress" xml:space="preserve">
+    <value>完了 {0} / {1}</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Next" xml:space="preserve">
+    <value>次の操作：{0}</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddStartUp" xml:space="preserve">
+    <value>ウェイクアップを追加</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddFight" xml:space="preserve">
+    <value>理性作戦を追加</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.RenameFight" xml:space="preserve">
+    <value>作戦タスクの名前を変更</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.SelectStage" xml:space="preserve">
+    <value>殲滅ステージを選択</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.ReorderFight" xml:space="preserve">
+    <value>タスクの順序を変更</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.EnableWeekly" xml:space="preserve">
+    <value>週次計画を有効化</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddSwitchTheme" xml:space="preserve">
+    <value>テーマ切替を追加</value>
+  </data>
+  <data name="TaskQueue.Guide.Skip" xml:space="preserve">
+    <value>ガイドをスキップ</value>
+  </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine" xml:space="preserve">
     <value>{0} の {1} のインポートに失敗しました。{1} 設定を読み取れません。手動で修正してください。</value>
   </data>

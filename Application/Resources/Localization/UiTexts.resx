@@ -6379,6 +6379,63 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TaskQueue.Guide.Resume" xml:space="preserve">
     <value>返回设置引导</value>
   </data>
+  <data name="TaskQueue.Guide.Agreement.Title" xml:space="preserve">
+    <value>用户协议</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Prefix" xml:space="preserve">
+    <value>使用 MAA 前请阅读</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Link" xml:space="preserve">
+    <value>用户协议</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Confirm" xml:space="preserve">
+    <value>我已阅读并同意用户协议</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Confirmed" xml:space="preserve">
+    <value>已确认用户协议</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Tip" xml:space="preserve">
+    <value>尚未确认用户协议。可以继续浏览，但任务演示需确认后才能完成。</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.RequiredForDemo" xml:space="preserve">
+    <value>请先返回 ｢使用指引｣ 确认用户协议，再完成任务演示。</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Title" xml:space="preserve">
+    <value>任务设置演示</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Note" xml:space="preserve">
+    <value>演示只操作引导中的模拟任务，不会修改实际任务队列。</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Progress" xml:space="preserve">
+    <value>已完成 {0} / {1}</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Next" xml:space="preserve">
+    <value>下一步：{0}</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddStartUp" xml:space="preserve">
+    <value>添加开始唤醒</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddFight" xml:space="preserve">
+    <value>添加理智作战</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.RenameFight" xml:space="preserve">
+    <value>重命名作战任务</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.SelectStage" xml:space="preserve">
+    <value>选择剿灭关卡</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.ReorderFight" xml:space="preserve">
+    <value>调整任务顺序</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.EnableWeekly" xml:space="preserve">
+    <value>启用周常计划</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddSwitchTheme" xml:space="preserve">
+    <value>添加更换主题</value>
+  </data>
+  <data name="TaskQueue.Guide.Skip" xml:space="preserve">
+    <value>跳过指引</value>
+  </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine" xml:space="preserve">
     <value>{0} 配置的 {1} 导入失败，无法读取 {1} 配置。请手动修改。</value>
   </data>

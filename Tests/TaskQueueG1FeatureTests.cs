@@ -37,6 +37,8 @@ public sealed class TaskQueueG1FeatureTests
         await using var fixture = await TestFixture.CreateAsync();
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] =
             JsonValue.Create(persistedStep);
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepOrderVersion] =
+            JsonValue.Create(2);
 
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
 
@@ -54,6 +56,7 @@ public sealed class TaskQueueG1FeatureTests
     {
         await using var fixture = await TestFixture.CreateAsync();
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("1");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepOrderVersion] = JsonValue.Create(2);
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
 
         Assert.True(await vm.PreviousGuideStepAsync());
@@ -95,6 +98,7 @@ public sealed class TaskQueueG1FeatureTests
         Assert.True(vm.IsGuideStep0Visible);
 
         fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("6");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepOrderVersion] = JsonValue.Create(2);
         await vm.ReloadConfigurationContextAsync();
 
         Assert.Equal(6, vm.GuideStepIndex);
@@ -107,27 +111,29 @@ public sealed class TaskQueueG1FeatureTests
     public async Task TaskQueueGuide_OpenTaskStepSuspendsWithoutLosingProgressAndResumeRestoresIt()
     {
         await using var fixture = await TestFixture.CreateAsync();
-        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("3");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("5");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepOrderVersion] = JsonValue.Create(2);
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
 
         Assert.True(vm.OpenCurrentGuideStepTarget());
         Assert.False(vm.IsGuideVisible);
         Assert.True(vm.IsTaskQueueContentVisible);
         Assert.True(vm.CanResumeGuide);
-        Assert.Equal("3", fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex]!.GetValue<string>());
+        Assert.Equal("5", fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex]!.GetValue<string>());
 
         vm.ResumeGuide();
 
         Assert.True(vm.IsGuideVisible);
         Assert.False(vm.CanResumeGuide);
-        Assert.True(vm.IsGuideStep3Visible);
+        Assert.True(vm.IsGuideStep5Visible);
     }
 
     [Fact]
     public async Task TaskQueueGuide_OpenSettingsStepNavigatesWithoutCompletingGuide()
     {
         await using var fixture = await TestFixture.CreateAsync();
-        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("2");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("3");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepOrderVersion] = JsonValue.Create(2);
         var sections = new List<string>();
         var vm = new TaskQueuePageViewModel(
             fixture.Runtime,
@@ -138,7 +144,135 @@ public sealed class TaskQueueG1FeatureTests
         Assert.Equal(["Connect"], sections);
         Assert.True(vm.IsGuideVisible);
         Assert.False(vm.CanResumeGuide);
-        Assert.Equal("2", fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex]!.GetValue<string>());
+        Assert.Equal("3", fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task TaskQueueGuide_AgreementConfirmationShouldPersistSeparatelyAndKeepNextEnabled()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("0");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepOrderVersion] = JsonValue.Create(2);
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+
+        Assert.True(vm.IsGuideNextEnabled);
+        Assert.True(await vm.NextGuideStepAsync());
+        Assert.Equal(1, vm.GuideStepIndex);
+        Assert.True(vm.IsGuideAgreementStep);
+        Assert.True(vm.IsGuideAgreementTipVisible);
+        Assert.True(vm.IsGuideNextEnabled);
+        Assert.True(vm.GuideAgreementBadgeVisible);
+
+        Assert.True(await vm.ConfirmGuideAgreementAsync());
+        Assert.True(vm.IsGuideAgreementConfirmed);
+        Assert.False(vm.IsGuideAgreementTipVisible);
+        Assert.False(vm.GuideAgreementBadgeVisible);
+        Assert.False(vm.CanConfirmGuideAgreement);
+
+        Assert.True(await vm.NextGuideStepAsync());
+        Assert.Equal(2, vm.GuideStepIndex);
+
+        var reloaded = new UnifiedConfigurationService(
+            new AvaloniaJsonConfigStore(fixture.Root),
+            new GuiNewJsonConfigImporter(),
+            new GuiJsonConfigImporter(),
+            new UiLogService(),
+            fixture.Root);
+        await reloaded.LoadOrBootstrapAsync();
+        Assert.True(reloaded.CurrentConfig.GlobalValues[ConfigurationKeys.GuideAgreementConfirmed]!.GetValue<bool>());
+        Assert.Equal(2, reloaded.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task TaskQueueGuide_TaskDemoShouldBeLockedUntilAgreementIsConfirmed()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("5");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepOrderVersion] = JsonValue.Create(2);
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+
+        Assert.True(vm.IsGuideTaskDemoStep);
+        Assert.True(vm.IsGuideDemoLocked);
+        Assert.False(vm.IsGuideNextEnabled);
+        Assert.False(string.IsNullOrWhiteSpace(vm.GuideNextGateTip));
+        Assert.False(vm.CompleteGuideDemoAction(SettingsGuideDemoAction.AddFight));
+
+        for (var step = 5; step > 1; step--)
+        {
+            Assert.True(await vm.PreviousGuideStepAsync());
+        }
+
+        Assert.Equal(1, vm.GuideStepIndex);
+        Assert.True(await vm.ConfirmGuideAgreementAsync());
+        for (var step = 1; step < 5; step++)
+        {
+            Assert.True(await vm.NextGuideStepAsync());
+        }
+
+        Assert.Equal(5, vm.GuideStepIndex);
+        Assert.False(vm.IsGuideDemoLocked);
+        Assert.False(vm.IsGuideNextEnabled);
+        foreach (var action in Enum.GetValues<SettingsGuideDemoAction>())
+        {
+            Assert.True(vm.CompleteGuideDemoAction(action));
+        }
+
+        Assert.True(vm.IsGuideDemoComplete);
+        Assert.True(vm.IsGuideNextEnabled);
+        Assert.True(await vm.NextGuideStepAsync());
+        Assert.Equal(6, vm.GuideStepIndex);
+    }
+
+    [Fact]
+    public async Task TaskQueueGuide_SkipShouldRecordStepAndPersistCompletion()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("3");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepOrderVersion] = JsonValue.Create(2);
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+
+        Assert.True(await vm.SkipGuideAsync());
+        Assert.Equal(7, vm.GuideStepIndex);
+        Assert.False(vm.IsGuideVisible);
+        Assert.Equal(
+            3,
+            fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideSkippedAtStep]!.GetValue<int>());
+        Assert.True(fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideSkipped]!.GetValue<bool>());
+
+        var reloaded = new UnifiedConfigurationService(
+            new AvaloniaJsonConfigStore(fixture.Root),
+            new GuiNewJsonConfigImporter(),
+            new GuiJsonConfigImporter(),
+            new UiLogService(),
+            fixture.Root);
+        await reloaded.LoadOrBootstrapAsync();
+        Assert.True(reloaded.CurrentConfig.GlobalValues[ConfigurationKeys.GuideSkipped]!.GetValue<bool>());
+        Assert.Equal(
+            3,
+            reloaded.CurrentConfig.GlobalValues[ConfigurationKeys.GuideSkippedAtStep]!.GetValue<int>());
+        Assert.Equal(7, reloaded.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task TaskQueueGuide_LegacyStepIndexShouldMigrateOnceToDevV2Order()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("3");
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+
+        Assert.Equal(5, vm.GuideStepIndex);
+        Assert.True(vm.IsGuideStep5Visible);
+        Assert.True(vm.IsGuideTaskDemoStep);
+        Assert.Equal(
+            5,
+            fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex]!.GetValue<int>());
+        Assert.Equal(
+            2,
+            fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepOrderVersion]!.GetValue<int>());
+
+        var second = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        Assert.Equal(5, second.GuideStepIndex);
     }
 
     [Fact]

@@ -5555,6 +5555,63 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="TaskQueue.Guide.Resume" xml:space="preserve">
     <value>返回設定引導</value>
   </data>
+  <data name="TaskQueue.Guide.Agreement.Title" xml:space="preserve">
+    <value>使用者協議</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Prefix" xml:space="preserve">
+    <value>使用 MAA 前請閱讀</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Link" xml:space="preserve">
+    <value>使用者協議</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Confirm" xml:space="preserve">
+    <value>我已閱讀並同意使用者協議</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Confirmed" xml:space="preserve">
+    <value>已確認使用者協議</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Tip" xml:space="preserve">
+    <value>尚未確認使用者協議。可以繼續瀏覽，但任務演示需確認後才能完成。</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.RequiredForDemo" xml:space="preserve">
+    <value>請先返回 ｢使用指引｣ 確認使用者協議，再完成任務演示。</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Title" xml:space="preserve">
+    <value>任務設定演示</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Note" xml:space="preserve">
+    <value>演示只操作引導中的模擬任務，不會修改實際任務佇列。</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Progress" xml:space="preserve">
+    <value>已完成 {0} / {1}</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Next" xml:space="preserve">
+    <value>下一步：{0}</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddStartUp" xml:space="preserve">
+    <value>新增開始喚醒</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddFight" xml:space="preserve">
+    <value>新增理智作戰</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.RenameFight" xml:space="preserve">
+    <value>重新命名作戰任務</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.SelectStage" xml:space="preserve">
+    <value>選擇剿滅關卡</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.ReorderFight" xml:space="preserve">
+    <value>調整任務順序</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.EnableWeekly" xml:space="preserve">
+    <value>啟用週常計畫</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddSwitchTheme" xml:space="preserve">
+    <value>新增更換主題</value>
+  </data>
+  <data name="TaskQueue.Guide.Skip" xml:space="preserve">
+    <value>跳過指引</value>
+  </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine" xml:space="preserve">
     <value>{0} 設定的 {1} 匯入失敗，無法讀取 {1} 設定。請手動修改。</value>
   </data>

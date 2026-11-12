@@ -59,12 +59,12 @@ public sealed class CopilotPopupNavigationRegressionTests
 
     [Theory]
     [InlineData(0, "GUI")]
-    [InlineData(1, "Game")]
-    [InlineData(2, "Connect")]
-    [InlineData(3, null)]
+    [InlineData(1, "About")]
+    [InlineData(2, "Game")]
+    [InlineData(3, "Connect")]
     [InlineData(4, "Performance")]
-    [InlineData(5, "VersionUpdate")]
-    [InlineData(6, "About")]
+    [InlineData(5, null)]
+    [InlineData(6, "VersionUpdate")]
     public void SettingsGuide_ShouldMapEveryStepToAnOperableTarget(int step, string? expectedSection)
     {
         Assert.Equal(expectedSection, TaskQueuePageViewModel.GetGuideStepSettingsSectionKey(step));
@@ -80,10 +80,15 @@ public sealed class CopilotPopupNavigationRegressionTests
         Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", guideXaml, StringComparison.Ordinal);
         Assert.Contains("MaxHeight=\"420\"", guideXaml, StringComparison.Ordinal);
         Assert.Equal(7, Regex.Matches(guideXaml, "Click=\"OnOpenGuideSettingsClick\"").Count);
-        foreach (var expectedTag in new[] { "GUI", "Game", "Connect", "Tasks", "Performance", "VersionUpdate", "About" })
-        {
-            Assert.Contains($"Tag=\"{expectedTag}\"", guideXaml, StringComparison.Ordinal);
-        }
+        Assert.Contains("Click=\"OnSkipGuideClick\"", guideXaml, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding IsGuideSkipVisible}\"", guideXaml, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding IsGuideNextEnabled}\"", guideXaml, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnConfirmGuideAgreementClick\"", guideXaml, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnGuideDemoActionClick\"", guideXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding GuideDemoSteps}\"", guideXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"app-badge guide-dot\"", guideXaml, StringComparison.Ordinal);
+        Assert.Contains("Tag=\"{Binding Action}\"", guideXaml, StringComparison.Ordinal);
+        Assert.Equal(7, Regex.Matches(guideXaml, "Classes=\"guide-step-marker\"").Count);
 
         Assert.Contains("IsVisible=\"{Binding CanResumeGuide}\"", taskQueueXaml, StringComparison.Ordinal);
         Assert.Contains("Click=\"OnResumeGuideClick\"", taskQueueXaml, StringComparison.Ordinal);
@@ -93,6 +98,9 @@ public sealed class CopilotPopupNavigationRegressionTests
     [InlineData("TaskQueue.Guide.OpenSettings")]
     [InlineData("TaskQueue.Guide.ConfigureTasks")]
     [InlineData("TaskQueue.Guide.Resume")]
+    [InlineData("TaskQueue.Guide.Agreement.Tip")]
+    [InlineData("TaskQueue.Guide.Demo.Title")]
+    [InlineData("TaskQueue.Guide.Skip")]
     [InlineData("Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine")]
     [InlineData("Settings.ConfigurationManager.Dialog.GlobalConfiguration")]
     [InlineData("Settings.Connect.Hint.MacBundledAdbNotFound")]

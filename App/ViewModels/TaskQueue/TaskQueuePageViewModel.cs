@@ -284,7 +284,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private const int DefaultRunDurationLimitMinutes = 240;
     private const int MaxOverlayLogs = 200;
     private const string GuideSaveScope = "TaskQueue.Guide.Save";
-    private const int GuideMaxStep = 7;
+    private const int GuideMaxStep = SettingsGuideStateMachine.StepCount;
     private static readonly TimeSpan TaskQueueAutoSaveDelay = TimeSpan.FromMilliseconds(200);
     private const string UiMallCreditFightLastTime = "_ui_mall_credit_fight_last_time";
     private const string UiMallVisitFriendsLastTime = "_ui_mall_visit_friends_last_time";
@@ -421,18 +421,18 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private readonly IUiLanguageCoordinator _uiLanguageCoordinator;
 
     private bool _isGuideSuspendedForTaskEditing;
-    private int _guideStepIndex;
+    private readonly SettingsGuideStateMachine _guideState;
 
 
-    public int GuideStepIndex => _guideStepIndex;
+    public int GuideStepIndex => _guideState.CurrentStep;
 
     public int GuideStepCount => GuideMaxStep;
 
-    public bool IsGuideVisible => GuideStepIndex < GuideMaxStep && !_isGuideSuspendedForTaskEditing;
+    public bool IsGuideVisible => _guideState.IsVisible && !_isGuideSuspendedForTaskEditing;
 
     public bool IsTaskQueueContentVisible => !IsGuideVisible;
 
-    public bool CanResumeGuide => _isGuideSuspendedForTaskEditing && GuideStepIndex < GuideMaxStep;
+    public bool CanResumeGuide => _isGuideSuspendedForTaskEditing && _guideState.IsVisible;
 
     public bool IsGuideNextVisible => IsGuideVisible && GuideStepIndex < GuideMaxStep - 1;
 
@@ -441,6 +441,95 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public bool CanGoToPreviousGuideStep => GuideStepIndex > 0;
 
     public string GuideStepProgressText => $"{Math.Clamp(GuideStepIndex, 0, GuideMaxStep - 1) + 1} / {GuideMaxStep}";
+
+    /// <summary>
+    /// Gets a value indicating whether the user agreement is confirmed. The gate is persisted
+    /// separately from the step index so replaying the guide never loses the confirmation.
+    /// </summary>
+    public bool IsGuideAgreementConfirmed => _guideState.AgreementConfirmed;
+
+    public bool IsGuideAgreementUnconfirmed => !_guideState.AgreementConfirmed;
+
+    public bool IsGuideAgreementStep => IsGuideVisible && _guideState.IsAgreementStep;
+
+    public bool IsGuideTaskDemoStep => IsGuideVisible && _guideState.IsTaskDemoStep;
+
+    public bool CanConfirmGuideAgreement =>
+        IsGuideVisible && _guideState.IsAgreementStep && !_guideState.AgreementConfirmed;
+
+    /// <summary>
+    /// Gets the red-dot state for the unconfirmed agreement. The dot reuses the shared
+    /// <c>app-badge</c> shell and is cleared as soon as <see cref="ConfirmGuideAgreementAsync"/> succeeds.
+    /// </summary>
+    public bool GuideAgreementBadgeVisible => IsGuideVisible && _guideState.AgreementBadgeVisible;
+
+    public bool IsGuideAgreementTipVisible =>
+        IsGuideVisible && _guideState.IsAgreementStep && !_guideState.AgreementConfirmed;
+
+    /// <summary>
+    /// Gets the localized reason the current step cannot advance, or <see langword="null"/>.
+    /// The agreement step deliberately keeps <see cref="IsGuideNextEnabled"/> true; only the
+    /// task-demo step is hard-gated by the agreement and its own completeness.
+    /// </summary>
+    public string? GuideNextGateTip
+    {
+        get
+        {
+            if (!IsGuideVisible)
+            {
+                return null;
+            }
+
+            if (_guideState.IsAgreementStep && !_guideState.AgreementConfirmed)
+            {
+                return RootTexts.GetOrDefault(
+                    "TaskQueue.Guide.Agreement.Tip",
+                    "The user agreement is not confirmed yet. You can continue, but the task demo requires confirmation.");
+            }
+
+            if (_guideState.IsTaskDemoStep)
+            {
+                if (!_guideState.AgreementConfirmed)
+                {
+                    return RootTexts.GetOrDefault(
+                        "TaskQueue.Guide.Agreement.RequiredForDemo",
+                        "Confirm the user agreement in the user guide step before completing the task demo.");
+                }
+
+                if (_guideState.NextDemoAction is { } next)
+                {
+                    return string.Format(
+                        CultureInfo.CurrentCulture,
+                        RootTexts.GetOrDefault("TaskQueue.Guide.Demo.Next", "Next: {0}"),
+                        next.Label);
+                }
+            }
+
+            return null;
+        }
+    }
+
+    public bool GuideNextGateTipVisible => !string.IsNullOrWhiteSpace(GuideNextGateTip);
+
+    /// <summary>
+    /// Gets a value indicating whether the Next button is enabled. The agreement step is never
+    /// disabled; the task-demo gate is the interlock that requires confirmation.
+    /// </summary>
+    public bool IsGuideNextEnabled => IsGuideVisible && !_guideState.IsLastStep && _guideState.CanGoToNext;
+
+    public bool IsGuideSkipVisible => IsGuideVisible;
+
+    public IReadOnlyList<SettingsGuideDemoStep> GuideDemoSteps => _guideState.DemoSteps;
+
+    public string GuideDemoProgressText => string.Format(
+        CultureInfo.CurrentCulture,
+        RootTexts.GetOrDefault("TaskQueue.Guide.Demo.Progress", "{0} / {1} completed"),
+        _guideState.CompletedDemoActionCount,
+        _guideState.DemoSteps.Count);
+
+    public bool IsGuideDemoComplete => _guideState.AllDemoActionsComplete;
+
+    public bool IsGuideDemoLocked => !_guideState.AgreementConfirmed;
 
     public bool IsGuideStep0Visible => GuideStepIndex == 0;
 
@@ -521,7 +610,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             Language = ResolveLanguage(),
         };
         RootTexts.FallbackReported += info => _localizationFallbackReporter?.Invoke(info);
-        _guideStepIndex = ReadGuideStepIndex(runtime.ConfigurationService.CurrentConfig);
+        _guideState = CreateGuideState(runtime.ConfigurationService.CurrentConfig);
         _logTimestampFormat = ResolveLogTimestampFormat();
         _dailyStageHint = Texts.GetOrDefault("TaskQueue.DailyStageHintDefault", "Daily stage hints will be shown after resources are loaded.");
         _noTaskSelectedHint = RootTexts.GetOrDefault(
@@ -1508,58 +1597,101 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     }
 
     internal static string? GetGuideStepSettingsSectionKey(int stepIndex)
-    {
-        return Math.Clamp(stepIndex, 0, GuideMaxStep - 1) switch
-        {
-            0 => "GUI",
-            1 => "Game",
-            2 => "Connect",
-            3 => null,
-            4 => "Performance",
-            5 => "VersionUpdate",
-            6 => "About",
-            _ => null,
-        };
-    }
+        => SettingsGuideStateMachine.GetSettingsSectionKey(stepIndex);
 
     public Task<bool> NextGuideStepAsync(CancellationToken cancellationToken = default)
     {
-        var nextStep = Math.Min(GuideStepIndex + 1, GuideMaxStep - 1);
-        return SetGuideStepIndexAsync(nextStep, cancellationToken);
+        if (!_guideState.TryGoNext())
+        {
+            return Task.FromResult(false);
+        }
+
+        _isGuideSuspendedForTaskEditing = false;
+        NotifyGuideStateChanged();
+        return SaveGuideStateAsync("Settings guide step saved.", cancellationToken);
     }
 
     public Task<bool> PreviousGuideStepAsync(CancellationToken cancellationToken = default)
     {
-        var previousStep = Math.Max(GuideStepIndex - 1, 0);
-        return SetGuideStepIndexAsync(previousStep, cancellationToken);
+        if (!_guideState.TryGoPrevious())
+        {
+            return Task.FromResult(false);
+        }
+
+        _isGuideSuspendedForTaskEditing = false;
+        NotifyGuideStateChanged();
+        return SaveGuideStateAsync("Settings guide step saved.", cancellationToken);
     }
 
     public Task<bool> CompleteGuideAsync(CancellationToken cancellationToken = default)
-        => SetGuideStepIndexAsync(GuideMaxStep, cancellationToken);
-
-    private async Task<bool> SetGuideStepIndexAsync(int stepIndex, CancellationToken cancellationToken)
     {
-        var normalizedStep = Math.Clamp(stepIndex, 0, GuideMaxStep);
-        if (GuideStepIndex == normalizedStep)
+        if (!_guideState.Complete())
         {
-            return true;
+            return Task.FromResult(false);
         }
 
-        _guideStepIndex = normalizedStep;
         _isGuideSuspendedForTaskEditing = false;
         NotifyGuideStateChanged();
-        Runtime.ConfigurationService.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] =
-            JsonValue.Create(normalizedStep);
-        return await RunTrackedConfigurationSaveAsync(
-            "TaskQueue.Guide",
-            RootTexts.GetOrDefault("TaskQueue.Guide.Title", "Settings guide"),
-            GuideSaveScope,
-            async ct =>
-            {
-                await Runtime.ConfigurationService.SaveAsync(ct);
-                return UiOperationResult.Ok("Settings guide step saved.");
-            },
-            cancellationToken);
+        return SaveGuideStateAsync("Settings guide completed.", cancellationToken);
+    }
+
+    /// <summary>
+    /// Confirms the user agreement. Only valid while the agreement step is current; the
+    /// confirmation itself is persisted independently of the step index.
+    /// </summary>
+    public Task<bool> ConfirmGuideAgreementAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_guideState.ConfirmAgreement())
+        {
+            return Task.FromResult(false);
+        }
+
+        NotifyGuideStateChanged();
+        return SaveGuideStateAsync("Settings guide agreement confirmed.", cancellationToken);
+    }
+
+    /// <summary>
+    /// Marks one simulated task-settings demo action complete. The demo is locked until the user
+    /// agreement is confirmed, which is the second half of the agreement/demo interlock.
+    /// </summary>
+    public bool CompleteGuideDemoAction(SettingsGuideDemoAction action)
+    {
+        if (!_guideState.CompleteDemoAction(action))
+        {
+            return false;
+        }
+
+        NotifyGuideStateChanged();
+        return true;
+    }
+
+    /// <summary>
+    /// Skips the guide, records the step that was skipped and completes the guide.
+    /// </summary>
+    public Task<bool> SkipGuideAsync(CancellationToken cancellationToken = default)
+    {
+        var skippedAtStep = GuideStepIndex;
+        if (!_guideState.Skip())
+        {
+            return Task.FromResult(false);
+        }
+
+        _isGuideSuspendedForTaskEditing = false;
+        Runtime.LogService.Info($"Settings guide skipped at step {skippedAtStep}.");
+        NotifyGuideStateChanged();
+        return SaveGuideStateAsync("Settings guide skipped.", cancellationToken);
+    }
+
+    /// <summary>
+    /// Re-enters the guide from the first step. The persisted agreement confirmation is kept,
+    /// while the simulated demo progress is reset so every adjusted step can be replayed.
+    /// </summary>
+    public Task<bool> RestartGuideAsync(CancellationToken cancellationToken = default)
+    {
+        _guideState.Restart();
+        _isGuideSuspendedForTaskEditing = false;
+        NotifyGuideStateChanged();
+        return SaveGuideStateAsync("Settings guide restarted.", cancellationToken);
     }
 
     private void NotifyGuideStateChanged()
@@ -1572,6 +1704,20 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(IsGuideDoneVisible));
         OnPropertyChanged(nameof(CanGoToPreviousGuideStep));
         OnPropertyChanged(nameof(GuideStepProgressText));
+        OnPropertyChanged(nameof(IsGuideAgreementConfirmed));
+        OnPropertyChanged(nameof(IsGuideAgreementUnconfirmed));
+        OnPropertyChanged(nameof(IsGuideAgreementStep));
+        OnPropertyChanged(nameof(IsGuideTaskDemoStep));
+        OnPropertyChanged(nameof(CanConfirmGuideAgreement));
+        OnPropertyChanged(nameof(GuideAgreementBadgeVisible));
+        OnPropertyChanged(nameof(IsGuideAgreementTipVisible));
+        OnPropertyChanged(nameof(GuideNextGateTip));
+        OnPropertyChanged(nameof(GuideNextGateTipVisible));
+        OnPropertyChanged(nameof(IsGuideNextEnabled));
+        OnPropertyChanged(nameof(IsGuideSkipVisible));
+        OnPropertyChanged(nameof(GuideDemoProgressText));
+        OnPropertyChanged(nameof(IsGuideDemoComplete));
+        OnPropertyChanged(nameof(IsGuideDemoLocked));
         OnPropertyChanged(nameof(IsGuideStep0Visible));
         OnPropertyChanged(nameof(IsGuideStep1Visible));
         OnPropertyChanged(nameof(IsGuideStep2Visible));
@@ -1588,26 +1734,104 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(IsGuideStep6Current));
     }
 
-    private int ReadGuideStepIndex(UnifiedConfig config)
+    private SettingsGuideStateMachine CreateGuideState(UnifiedConfig config)
     {
-        return Math.Clamp(
-            TryReadGlobalInt(config.GlobalValues, ConfigurationKeys.GuideStepIndex, 0),
-            0,
-            GuideMaxStep);
+        var snapshot = ReadGuideState(config);
+        return new SettingsGuideStateMachine(
+            snapshot.Step,
+            snapshot.AgreementConfirmed,
+            snapshot.Skipped,
+            snapshot.SkippedAtStep,
+            key => RootTexts.GetOrDefault(key, key));
+    }
+
+    private GuideStateSnapshot ReadGuideState(UnifiedConfig config)
+    {
+        var rawStep = TryReadGlobalInt(config.GlobalValues, ConfigurationKeys.GuideStepIndex, 0);
+        var stepOrderVersion = TryReadGlobalInt(
+            config.GlobalValues,
+            ConfigurationKeys.GuideStepOrderVersion,
+            0);
+        var step = SettingsGuideStateMachine.ResolvePersistedStep(rawStep, stepOrderVersion);
+        if (stepOrderVersion < SettingsGuideStateMachine.StepOrderVersion)
+        {
+            // Mark the migrated index in memory so a later configuration save is idempotent.
+            // Without the version marker, repeated loads would keep translating the already
+            // translated index (v6.3.7 step 3 -> dev-v2 step 5 -> dev-v2 step 6).
+            config.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create(step);
+            config.GlobalValues[ConfigurationKeys.GuideStepOrderVersion] =
+                JsonValue.Create(SettingsGuideStateMachine.StepOrderVersion);
+        }
+
+        return new GuideStateSnapshot(
+            step,
+            TryReadGlobalBool(config.GlobalValues, ConfigurationKeys.GuideAgreementConfirmed, false),
+            TryReadGlobalBool(config.GlobalValues, ConfigurationKeys.GuideSkipped, false),
+            TryReadGlobalInt(config.GlobalValues, ConfigurationKeys.GuideSkippedAtStep, 0));
+    }
+
+    private void WriteGuideStateToConfig()
+    {
+        var config = Runtime.ConfigurationService.CurrentConfig;
+        config.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create(GuideStepIndex);
+        config.GlobalValues[ConfigurationKeys.GuideStepOrderVersion] =
+            JsonValue.Create(SettingsGuideStateMachine.StepOrderVersion);
+        config.GlobalValues[ConfigurationKeys.GuideAgreementConfirmed] =
+            JsonValue.Create(_guideState.AgreementConfirmed);
+        if (_guideState.WasSkipped)
+        {
+            config.GlobalValues[ConfigurationKeys.GuideSkipped] = JsonValue.Create(true);
+            config.GlobalValues[ConfigurationKeys.GuideSkippedAtStep] =
+                JsonValue.Create(_guideState.SkippedAtStep);
+        }
+        else
+        {
+            config.GlobalValues.Remove(ConfigurationKeys.GuideSkipped);
+            config.GlobalValues.Remove(ConfigurationKeys.GuideSkippedAtStep);
+        }
+    }
+
+    private Task<bool> SaveGuideStateAsync(string successMessage, CancellationToken cancellationToken)
+    {
+        WriteGuideStateToConfig();
+        return RunTrackedConfigurationSaveAsync(
+            "TaskQueue.Guide",
+            RootTexts.GetOrDefault("TaskQueue.Guide.Title", "Settings guide"),
+            GuideSaveScope,
+            async ct =>
+            {
+                await Runtime.ConfigurationService.SaveAsync(ct);
+                return UiOperationResult.Ok(successMessage);
+            },
+            cancellationToken);
     }
 
     private void RefreshGuideStepFromConfig()
     {
-        var persistedStep = ReadGuideStepIndex(Runtime.ConfigurationService.CurrentConfig);
-        if (persistedStep == _guideStepIndex)
+        var snapshot = ReadGuideState(Runtime.ConfigurationService.CurrentConfig);
+        if (_guideState.Matches(
+                snapshot.Step,
+                snapshot.AgreementConfirmed,
+                snapshot.Skipped,
+                snapshot.SkippedAtStep))
         {
             return;
         }
 
-        _guideStepIndex = persistedStep;
+        _guideState.ApplyPersisted(
+            snapshot.Step,
+            snapshot.AgreementConfirmed,
+            snapshot.Skipped,
+            snapshot.SkippedAtStep);
         _isGuideSuspendedForTaskEditing = false;
         NotifyGuideStateChanged();
     }
+
+    private readonly record struct GuideStateSnapshot(
+        int Step,
+        bool AgreementConfirmed,
+        bool Skipped,
+        int SkippedAtStep);
 
     public void SetLanguage(string language)
     {
@@ -1622,6 +1846,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         RootTexts.Language = normalized;
         OnPropertyChanged(nameof(Texts));
         OnPropertyChanged(nameof(RootTexts));
+        _guideState.RefreshLocalization();
+        NotifyGuideStateChanged();
 
         DailyStageHint = FightTaskModuleViewModel.BuildDailyResourceHint(
             Texts.Language,
@@ -10432,6 +10658,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private void PrepareForConfigurationContextSwitch()
     {
+        _guideState.ResetDemoProgress();
         CancelTypedModuleAutoSave();
         CancelTaskQueueAutoSave();
         CancelPendingBinding();

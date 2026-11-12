@@ -390,6 +390,14 @@ public static class ConfigurationKeys
 
     public const string GuideStepIndex = "Guide.StepIndex";
 
+    // WPF dev-v2 0f4ba4c610 / 0e940011a9 introduced a separately persisted user-agreement gate
+    // and skip bookkeeping. MAAUnified stores them next to Guide.StepIndex so old configs keep
+    // loading and the new step order can be migrated exactly once.
+    public const string GuideAgreementConfirmed = "Guide.AgreementConfirmed";
+    public const string GuideSkipped = "Guide.Skipped";
+    public const string GuideSkippedAtStep = "Guide.SkippedAtStep";
+    public const string GuideStepOrderVersion = "Guide.StepOrderVersion";
+
     public const string ForceScheduledStart = "Timer.ForceScheduledStart";
     public const string ShowWindowBeforeForceScheduledStart = "Timer.ShowWindowBeforeForceScheduledStart";
     public const string CustomConfig = "Timer.CustomConfig";
