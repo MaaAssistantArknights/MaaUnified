@@ -1843,6 +1843,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         set
         {
             var normalized = NormalizeNotificationProvider(value);
+            OnPropertyChanged(nameof(CanAddNotificationChannelInstance));
             if (string.IsNullOrWhiteSpace(normalized))
             {
                 return;

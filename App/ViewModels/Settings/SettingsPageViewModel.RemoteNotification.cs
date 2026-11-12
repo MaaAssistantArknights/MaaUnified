@@ -423,6 +423,9 @@ public sealed partial class SettingsPageViewModel
             [ConfigurationKeys.ExternalNotificationBlacklist] = ExternalNotificationBlacklist,
         };
 
+        // 多实例模式：数组写入全局配置，实例参数写入敏感键；同时回写旧扁平键供旧读取路径使用。
+        AddNotificationChannelInstanceUpdates(updates);
+
         var applyProviderResult = await PopulateExternalNotificationProviderUpdatesAsync(
             updates,
             enabledProviders,
@@ -768,6 +771,7 @@ public sealed partial class SettingsPageViewModel
         _selectedNotificationProvider = selected;
         RefreshSelectedNotificationProviderText(selected);
         OnPropertyChanged(nameof(SelectedNotificationProvider));
+        LoadNotificationChannelInstancesFromConfig(config);
     }
 
     private static string BuildProviderParameterTextFromConfig(string provider, UnifiedConfig config)
@@ -1473,6 +1477,16 @@ public sealed partial class SettingsPageViewModel
 
     private List<string> ResolveEnabledNotificationProviders()
     {
+        if (NotificationChannelInstances.Count > 0)
+        {
+            var instanceProviders = NotificationChannelInstances
+                .Select(instance => instance.Provider)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            ExternalNotificationEnabled = instanceProviders.Count > 0;
+            return instanceProviders;
+        }
+
         if (!ExternalNotificationEnabled)
         {
             return [];

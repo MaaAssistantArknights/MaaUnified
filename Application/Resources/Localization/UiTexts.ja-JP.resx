@@ -3139,6 +3139,21 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="Settings.ExternalNotification.IncludePreviousLogs" xml:space="preserve">
     <value>履歴ログを添付</value>
   </data>
+  <data name="Settings.ExternalNotification.Instances.Add" xml:space="preserve">
+    <value>チャンネルインスタンスを追加</value>
+  </data>
+  <data name="Settings.ExternalNotification.Instances.Description" xml:space="preserve">
+    <value>同じチャンネルを複数追加できます。パラメーターは暗号化ストレージに保存されます。</value>
+  </data>
+  <data name="Settings.ExternalNotification.Instances.Parameters" xml:space="preserve">
+    <value>パラメーター（1 行 key=value）</value>
+  </data>
+  <data name="Settings.ExternalNotification.Instances.Remove" xml:space="preserve">
+    <value>削除</value>
+  </data>
+  <data name="Settings.ExternalNotification.Instances.Title" xml:space="preserve">
+    <value>チャンネルインスタンス</value>
+  </data>
   <data name="Settings.ExternalNotification.MaxEntries" xml:space="preserve">
     <value>履歴ログの件数</value>
   </data>

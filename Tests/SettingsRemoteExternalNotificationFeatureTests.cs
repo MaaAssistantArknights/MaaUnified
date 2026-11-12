@@ -569,6 +569,36 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
     }
 
     [Fact]
+    public async Task ExternalNotification_ChannelInstances_ShouldRoundTripThroughSensitiveStorage()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.ExternalNotificationEnabled = true;
+        vm.SelectedNotificationProvider = "Bark";
+
+        vm.AddNotificationChannelInstance();
+        vm.NotificationChannelInstances[0].ParametersText = "sendKey=one\nserver=https://one.example.com";
+        vm.AddNotificationChannelInstance();
+        vm.NotificationChannelInstances[1].ParametersText = "sendKey=two\nserver=https://two.example.com";
+
+        await vm.SaveExternalNotificationAsync();
+
+        var global = fixture.Config.CurrentConfig.GlobalValues[
+            MAAUnified.Application.Services.Notifications.ExternalNotificationChannels.ConfigsKey];
+        var array = Assert.IsType<JsonArray>(global);
+        Assert.Equal(2, array.Count);
+        Assert.Equal("Bark", array[0]!["$type"]!.GetValue<string>());
+        Assert.False(string.IsNullOrWhiteSpace(array[0]!["Id"]!.GetValue<string>()));
+
+        var reloaded = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await reloaded.InitializeAsync();
+        Assert.Equal(2, reloaded.NotificationChannelInstances.Count);
+        Assert.Contains("sendKey=one", reloaded.NotificationChannelInstances[0].ParametersText, StringComparison.Ordinal);
+        Assert.Contains("sendKey=two", reloaded.NotificationChannelInstances[1].ParametersText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ExternalNotification_InvalidUnsavedLine_DoesNotReachDiagnosticsOrIssueReport()
     {
         const string sentinel = "UNSAVED/NOTIFY?token=raw+sentinel";

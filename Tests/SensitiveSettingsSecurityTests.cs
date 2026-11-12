@@ -520,16 +520,28 @@ public sealed class SensitiveSettingsSecurityTests
     [Fact]
     public void RegistryContainsExactlyWpfSensitiveSet()
     {
-        Assert.Equal(32, SensitiveSettingKeyRegistry.Definitions.Count);
-        Assert.Equal(30, SensitiveSettingKeyRegistry.Definitions.Count(value => value.Scope == SensitiveSettingScope.Profile));
+        // 动态多实例键（ExternalNotification.Instance.<id>.<param>）按需注册，不改变冻结的
+        // WPF 凭据键集合；这里只校验基础键，并单独校验动态键的命名前缀。
+        var definitions = SensitiveSettingKeyRegistry.Definitions
+            .Where(definition => !definition.Key.StartsWith(
+                SensitiveSettingKeyRegistry.ExternalNotificationInstanceKeyPrefix,
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        Assert.Equal(32, definitions.Count);
+        Assert.Equal(30, definitions.Count(value => value.Scope == SensitiveSettingScope.Profile));
         // P1-13（WPF 53870a7a52）：GitHub Token 与 Mirror 酱 CDK 同为全局凭据。
-        Assert.Equal(2, SensitiveSettingKeyRegistry.Definitions.Count(value => value.Scope == SensitiveSettingScope.Global));
-        Assert.Equal(32, SensitiveSettingKeyRegistry.Definitions.Select(value => value.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count());
-        Assert.All(SensitiveSettingKeyRegistry.Definitions, definition =>
+        Assert.Equal(2, definitions.Count(value => value.Scope == SensitiveSettingScope.Global));
+        Assert.Equal(32, definitions.Select(value => value.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(definitions, definition =>
         {
             Assert.False(string.IsNullOrWhiteSpace(definition.DisplayName));
             Assert.False(string.IsNullOrWhiteSpace(definition.LocalizationKey));
         });
+        Assert.All(
+            SensitiveSettingKeyRegistry.Definitions.Where(definition => definition.Key.StartsWith(
+                SensitiveSettingKeyRegistry.ExternalNotificationInstanceKeyPrefix,
+                StringComparison.OrdinalIgnoreCase)),
+            definition => Assert.Equal(SensitiveSettingScope.Profile, definition.Scope));
     }
 
     [Fact]

@@ -103,6 +103,7 @@ public sealed class SensitiveSettingsService
             var backend = GetSelectedBackend(metadata.Backend);
             var document = await backend.ReadAsync(metadata.StoreId, metadata.Revision, cancellationToken).ConfigureAwait(false);
             ValidateExactMatch(metadata, document);
+            SensitiveSettingKeyRegistry.RegisterExternalNotificationInstanceKeys(config);
             var plaintextDocument = SensitiveSettingKeyRegistry.ExtractAndRemove(
                 config,
                 metadata.StoreId,

@@ -172,6 +172,54 @@
                     IsChecked="{Binding ExternalNotificationSendBeforeScheduledStart}"
                     ToolTip.Tip="{Binding RootTexts[Settings.ExternalNotification.SendBeforeScheduledStartTip]}" />
         </controls:AdaptiveSpacingStackPanel>
+
+        <Border Classes="settings-page-subtle-divider" />
+
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack external-notification-provider">
+          <TextBlock Classes="app-body external-notification-section-title"
+                     Text="{Binding RootTexts[Settings.ExternalNotification.Instances.Title]}" />
+          <TextBlock Classes="app-caption long-wrap"
+                     Text="{Binding RootTexts[Settings.ExternalNotification.Instances.Description]}" />
+          <ItemsControl ItemsSource="{Binding NotificationChannelInstances}"
+                        IsVisible="{Binding HasNotificationChannelInstances}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Spacing="8" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Classes="settings-page-branch-block"
+                        Padding="10">
+                  <Grid RowDefinitions="Auto,6,Auto"
+                        ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="app-body"
+                               Text="{Binding DisplayName}"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="1"
+                            Classes="app-button app-secondary"
+                            Content="{Binding DataContext.RootTexts[Settings.ExternalNotification.Instances.Remove], RelativeSource={RelativeSource AncestorType=UserControl}}"
+                            Tag="{Binding}"
+                            Click="OnRemoveNotificationChannelInstanceClick" />
+                    <TextBox Grid.Row="2"
+                             Grid.ColumnSpan="2"
+                             Classes="settings-input settings-input-block"
+                             Height="64"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             Watermark="{Binding DataContext.RootTexts[Settings.ExternalNotification.Instances.Parameters], RelativeSource={RelativeSource AncestorType=UserControl}}"
+                             Text="{Binding ParametersText, UpdateSourceTrigger=PropertyChanged}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Button Classes="app-button app-secondary"
+                  HorizontalAlignment="Left"
+                  IsEnabled="{Binding CanAddNotificationChannelInstance}"
+                  Content="{Binding RootTexts[Settings.ExternalNotification.Instances.Add]}"
+                  Click="OnAddNotificationChannelInstanceClick" />
+        </controls:AdaptiveSpacingStackPanel>
       </controls:AdaptiveSpacingStackPanel>
 
       <Border Classes="settings-page-subtle-divider" />

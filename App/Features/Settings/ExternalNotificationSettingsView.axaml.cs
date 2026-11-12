@@ -37,6 +37,19 @@ public partial class ExternalNotificationSettingsView : UserControl
         }
     }
 
+    private void OnAddNotificationChannelInstanceClick(object? sender, RoutedEventArgs e)
+    {
+        VM?.AddNotificationChannelInstance();
+    }
+
+    private void OnRemoveNotificationChannelInstanceClick(object? sender, RoutedEventArgs e)
+    {
+        if (VM is not null && sender is Button { Tag: NotificationChannelInstanceViewModel instance })
+        {
+            VM.RemoveNotificationChannelInstance(instance);
+        }
+    }
+
     private async void OnDiscardUnreadableSensitiveValuesClick(object? sender, RoutedEventArgs e)
     {
         if (VM is not null)

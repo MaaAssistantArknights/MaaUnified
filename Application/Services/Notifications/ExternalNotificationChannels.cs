@@ -16,7 +16,8 @@ namespace MAAUnified.Application.Services.Notifications;
 /// <param name="Parameters">Provider parameters as passed to the feature service.</param>
 public sealed record ExternalNotificationChannel(
     string Provider,
-    IReadOnlyDictionary<string, string> Parameters);
+    IReadOnlyDictionary<string, string> Parameters,
+    string? Id = null);
 
 /// <summary>
 /// Reads the enabled channels out of the flat external-notification keys and merges the removed
@@ -218,10 +219,18 @@ public static class ExternalNotificationChannels
                 continue;
             }
 
+            var instanceId = ReadStringProperty(configObject, "Id");
             var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var (parameterKey, propertyName) in propertyMap)
             {
-                var value = ReadPropertyValue(configObject, propertyName);
+                // MAAUnified 写回的多实例只把 Id/$type 放进数组，参数值在敏感存储里；
+                // WPF 直接写在数组对象上的字段仍按原样读取。
+                var value = string.IsNullOrWhiteSpace(instanceId)
+                    ? ReadPropertyValue(configObject, propertyName)
+                    : NotificationConfigReader.ReadString(
+                        config,
+                        MAAUnified.Application.Security.SensitiveSettingKeyRegistry.BuildExternalNotificationInstanceKey(instanceId, parameterKey),
+                        string.Empty);
                 if (!string.IsNullOrWhiteSpace(value))
                 {
                     parameters[parameterKey] = value;
@@ -234,7 +243,7 @@ public static class ExternalNotificationChannels
                 parameters["server"] = "https://api.day.app";
             }
 
-            parsed.Add(new ExternalNotificationChannel(provider, parameters));
+            parsed.Add(new ExternalNotificationChannel(provider, parameters, instanceId));
         }
 
         channels = parsed;
@@ -305,6 +314,21 @@ public static class ExternalNotificationChannels
         }
 
         return channels;
+    }
+
+    /// <summary>
+    /// 返回某个 provider 支持的全部参数名（用于多实例敏感键注册）。
+    /// </summary>
+    /// <param name="provider">规范化 provider 名。</param>
+    /// <returns>参数名集合；未知 provider 返回空。</returns>
+    public static IReadOnlyList<string> ProviderParameterKeys(string provider)
+    {
+        if (!ConfigKeyMap.TryGetValue(provider, out var map))
+        {
+            return [];
+        }
+
+        return [.. map.Keys];
     }
 
     public static string BuildParameterText(ExternalNotificationChannel channel)

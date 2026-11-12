@@ -3140,6 +3140,21 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.ExternalNotification.IncludePreviousLogs" xml:space="preserve">
     <value>최근 로그 첨부</value>
   </data>
+  <data name="Settings.ExternalNotification.Instances.Add" xml:space="preserve">
+    <value>채널 인스턴스 추가</value>
+  </data>
+  <data name="Settings.ExternalNotification.Instances.Description" xml:space="preserve">
+    <value>같은 채널을 여러 개 추가할 수 있습니다. 매개변수는 암호화 저장소에 보관됩니다.</value>
+  </data>
+  <data name="Settings.ExternalNotification.Instances.Parameters" xml:space="preserve">
+    <value>매개변수(줄당 key=value)</value>
+  </data>
+  <data name="Settings.ExternalNotification.Instances.Remove" xml:space="preserve">
+    <value>삭제</value>
+  </data>
+  <data name="Settings.ExternalNotification.Instances.Title" xml:space="preserve">
+    <value>채널 인스턴스</value>
+  </data>
   <data name="Settings.ExternalNotification.MaxEntries" xml:space="preserve">
     <value>최근 로그 개수</value>
   </data>

@@ -21,7 +21,8 @@ public static class SensitiveSettingKeyRegistry
 {
     public const string ExternalNotificationCustomWebhookHeaders = "ExternalNotification.CustomWebhook.Headers";
 
-    private static readonly IReadOnlyList<SensitiveSettingDefinition> _definitions =
+    private static readonly object _definitionsGate = new();
+    private static readonly List<SensitiveSettingDefinition> _definitions =
     [
         Profile(ConfigurationKeys.RemoteControlGetTaskEndpointUri, "远程控制获取任务地址", "Settings.RemoteControl.GetTaskEndpoint"),
         Profile(ConfigurationKeys.RemoteControlReportStatusUri, "远程控制上报地址", "Settings.RemoteControl.ReportTaskEndpoint"),
@@ -57,8 +58,126 @@ public static class SensitiveSettingKeyRegistry
         Global(ConfigurationKeys.GitHubToken, "GitHub Token", "Settings.VersionUpdate.GitHubToken"),
     ];
 
-    private static readonly IReadOnlyDictionary<string, SensitiveSettingDefinition> _byKey =
+    private static Dictionary<string, SensitiveSettingDefinition> _byKey =
         _definitions.ToDictionary(definition => definition.Key, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 实例键前缀：ExternalNotification.Instance.&lt;id&gt;.&lt;parameter&gt;。与 WPF Configs 多实例
+    /// 数组配套，参数值仍走敏感存储，不写进 config JSON。
+    /// </summary>
+    public const string ExternalNotificationInstanceKeyPrefix = "ExternalNotification.Instance.";
+
+    /// <summary>
+    /// 注册一组动态敏感键（多实例渠道参数）。重复注册幂等；注册后 ExtractAndRemove/Inject
+    /// 会把这个键当作普通敏感键处理。
+    /// </summary>
+    /// <param name="definitions">要注册的敏感键定义。</param>
+    public static void RegisterDynamic(IEnumerable<SensitiveSettingDefinition> definitions)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        lock (_definitionsGate)
+        {
+            var changed = false;
+            foreach (var definition in definitions)
+            {
+                if (_byKey.ContainsKey(definition.Key))
+                {
+                    continue;
+                }
+
+                _definitions.Add(definition);
+                _byKey[definition.Key] = definition;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                _byKey = new Dictionary<string, SensitiveSettingDefinition>(_byKey, StringComparer.OrdinalIgnoreCase);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 构造一个多实例渠道的敏感键。
+    /// </summary>
+    /// <param name="instanceId">实例 id（配置数组中的 Id）。</param>
+    /// <param name="parameterKey">渠道参数名。</param>
+    /// <returns>敏感键。</returns>
+    /// <summary>
+    /// 从配置里的多实例数组（ExternalNotification.Configs）扫描实例 Id 与 provider，
+    /// 为每个参数注册动态敏感键。必须在敏感存储 Extract/Inject 之前调用，否则实例参数
+    /// 会被当作普通配置明文写入。
+    /// </summary>
+    /// <param name="config">配置快照。</param>
+    public static void RegisterExternalNotificationInstanceKeys(UnifiedConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        if (!config.GlobalValues.TryGetValue("ExternalNotification.Configs", out var node) || node is null)
+        {
+            return;
+        }
+
+        System.Text.Json.Nodes.JsonArray? array = node as System.Text.Json.Nodes.JsonArray;
+        if (array is null && node is System.Text.Json.Nodes.JsonValue value
+            && value.TryGetValue<string>(out var raw) && !string.IsNullOrWhiteSpace(raw))
+        {
+            try
+            {
+                array = System.Text.Json.Nodes.JsonNode.Parse(raw) as System.Text.Json.Nodes.JsonArray;
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return;
+            }
+        }
+
+        if (array is null)
+        {
+            return;
+        }
+
+        var definitions = new List<SensitiveSettingDefinition>();
+        foreach (var item in array)
+        {
+            if (item is not System.Text.Json.Nodes.JsonObject configObject)
+            {
+                continue;
+            }
+
+            if (!configObject.TryGetPropertyValue("Id", out var idNode)
+                || idNode is not System.Text.Json.Nodes.JsonValue idValue
+                || !idValue.TryGetValue<string>(out var instanceId)
+                || string.IsNullOrWhiteSpace(instanceId))
+            {
+                continue;
+            }
+
+            if (!configObject.TryGetPropertyValue("$type", out var typeNode)
+                || typeNode is not System.Text.Json.Nodes.JsonValue typeValue
+                || !typeValue.TryGetValue<string>(out var provider)
+                || string.IsNullOrWhiteSpace(provider))
+            {
+                continue;
+            }
+
+            foreach (var parameterKey in MAAUnified.Application.Services.Notifications.ExternalNotificationChannels.ProviderParameterKeys(provider))
+            {
+                definitions.Add(new SensitiveSettingDefinition(
+                    BuildExternalNotificationInstanceKey(instanceId, parameterKey),
+                    SensitiveSettingScope.Profile,
+                    $"External notification instance {provider}.{parameterKey}",
+                    "ExternalNotificationInstanceParameter"));
+            }
+        }
+
+        if (definitions.Count > 0)
+        {
+            RegisterDynamic(definitions);
+        }
+    }
+
+    public static string BuildExternalNotificationInstanceKey(string instanceId, string parameterKey)
+        => $"{ExternalNotificationInstanceKeyPrefix}{instanceId}.{parameterKey}";
 
     public static IReadOnlyList<SensitiveSettingDefinition> Definitions => _definitions;
 

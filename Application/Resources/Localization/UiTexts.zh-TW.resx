@@ -3142,6 +3142,21 @@
   <data name="Settings.ExternalNotification.IncludePreviousLogs" xml:space="preserve">
     <value>附帶歷史日誌</value>
   </data>
+  <data name="Settings.ExternalNotification.Instances.Add" xml:space="preserve">
+    <value>新增渠道實例</value>
+  </data>
+  <data name="Settings.ExternalNotification.Instances.Description" xml:space="preserve">
+    <value>可加入同一渠道的多個實例，參數儲存在加密儲存中。</value>
+  </data>
+  <data name="Settings.ExternalNotification.Instances.Parameters" xml:space="preserve">
+    <value>參數（每行 key=value）</value>
+  </data>
+  <data name="Settings.ExternalNotification.Instances.Remove" xml:space="preserve">
+    <value>刪除</value>
+  </data>
+  <data name="Settings.ExternalNotification.Instances.Title" xml:space="preserve">
+    <value>渠道實例</value>
+  </data>
   <data name="Settings.ExternalNotification.MaxEntries" xml:space="preserve">
     <value>歷史日誌條數</value>
   </data>
