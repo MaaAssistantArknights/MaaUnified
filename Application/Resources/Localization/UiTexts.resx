@@ -6380,4 +6380,16 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.Game.RunDurationLimitExecutePostActions" xml:space="preserve">
     <value>停止后执行完成后动作</value>
   </data>
+  <data name="ResourceBrokenTaskBlocked" xml:space="preserve">
+    <value>资源已损坏，任务无法启动。{key=ResourceBrokenRepairGuidance}</value>
+  </data>
+  <data name="ResourceBrokenRepairGuidance" xml:space="preserve">
+    <value>请前往 设置 > 版本更新 检查资源更新（或重新下载完整安装包）后重启 MAA；重新加载资源成功后会自动解除限制。</value>
+  </data>
+  <data name="UnknownTaskInChain" xml:space="preserve">
+    <value>任务链引用了未定义的任务（{0}），资源可能已损坏或与程序版本不匹配，已停止任务。</value>
+  </data>
+  <data name="CoreLoadingTip" xml:space="preserve">
+    <value>MAA 内核尚未加载完成，请稍后再试。</value>
+  </data>
 </root>

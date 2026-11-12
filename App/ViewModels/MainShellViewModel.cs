@@ -176,6 +176,11 @@ public sealed class MainShellViewModel : ObservableObject
             gameDataReportService: null,
             stopActiveSessionOperationAsync: StopActiveSessionOperationFromTaskQueueAsync);
         Program.RecordStartupStage("FrameworkInit.ViewModel.MainShell.TaskQueue.End", "TaskQueuePageViewModel created.");
+
+        // WPF parity (2e0ff15edd): resource-broken is surfaced as a non-blocking prompt as well
+        // as the error log; the gate blocks every start entry until the resources are repaired.
+        runtime.TaskStartGate.ResourceBrokenMarked += message =>
+            Dispatcher.UIThread.Post(() => PushGrowl(message));
         Program.RecordStartupStage("FrameworkInit.ViewModel.MainShell.Pages.Deferred", "Secondary page view models deferred for lazy creation.");
         var (taskQueuePendingTitle, taskQueuePendingMessage) = GetRootPagePendingText(RootPageStatusKind.TaskQueue);
         var (copilotPendingTitle, copilotPendingMessage) = GetRootPagePendingText(RootPageStatusKind.Copilot);
@@ -609,6 +614,10 @@ public sealed class MainShellViewModel : ObservableObject
         {
             if (SetProperty(ref _isCoreReady, value))
             {
+                // WPF parity (Bootstrapper.TryGetTaskBlockReason): Core readiness feeds the
+                // unified start gate, so tray/hotkey/Copilot/Toolbox/remote entries are blocked
+                // while Core is still warming up.
+                _runtime.SetCoreReady(value);
                 OnPropertyChanged(nameof(CanStartExecution));
             }
         }
@@ -1822,6 +1831,20 @@ public sealed class MainShellViewModel : ObservableObject
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         CurrentSessionState = _runtime.SessionService.CurrentState;
+        if (_runtime.TryGetTaskStartBlock("App.Shell.Start", coreWarmupAvailable: true) is { } startBlock)
+        {
+            // WPF parity (Bootstrapper.TryGetTaskBlockReason): the shell start path (tray,
+            // LinkStart hotkey, main run button) must not even attempt a connection while
+            // the gate is closed; the localized reason is shown immediately.
+            LastError = startBlock.Message;
+            PushGrowl(startBlock.Message);
+            await ApplyResultAsync(
+                UiOperationResult.Fail(startBlock.ErrorCode, startBlock.Message),
+                "App.Shell.Start",
+                cancellationToken);
+            return;
+        }
+
         var latestIssues = _runtime.ConfigurationService.RevalidateCurrentConfig();
         RefreshConfigValidationState(latestIssues);
         UiOperationResult? startConnectResult = null;
@@ -2224,13 +2247,26 @@ public sealed class MainShellViewModel : ObservableObject
                             return ShellUiAction.None;
                         }
 
-                        var blockedMessage = CurrentSessionState switch
-                        {
-                            SessionState.Running or SessionState.Stopping => "任务正在执行中，Start 已禁用。",
-                            _ when HasBlockingConfigIssues => "存在阻断级配置错误，Start/LinkStart 已禁用。",
-                            _ => BuildLinkStartStateNotAllowedMessage(CurrentSessionState),
-                        };
+                        var startBlock = _runtime.TryGetTaskStartBlock(scope, coreWarmupAvailable: true);
+                        var blockedMessage = startBlock?.Message
+                            ?? CurrentSessionState switch
+                            {
+                                SessionState.Running or SessionState.Stopping => "任务正在执行中，Start 已禁用。",
+                                _ when HasBlockingConfigIssues => "存在阻断级配置错误，Start/LinkStart 已禁用。",
+                                _ => BuildLinkStartStateNotAllowedMessage(CurrentSessionState),
+                            };
                         PushGrowl(blockedMessage);
+                        if (startBlock is not null)
+                        {
+                            // WPF parity (Bootstrapper.TryGetTaskBlockReason): a closed gate
+                            // (resource broken / restart required / core loading) must not
+                            // navigate to the connection settings as if the user were offline.
+                            await RecordEventAsync(
+                                scope,
+                                $"source={source}; start-gate={startBlock.Value.Kind}",
+                                cancellationToken);
+                            return ShellUiAction.None;
+                        }
                         if (CurrentSessionState != SessionState.Connected && !HasBlockingConfigIssues)
                         {
                             NavigateToSettingsSection("Connect");

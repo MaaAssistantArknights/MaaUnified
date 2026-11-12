@@ -1805,6 +1805,19 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 return;
             }
 
+            // WPF parity (43965095df, ToolboxViewModel.StartPeep): starting the video
+            // recognition stream is a Core entry too and is gated the same way; stopping an
+            // already running peep above stays allowed.
+            if (Runtime.TryGetTaskStartBlock("Toolbox.Peep") is { } peepBlock)
+            {
+                await ApplyFailureAsync(
+                    ToolboxToolKind.VideoRecognition,
+                    UiOperationResult.Fail(peepBlock.ErrorCode, peepBlock.Message),
+                    "start-gate",
+                    cancellationToken);
+                return;
+            }
+
             if (!Runtime.SessionService.TryBeginRun(
                     ToolboxRunOwner,
                     GetToolDisplayName(ToolboxToolKind.VideoRecognition),
@@ -2058,6 +2071,18 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         bool transitionBeforeConnect = false)
     {
         CurrentToolParameters = BuildCurrentParameterText(tool);
+        // WPF parity (Bootstrapper.TryGetTaskBlockReason, a413ff2cfd): every toolbox tool that
+        // dispatches Core tasks shares the unified start gate with the main queue.
+        if (Runtime.TryGetTaskStartBlock($"Toolbox.{tool}") is { } startBlock)
+        {
+            await ApplyFailureAsync(
+                tool,
+                UiOperationResult.Fail(startBlock.ErrorCode, startBlock.Message),
+                "start-gate",
+                cancellationToken);
+            return;
+        }
+
         var validation = ValidateCurrentToolParameters(tool);
         if (!validation.Success)
         {

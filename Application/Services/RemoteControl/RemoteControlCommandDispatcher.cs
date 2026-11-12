@@ -21,6 +21,7 @@ internal sealed class RemoteControlCommandDispatcher
     private readonly IToolboxFeatureService? _toolboxFeatureService;
     private readonly IMaaCoreBridge? _coreBridge;
     private readonly UiLogService? _logService;
+    private readonly TaskStartGate? _taskStartGate;
 
     public RemoteControlCommandDispatcher(
         UnifiedConfigurationService? configService,
@@ -30,6 +31,27 @@ internal sealed class RemoteControlCommandDispatcher
         IToolboxFeatureService? toolboxFeatureService,
         IMaaCoreBridge? coreBridge,
         UiLogService? logService)
+        : this(
+            configService,
+            sessionService,
+            connectFeatureService,
+            taskQueueFeatureService,
+            toolboxFeatureService,
+            coreBridge,
+            logService,
+            taskStartGate: null)
+    {
+    }
+
+    public RemoteControlCommandDispatcher(
+        UnifiedConfigurationService? configService,
+        UnifiedSessionService? sessionService,
+        IConnectFeatureService? connectFeatureService,
+        ITaskQueueFeatureService? taskQueueFeatureService,
+        IToolboxFeatureService? toolboxFeatureService,
+        IMaaCoreBridge? coreBridge,
+        UiLogService? logService,
+        TaskStartGate? taskStartGate)
     {
         _configService = configService;
         _sessionService = sessionService;
@@ -38,6 +60,7 @@ internal sealed class RemoteControlCommandDispatcher
         _toolboxFeatureService = toolboxFeatureService;
         _coreBridge = coreBridge;
         _logService = logService;
+        _taskStartGate = taskStartGate;
     }
 
     public async Task<RemoteControlCommandResult> DispatchAsync(
@@ -190,6 +213,14 @@ internal sealed class RemoteControlCommandDispatcher
                 $"Remote command `{command}` cannot start new tasks while session state is `{_sessionService!.CurrentState}`. Stop the current run first.");
         }
 
+        // WPF parity (a413ff2cfd, RemoteControlService.LinkStart): remote control funnels
+        // into the same unified start gate as the local entries, so a broken resource or a
+        // restart-required session blocks LinkStart instead of dispatching tasks to Core.
+        if (TryGetStartBlockResult(request, command) is { } blocked)
+        {
+            return blocked;
+        }
+
         // WPF parity: the sequential loop waits for the running state to become
         // idle before starting the next sequential command.
         await WaitUntilIdleAsync(cancellationToken);
@@ -271,6 +302,13 @@ internal sealed class RemoteControlCommandDispatcher
                 command,
                 UiErrorCode.SessionStateNotAllowed,
                 $"Remote command `{command}` cannot start new tasks while session state is `{_sessionService!.CurrentState}`. Stop the current run first.");
+        }
+
+        // WPF parity (a413ff2cfd): toolbox dispatches from remote control share the same
+        // unified start gate as the local toolbox entries.
+        if (TryGetStartBlockResult(request, command) is { } blocked)
+        {
+            return blocked;
         }
 
         // WPF parity: gacha commands wait for the running state to become idle
@@ -803,6 +841,27 @@ internal sealed class RemoteControlCommandDispatcher
             Details: details,
             CoreTaskId: coreTaskId,
             TaskType: taskType);
+    }
+
+    /// <summary>
+    /// 统一启动拦截：资源破损 &gt; 需重启 &gt; 内核未初始化。WPF parity
+    /// (<c>Bootstrapper.TryGetTaskBlockReason</c>, a413ff2cfd)：远程控制入口也必须过同一判定。
+    /// </summary>
+    /// <param name="request">原始远程命令请求。</param>
+    /// <param name="command">归一化后的命令名。</param>
+    /// <returns>被拦截时的失败结果；允许启动时为 <see langword="null"/>。</returns>
+    private RemoteControlCommandResult? TryGetStartBlockResult(
+        RemoteControlCommandRequest request,
+        string command)
+    {
+        if (_taskStartGate?.TryGetBlock($"RemoteControl.{command}") is not { } block)
+        {
+            return null;
+        }
+
+        _logService?.Warn(
+            $"Remote command `{command}` blocked by the start gate: {block.Kind} ({block.ErrorCode}).");
+        return Fail(request, command, block.ErrorCode, block.Message);
     }
 
     private static RemoteControlCommandResult Fail(

@@ -6400,4 +6400,16 @@ A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created b
   <data name="Settings.Game.RunDurationLimitExecutePostActions" xml:space="preserve">
     <value>Run completion actions after stopping</value>
   </data>
+  <data name="ResourceBrokenTaskBlocked" xml:space="preserve">
+    <value>The resources are damaged, so tasks cannot be started. {key=ResourceBrokenRepairGuidance}</value>
+  </data>
+  <data name="ResourceBrokenRepairGuidance" xml:space="preserve">
+    <value>Go to Settings > Version update to check for a resource update (or download the full package again) and restart MAA. The block is lifted once the resources reload successfully.</value>
+  </data>
+  <data name="UnknownTaskInChain" xml:space="preserve">
+    <value>The task chain references an undefined task ({0}). The resource may be damaged or mismatched with the application version. Tasks have been stopped.</value>
+  </data>
+  <data name="CoreLoadingTip" xml:space="preserve">
+    <value>The MAA core is still loading. Please try again shortly.</value>
+  </data>
 </root>

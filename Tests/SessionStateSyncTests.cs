@@ -1497,6 +1497,80 @@ public sealed class SessionStateSyncTests
     }
 
     [Fact]
+    public void TaskStartGate_ShouldOrderResourceBrokenThenRestartThenCoreNotReady()
+    {
+        var gate = new TaskStartGate();
+        gate.SetCoreReady(false, "core is loading");
+        gate.MarkRequiresRestart("TaskQueue.StopTimeout");
+        gate.MarkResourceBroken("TaskQueue.SubTaskError.UnknownTask:MissingTaskA");
+
+        // WPF Bootstrapper.TryGetTaskBlockReason 固定顺序：资源破损 > 需重启 > 内核未初始化。
+        Assert.Equal(TaskStartBlockKind.ResourceBroken, gate.TryGetBlock("Test")?.Kind);
+        Assert.True(gate.ClearResourceBroken("Test.Reload"));
+        Assert.Equal(TaskStartBlockKind.RequiresRestart, gate.TryGetBlock("Test")?.Kind);
+
+        var coreOnly = new TaskStartGate();
+        coreOnly.SetCoreReady(false, "core is loading");
+        Assert.Equal(TaskStartBlockKind.CoreNotReady, coreOnly.TryGetBlock("Test")?.Kind);
+        Assert.Equal("core is loading", coreOnly.TryGetBlock("Test")?.Message);
+
+        coreOnly.SetCoreReady(true);
+        Assert.Null(coreOnly.TryGetBlock("Test"));
+    }
+
+    [Fact]
+    public async Task ReloadResourceWhenIdleAsync_WhenSuccessful_ShouldClearResourceBrokenGate()
+    {
+        var gate = new TaskStartGate();
+        gate.MarkResourceBroken("TaskQueue.SubTaskError.UnknownTask:MissingTaskA");
+        Assert.NotNull(gate.TryGetBlock("Test.Reload"));
+
+        var bridge = new FakeBridge
+        {
+            RuntimeStatus = new CoreRuntimeStatus(Initialized: true, Connected: true, Running: false),
+        };
+        var session = new UnifiedSessionService(
+            bridge,
+            CreateConfigService(),
+            new UiLogService(),
+            new SessionStateMachine(),
+            gate);
+
+        var result = await session.ReloadResourceWhenIdleAsync("YoStarEN");
+
+        // 修复引导：资源重载成功后资源破损态自动解除，无需重启进程。
+        Assert.True(result.Success);
+        Assert.Equal(1, bridge.ReloadResourceCallCount);
+        Assert.False(gate.IsResourceBroken);
+        Assert.Null(gate.TryGetBlock("Test.Reload"));
+    }
+
+    [Fact]
+    public async Task ReloadResourceWhenIdleAsync_WhenReloadFails_ShouldKeepResourceBrokenGate()
+    {
+        var gate = new TaskStartGate();
+        gate.MarkResourceBroken("TaskQueue.SubTaskError.UnknownTask:MissingTaskA");
+
+        var bridge = new FakeBridge
+        {
+            RuntimeStatus = new CoreRuntimeStatus(Initialized: true, Connected: true, Running: false),
+            ReloadResourceSucceeds = false,
+        };
+        var session = new UnifiedSessionService(
+            bridge,
+            CreateConfigService(),
+            new UiLogService(),
+            new SessionStateMachine(),
+            gate);
+
+        var result = await session.ReloadResourceWhenIdleAsync("YoStarEN");
+
+        Assert.False(result.Success);
+        Assert.True(gate.IsResourceBroken);
+        Assert.NotNull(gate.TryGetBlock("Test.Reload"));
+    }
+
+    [Fact]
     public async Task ReloadResourceWhenIdleAsync_WhenSessionIsRunning_ShouldWaitUntilIdleThenReload()
     {
         var bridge = new FakeBridge

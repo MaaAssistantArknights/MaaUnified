@@ -5556,4 +5556,16 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="Settings.Game.RunDurationLimitExecutePostActions" xml:space="preserve">
     <value>停止後執行完成後動作</value>
   </data>
+  <data name="ResourceBrokenTaskBlocked" xml:space="preserve">
+    <value>資源已損毀，任務無法啟動。{key=ResourceBrokenRepairGuidance}</value>
+  </data>
+  <data name="ResourceBrokenRepairGuidance" xml:space="preserve">
+    <value>請前往 設定 > 版本更新 檢查資源更新（或重新下載完整安裝包）後重新啟動 MAA；重新載入資源成功後會自動解除限制。</value>
+  </data>
+  <data name="UnknownTaskInChain" xml:space="preserve">
+    <value>任務鏈引用了未定義的任務（{0}），資源可能已損毀或與程式版本不匹配，已停止任務。</value>
+  </data>
+  <data name="CoreLoadingTip" xml:space="preserve">
+    <value>MAA 核心尚未載入完成，請稍後再試。</value>
+  </data>
 </root>

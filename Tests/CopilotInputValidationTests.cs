@@ -237,6 +237,27 @@ public sealed class CopilotInputValidationTests
         Assert.Equal(2, item.TabIndex);
     }
 
+    [Fact]
+    public async Task CopilotPage_StartBlockedWhenResourceBroken_ShouldLogFailureAndNotStart()
+    {
+        await using var fixture = await CopilotPageFixture.CreateAsync();
+        var vm = fixture.ViewModel;
+        var expected = vm.RootTexts.GetOrDefault("ResourceBrokenTaskBlocked", "ResourceBrokenTaskBlocked");
+        fixture.Runtime.MarkResourceBroken("TaskQueue.SubTaskError.UnknownTask:MissingTaskA");
+
+        await vm.StartAsync();
+
+        // WPF a413ff2cfd: Copilot funnels into the unified start gate; the localized reason
+        // (with repair guidance) is surfaced instead of silently starting Core tasks.
+        Assert.Equal(expected, vm.LastErrorMessage);
+        Assert.False(fixture.Runtime.SessionService.IsRunOwner("Copilot"));
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.True(await WaitForLogContainsAsync(
+            fixture.Runtime.DiagnosticsService.ErrorLogPath,
+            "[Copilot.Start.ResourceBroken]",
+            retry: 40));
+    }
+
     private static string CreateTempFile(string contents)
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));

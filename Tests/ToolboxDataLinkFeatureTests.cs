@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using MAAUnified.App.ViewModels.Toolbox;
+using MAAUnified.Application.Models;
 using MAAUnified.CoreBridge;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
@@ -12,6 +13,34 @@ namespace MAAUnified.Tests;
 /// </summary>
 public sealed class ToolboxDataLinkFeatureTests
 {
+    [Fact]
+    public async Task Toolbox_ResourceBroken_ShouldBlockEveryCoreToolAndSurfaceRepairGuidance()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        fixture.Runtime.MarkResourceBroken("TaskQueue.SubTaskError.UnknownTask:MissingTaskA");
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+        var blockedText = vm.RootTexts.GetOrDefault("ResourceBrokenTaskBlocked", "ResourceBrokenTaskBlocked");
+
+        // WPF a413ff2cfd: every toolbox Core entry shares the unified start gate and reports
+        // the localized reason instead of silently failing after a connect attempt.
+        await vm.StartDepotAsync();
+        Assert.Equal(UiErrorCode.ResourceBroken, vm.LastExecutionErrorCode);
+        Assert.Contains(blockedText, vm.ResultText, StringComparison.Ordinal);
+        Assert.Contains(blockedText, vm.LastErrorMessage, StringComparison.Ordinal);
+
+        await vm.StartRecruitAsync();
+        Assert.Equal(UiErrorCode.ResourceBroken, vm.LastExecutionErrorCode);
+
+        await vm.TogglePeepAsync();
+        Assert.Equal(UiErrorCode.ResourceBroken, vm.LastExecutionErrorCode);
+        Assert.False(vm.Peeping);
+
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.Equal(0, fixture.Bridge.ConnectCallCount);
+        Assert.Equal(0, fixture.Bridge.StartCallCount);
+    }
+
     [Fact]
     public async Task ApplyRuntimeCallback_DepotDone_ShouldReportBaseMaterials()
     {

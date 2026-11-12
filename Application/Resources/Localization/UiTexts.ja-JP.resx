@@ -5553,4 +5553,16 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="Settings.Game.RunDurationLimitExecutePostActions" xml:space="preserve">
     <value>停止後に完了後の動作を実行する</value>
   </data>
+  <data name="ResourceBrokenTaskBlocked" xml:space="preserve">
+    <value>リソースが破損しているため、タスクを開始できません。{key=ResourceBrokenRepairGuidance}</value>
+  </data>
+  <data name="ResourceBrokenRepairGuidance" xml:space="preserve">
+    <value>設定 > バージョン更新 でリソース更新を確認するか、完全版パッケージを再ダウンロードして MAA を再起動してください。リソースの再読み込みに成功すると制限は解除されます。</value>
+  </data>
+  <data name="UnknownTaskInChain" xml:space="preserve">
+    <value>タスクチェーンが未定義のタスク（{0}）を参照しています。リソースが破損しているか、アプリのバージョンと一致していない可能性があります。タスクを停止しました。</value>
+  </data>
+  <data name="CoreLoadingTip" xml:space="preserve">
+    <value>MAA コアはまだ読み込み中です。しばらくしてから再度お試しください。</value>
+  </data>
 </root>

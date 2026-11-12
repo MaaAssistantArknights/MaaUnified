@@ -11,6 +11,7 @@ public static class UiErrorCode
     public const string AppRestartUnsupported = "AppRestartUnsupported";
     public const string AutostartQueryFailed = "AutostartQueryFailed";
     public const string CoreUnknown = "CoreUnknown";
+    public const string CoreNotReady = "CoreNotReady";
     public const string ConnectFailed = "ConnectFailed";
     public const string ImportFailed = "ImportFailed";
     public const string InvalidWaitTime = "InvalidWaitTime";
@@ -25,6 +26,7 @@ public static class UiErrorCode
     public const string ProfileMissing = "ProfileMissing";
     public const string RemoteControlConnectivityFailed = "RemoteControlConnectivityFailed";
     public const string RequiresRestart = "RequiresRestart";
+    public const string ResourceBroken = "ResourceBroken";
     public const string SessionStateNotAllowed = "SessionStateNotAllowed";
     public const string SettingBatchEmpty = "SettingBatchEmpty";
     public const string SettingKeyMissing = "SettingKeyMissing";

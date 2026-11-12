@@ -27,6 +27,7 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
     private readonly IToolboxFeatureService? _toolboxFeatureService;
     private readonly IMaaCoreBridge? _coreBridge;
     private readonly UiLogService? _logService;
+    private readonly TaskStartGate? _taskStartGate;
     private readonly Func<string, Uri, CancellationToken, Task<EndpointProbeResult>> _probeAsync;
     private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _sendHttpAsync;
     private readonly HashSet<string?> _seenTaskIds = new(StringComparer.Ordinal);
@@ -52,6 +53,31 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         UiLogService? logService,
         Func<string, Uri, CancellationToken, Task<EndpointProbeResult>>? probeAsync = null,
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? sendHttpAsync = null)
+        : this(
+            configService,
+            sessionService,
+            connectFeatureService,
+            taskQueueFeatureService,
+            toolboxFeatureService,
+            coreBridge,
+            logService,
+            probeAsync,
+            sendHttpAsync,
+            taskStartGate: null)
+    {
+    }
+
+    internal RemoteControlFeatureService(
+        UnifiedConfigurationService? configService,
+        UnifiedSessionService? sessionService,
+        IConnectFeatureService? connectFeatureService,
+        ITaskQueueFeatureService? taskQueueFeatureService,
+        IToolboxFeatureService? toolboxFeatureService,
+        IMaaCoreBridge? coreBridge,
+        UiLogService? logService,
+        Func<string, Uri, CancellationToken, Task<EndpointProbeResult>>? probeAsync,
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>>? sendHttpAsync,
+        TaskStartGate? taskStartGate)
     {
         _configService = configService;
         _sessionService = sessionService;
@@ -60,6 +86,7 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
         _toolboxFeatureService = toolboxFeatureService;
         _coreBridge = coreBridge;
         _logService = logService;
+        _taskStartGate = taskStartGate;
         _probeAsync = probeAsync ?? ProbeEndpointAsync;
         _sendHttpAsync = sendHttpAsync ?? DefaultSendAsync;
     }
@@ -262,7 +289,8 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
             _taskQueueFeatureService,
             _toolboxFeatureService,
             _coreBridge,
-            _logService);
+            _logService,
+            _taskStartGate);
 
     // WPF parity: sequential commands are queued to the dedicated execution
     // loop; instant commands execute immediately on the polling loop; unknown

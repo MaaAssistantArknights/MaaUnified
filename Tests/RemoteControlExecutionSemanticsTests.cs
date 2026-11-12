@@ -50,6 +50,35 @@ public sealed class RemoteControlExecutionSemanticsTests
     }
 
     [Fact]
+    public async Task LinkStart_WhenResourceBroken_ShouldFailAtTheUnifiedGateWithoutDispatching()
+    {
+        await using var bridge = new FakeBridge();
+        var fixture = await ExecFixture.CreateAsync(bridge);
+        var gate = new TaskStartGate();
+        gate.MarkResourceBroken("TaskQueue.SubTaskError.UnknownTask:MissingTaskA");
+        var dispatcher = new RemoteControlCommandDispatcher(
+            fixture.Config,
+            fixture.Session,
+            new ConnectFeatureService(fixture.Session, fixture.Config),
+            new TaskQueueFeatureService(fixture.Session, fixture.Config),
+            null,
+            bridge,
+            fixture.Log,
+            gate);
+
+        var result = await dispatcher.DispatchAsync(
+            new RemoteControlCommandRequest("LinkStart", null, "alice", "pc-1", TaskId: "11"),
+            CancellationToken.None);
+
+        // WPF a413ff2cfd: remote LinkStart waits for idle, then runs the same unified gate;
+        // a broken resource fails the command before connecting or queueing any task.
+        Assert.False(result.Success);
+        Assert.Equal(UiErrorCode.ResourceBroken, result.ErrorCode);
+        Assert.Equal(SessionState.Idle, fixture.Session.CurrentState);
+        Assert.True(gate.IsResourceBroken);
+    }
+
+    [Fact]
     public async Task RouteFetchedCommands_SkipsUnknownCommandsWithoutReport()
     {
         var reportUri = new Uri("http://127.0.0.1:1/report");

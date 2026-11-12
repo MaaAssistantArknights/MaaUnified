@@ -164,6 +164,7 @@ public sealed class UnifiedSessionService
     private readonly UnifiedConfigurationService _configService;
     private readonly UiLogService _logService;
     private readonly SessionStateMachine _stateMachine;
+    private readonly TaskStartGate? _taskStartGate;
     private readonly object _taskIndexMapGate = new();
     private readonly object _runOwnerGate = new();
     private readonly object _connectionOperationGate = new();
@@ -215,12 +216,14 @@ public sealed class UnifiedSessionService
         IMaaCoreBridge bridge,
         UnifiedConfigurationService configService,
         UiLogService logService,
-        SessionStateMachine stateMachine)
+        SessionStateMachine stateMachine,
+        TaskStartGate? taskStartGate = null)
     {
         _bridge = bridge;
         _configService = configService;
         _logService = logService;
         _stateMachine = stateMachine;
+        _taskStartGate = taskStartGate;
         _stateMachine.StateChanged += OnSessionStateChanged;
     }
 
@@ -1888,6 +1891,10 @@ public sealed class UnifiedSessionService
                     if (reloadResult.Success)
                     {
                         _logService.Info($"Session resources reloaded. client={clientType ?? "<current>"}");
+                        // 资源重载成功即证明当前资源可被 Core 正常解析：解除资源破损拦截，
+                        // 用户按修复引导重载/更新资源后无需重启即可继续任务。
+                        _taskStartGate?.ClearResourceBroken(
+                            $"Session.ReloadResource:{clientType ?? "<current>"}");
                     }
                     else
                     {

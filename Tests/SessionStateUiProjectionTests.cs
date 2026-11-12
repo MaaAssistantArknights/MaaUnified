@@ -969,6 +969,9 @@ public sealed class SessionStateUiProjectionTests
             DateTimeOffset.UtcNow);
         var shell = new MainShellViewModel(fixture.Runtime);
         await shell.InitializeAsync();
+        // P0-03 统一启动拦截：Copilot 入口在 Core 预热完成前会被 gate 拦截（WPF
+        // Bootstrapper.TryGetTaskBlockReason 同序），因此先等预热完成再验证 append 窗口。
+        await WaitUntilAsync(() => shell.IsCoreReady, retry: 240, delayMs: 25);
         shell.ConnectionGameSharedState.MacUseBundledAdb = false;
         shell.ConnectionGameSharedState.ConnectAddress = "127.0.0.1:5555";
         shell.ConnectionGameSharedState.ConnectConfig = "General";

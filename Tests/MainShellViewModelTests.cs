@@ -1394,6 +1394,40 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task StartEntries_WhenResourceBroken_ShouldBlockBeforeConnectAndSurfaceRepairGuidance()
+    {
+        var bridge = new BlockingConnectBridge();
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateRunnableShellConfigJson(),
+            bridge: bridge);
+        await fixture.ViewModel.InitializeAsync();
+        Assert.True(await WaitUntilAsync(() => fixture.ViewModel.IsCoreReady, retry: 160, delayMs: 25));
+
+        fixture.Runtime.MarkResourceBroken("TaskQueue.SubTaskError.UnknownTask:MissingTaskA");
+        fixture.ViewModel.GrowlMessages.Clear();
+        var expected = fixture.ViewModel.RootTexts.GetOrDefault(
+            "ResourceBrokenTaskBlocked",
+            "ResourceBrokenTaskBlocked");
+        var connectBefore = bridge.ConnectCallCount;
+
+        // WPF parity (Bootstrapper.TryGetTaskBlockReason, a413ff2cfd): tray and LinkStart
+        // hotkey entries must show the localized block reason and stop before connecting.
+        var action = await fixture.ViewModel.ExecuteTrayCommandAsync(TrayCommandId.Start, "tray-start");
+        var hotkeyOutcome = await fixture.ViewModel.ExecuteLinkStartHotkeyAsync("hotkey-linkstart");
+        await fixture.ViewModel.StartAsync();
+
+        Assert.Equal(ShellUiAction.None, action);
+        Assert.Equal(LinkStartHotkeyOutcome.Started, hotkeyOutcome);
+        Assert.Equal(connectBefore, bridge.ConnectCallCount);
+        Assert.Equal(0, bridge.StartCallCount);
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+        Assert.Equal(expected, fixture.ViewModel.LastError);
+        Assert.Contains(
+            fixture.ViewModel.GrowlMessages,
+            message => message.Contains(expected, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ExecuteTrayCommandAsync_Start_WhileConnecting_RequestsStopInsteadOfSecondStart()
     {
         // WPF parity (MaaHotKeyActionHandler.HandleLinkStart): once LinkStart has been

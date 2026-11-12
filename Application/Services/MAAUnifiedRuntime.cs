@@ -87,7 +87,53 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
 
     public IAppLifecycleService AppLifecycleService { get; set; } = new NoOpAppLifecycleService();
 
-    private int _requiresRestart;
+    /// <summary>
+    /// Gets the unified task start gate shared by every entry point that may dispatch tasks to
+    /// Core. WPF parity (<c>Bootstrapper.TryGetTaskBlockReason</c>): resource broken &gt;
+    /// restart required &gt; core not initialized.
+    /// </summary>
+    public TaskStartGate TaskStartGate { get; init; } = new();
+
+    /// <summary>
+    /// Gets a value indicating whether the loaded Core resource is broken this session
+    /// (for example a task chain referenced an undefined task name).
+    /// </summary>
+    public bool IsResourceBroken => TaskStartGate.IsResourceBroken;
+
+    /// <summary>
+    /// Gets the diagnostic reason recorded when <see cref="IsResourceBroken"/> was first set.
+    /// </summary>
+    public string? ResourceBrokenReason => TaskStartGate.ResourceBrokenReason;
+
+    /// <summary>
+    /// 标记 Core 资源破损：错误日志 + 拦截所有新任务启动，直到资源重新加载成功。
+    /// </summary>
+    /// <param name="reason">诊断原因（触发点）。</param>
+    public void MarkResourceBroken(string reason) => TaskStartGate.MarkResourceBroken(reason);
+
+    /// <summary>
+    /// 资源修复/重载成功后解除资源破损拦截。
+    /// </summary>
+    /// <param name="reason">诊断原因（解除来源）。</param>
+    /// <returns>本次调用是否真的解除了拦截。</returns>
+    public bool ClearResourceBroken(string reason) => TaskStartGate.ClearResourceBroken(reason);
+
+    /// <summary>
+    /// 更新 Core 初始化完成状态，供统一启动拦截判定使用。
+    /// </summary>
+    /// <param name="isReady">Core 是否可用。</param>
+    /// <param name="message">Core 未就绪时的用户可见原因。</param>
+    public void SetCoreReady(bool isReady, string? message = null) => TaskStartGate.SetCoreReady(isReady, message);
+
+    /// <summary>
+    /// 获取当前禁止开始新任务的原因；<see langword="null"/> 表示可启动。
+    /// 所有下发 Core 任务的入口统一经此判定。
+    /// </summary>
+    /// <param name="scope">发起启动的入口标识，用于日志定位。</param>
+    /// <param name="coreWarmupAvailable">该入口是否会自行触发 Core 预热。</param>
+    /// <returns>拦截结果；可启动时为 <see langword="null"/>。</returns>
+    public TaskStartBlock? TryGetTaskStartBlock(string scope, bool coreWarmupAvailable = false)
+        => TaskStartGate.TryGetBlock(scope, coreWarmupAvailable);
 
     /// <summary>
     /// Gets a value indicating whether this session must be restarted before new tasks may run.
@@ -96,28 +142,18 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
     /// device removal makes the GPU inference device unavailable. Both cases block every task
     /// start until the process restarts. Process-scoped, so restarting clears it.
     /// </summary>
-    public bool RequiresRestart => Volatile.Read(ref _requiresRestart) != 0;
+    public bool RequiresRestart => TaskStartGate.RequiresRestart;
 
     /// <summary>
     /// Gets the diagnostic reason recorded when <see cref="RequiresRestart"/> was first set.
     /// </summary>
-    public string? RequiresRestartReason { get; private set; }
+    public string? RequiresRestartReason => TaskStartGate.RequiresRestartReason;
 
     /// <summary>
     /// Marks the current session as requiring a restart. Idempotent: the first reason wins.
     /// </summary>
     /// <param name="reason">Diagnostic reason (scope or Core exception kind).</param>
-    public void MarkRequiresRestart(string reason)
-    {
-        var normalized = string.IsNullOrWhiteSpace(reason) ? "unspecified" : reason.Trim();
-        if (Interlocked.Exchange(ref _requiresRestart, 1) == 1)
-        {
-            return;
-        }
-
-        RequiresRestartReason = normalized;
-        LogService.Warn($"Runtime requires restart: {normalized}. Further task starts are blocked until the process restarts.");
-    }
+    public void MarkRequiresRestart(string reason) => TaskStartGate.MarkRequiresRestart(reason);
 
     public async ValueTask DisposeAsync()
     {
@@ -274,7 +310,8 @@ public static class MAAUnifiedRuntimeFactory
         diagnosticsService.SetSensitiveValueProvider(sensitiveValueProvider);
         var bridge = new MaaCoreBridgeNative();
         var stateMachine = new SessionStateMachine();
-        var sessionService = new UnifiedSessionService(bridge, configService, logService, stateMachine);
+        var taskStartGate = new TaskStartGate(logService, () => ResolveTaskStartGateLanguage(configService));
+        var sessionService = new UnifiedSessionService(bridge, configService, logService, stateMachine, taskStartGate);
         var platform = PlatformServicesFactory.CreateDefaults();
         var resourceWorkflowService = new ResourceWorkflowService(
             runtimeBaseDirectory,
@@ -300,7 +337,10 @@ public static class MAAUnifiedRuntimeFactory
             taskQueueFeatureService,
             toolboxFeatureService,
             bridge,
-            logService);
+            logService,
+            probeAsync: null,
+            sendHttpAsync: null,
+            taskStartGate: taskStartGate);
         var platformCapabilityService = new PlatformCapabilityFeatureService(platform, diagnosticsService);
         var overlayFeatureService = new OverlayFeatureService(platformCapabilityService);
         var notificationProviderFeatureService = new NotificationProviderFeatureService(configService);
@@ -338,6 +378,7 @@ public static class MAAUnifiedRuntimeFactory
 
         return new MAAUnifiedRuntime {
             CoreBridge = bridge,
+            TaskStartGate = taskStartGate,
             ConfigurationService = configService,
             ResourceWorkflowService = resourceWorkflowService,
             SessionService = sessionService,
@@ -366,5 +407,18 @@ public static class MAAUnifiedRuntimeFactory
             PostActionFeatureService = postActionFeatureService,
             AppLifecycleService = appLifecycleService,
         };
+    }
+
+    private static string ResolveTaskStartGateLanguage(UnifiedConfigurationService configService)
+    {
+        if (configService.CurrentConfig.GlobalValues.TryGetValue("GUI.Localization", out var value)
+            && value is System.Text.Json.Nodes.JsonValue jsonValue
+            && jsonValue.TryGetValue(out string? language)
+            && !string.IsNullOrWhiteSpace(language))
+        {
+            return UiLanguageCatalog.Normalize(language);
+        }
+
+        return UiLanguageCatalog.DefaultLanguage;
     }
 }

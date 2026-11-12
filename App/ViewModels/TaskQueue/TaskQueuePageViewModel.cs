@@ -334,6 +334,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private int _stallReminderCount;
     private CancellationTokenSource? _runDurationLimitCts;
     private int _stopScriptLaunched;
+    // Resource-broken (UnknownTask) 停止请求发射权：一条链可能连发多次 SubTaskError，
+    // 只允许触发一次停止，新一轮运行开始时重置。
+    private int _resourceBrokenStopRequested;
     // Durable ｢this run was started by the main queue｣ marker for terminal callback handling.
     // The session clears its run owner as soon as the state watermark flips to Connected, which
     // can happen before the queued AllTasksCompleted handler runs; WPF snapshots the owner in the
@@ -1668,6 +1671,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         IsCoreReady = isReady;
         CoreInitializationMessage = isReady ? string.Empty : (message?.Trim() ?? string.Empty);
+        // WPF parity (Bootstrapper.TryGetTaskBlockReason): core readiness feeds the unified
+        // start gate so non-task-queue entries (Copilot/Toolbox/remote/tray) are blocked the
+        // same way while Core is still warming up.
+        Runtime.SetCoreReady(isReady, message);
     }
 
     public void RefreshStagePresentation(bool forceReloadStageOptions = false)
@@ -3362,26 +3369,30 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     }
 
     /// <summary>
-    /// WPF parity (Bootstrapper.RequiresRestart): once a stop timed out or the GPU inference
-    /// device was removed, Core state is untrusted and every start entry is blocked until the
-    /// process restarts. Resource-broken / core-loading reasons are layered on top later.
+    /// WPF parity (Bootstrapper.TryGetTaskBlockReason, a413ff2cfd/2e0ff15edd/43965095df):
+    /// every task start entry shares one gate with a fixed priority — resource broken &gt;
+    /// restart required &gt; core not initialized. The gate also records the diagnostic reason
+    /// so a blocked start is never silent.
     /// </summary>
     /// <param name="scope">Diagnostic scope of the entry being blocked.</param>
-    /// <param name="message">Localized user facing reason.</param>
+    /// <param name="block">Localized block reason and error code.</param>
     /// <returns><see langword="true"/> when the entry must not start a run.</returns>
-    private bool TryGetRequiresRestartBlock(string scope, out string message)
+    private bool TryGetTaskStartBlock(string scope, out TaskStartBlock block)
     {
-        message = string.Empty;
-        if (!Runtime.RequiresRestart)
+        // MAAUnified 的 Core 预热由启动入口自身触发（延迟预热），因此 ｢内核未初始化｣ 交给
+        // EnsureCoreReadyAsync 处理；资源破损 / 需重启仍是硬拦截。
+        var current = Runtime.TryGetTaskStartBlock(
+            scope,
+            coreWarmupAvailable: _ensureCoreReadyForExecutionAsync is not null);
+        if (current is null)
         {
+            block = default;
             return false;
         }
 
-        message = GetRootText(
-            "RestartRecommendation",
-            "It is recommended to restart MAA to restore normal state");
-        Runtime.LogService.Warn(
-            $"{scope} blocked: the session requires a restart ({Runtime.RequiresRestartReason ?? "unspecified"}).");
+        block = current.Value;
+        LastErrorMessage = block.Message;
+        AppendStartFailureLog(block.Message);
         return true;
     }
 
@@ -3389,13 +3400,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         IDisposable? exclusiveSessionOperationLease,
         CancellationToken cancellationToken)
     {
-        if (TryGetRequiresRestartBlock("TaskQueue.Start", out var restartBlockMessage))
+        if (TryGetTaskStartBlock("TaskQueue.Start", out var startBlock))
         {
-            LastErrorMessage = restartBlockMessage;
-            AppendStartFailureLog(restartBlockMessage);
             await RecordFailedResultAsync(
-                "TaskQueue.Start.RequiresRestart",
-                UiOperationResult.Fail(UiErrorCode.RequiresRestart, restartBlockMessage),
+                "TaskQueue.Start." + startBlock.Kind,
+                UiOperationResult.Fail(startBlock.ErrorCode, startBlock.Message),
                 cancellationToken);
             return;
         }
@@ -3470,6 +3479,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             SetStartRequestActive(true);
             // WPF parity (LinkStart): a new run restarts the main task progress counter.
             MainTasksCompletedCount = 0;
+            Interlocked.Exchange(ref _resourceBrokenStopRequested, 0);
             try
             {
                 if (_isCoreQueueCleanupRequired
@@ -4586,13 +4596,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public async Task RunSelectedTaskOnceAsync(CancellationToken cancellationToken = default)
     {
-        if (TryGetRequiresRestartBlock("TaskQueue.RunOnce", out var restartBlockMessage))
+        if (TryGetTaskStartBlock("TaskQueue.RunOnce", out var startBlock))
         {
-            LastErrorMessage = restartBlockMessage;
-            AppendStartFailureLog(restartBlockMessage);
             await RecordFailedResultAsync(
-                "TaskQueue.RunOnce.RequiresRestart",
-                UiOperationResult.Fail(UiErrorCode.RequiresRestart, restartBlockMessage),
+                "TaskQueue.RunOnce." + startBlock.Kind,
+                UiOperationResult.Fail(startBlock.ErrorCode, startBlock.Message),
                 cancellationToken);
             return;
         }
@@ -4656,6 +4664,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             _roguelikeDelayStopForceRequested = false;
             _stopStartRequestTask = null;
             _runStartTime = DateTime.Now;
+            Interlocked.Exchange(ref _resourceBrokenStopRequested, 0);
             var keepRunOwner = false;
             startRequestCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _startRequestCts = startRequestCts;
@@ -4892,13 +4901,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private async Task RunAccountSwitchManualAsync(CancellationToken cancellationToken)
     {
-        if (TryGetRequiresRestartBlock("TaskQueue.AccountSwitch", out var restartBlockMessage))
+        if (TryGetTaskStartBlock("TaskQueue.AccountSwitch", out var startBlock))
         {
-            LastErrorMessage = restartBlockMessage;
-            AppendStartFailureLog(restartBlockMessage);
             await RecordFailedResultAsync(
-                "TaskQueue.AccountSwitch.RequiresRestart",
-                UiOperationResult.Fail(UiErrorCode.RequiresRestart, restartBlockMessage),
+                "TaskQueue.AccountSwitch." + startBlock.Kind,
+                UiOperationResult.Fail(startBlock.ErrorCode, startBlock.Message),
                 cancellationToken);
             return;
         }
@@ -4940,6 +4947,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             _roguelikeDelayStopForceRequested = false;
             _stopStartRequestTask = null;
             _runStartTime = DateTime.Now;
+            Interlocked.Exchange(ref _resourceBrokenStopRequested, 0);
             var keepRunOwner = false;
             startRequestCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             _startRequestCts = startRequestCts;
@@ -6901,6 +6909,86 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         };
     }
 
+    /// <summary>
+    /// WPF parity (2e0ff15edd, AsstProxy.ProcSubTaskError): <c>ProcessTask</c> reports
+    /// <c>what = UnknownTask</c> when the recognition list references a task name that is not
+    /// defined in the loaded resource. Resource and application version therefore disagree, so
+    /// the run must stop and all new starts must be blocked until the resources are repaired.
+    /// </summary>
+    /// <param name="payload">Parsed SubTaskError payload.</param>
+    /// <param name="unknownTasks">任务名列表（可能为空：details 缺失时仍按资源破损处理）。</param>
+    /// <returns>是否为未定义任务回调。</returns>
+    private static bool TryGetUnknownTaskNames(CallbackPayload payload, out IReadOnlyList<string> unknownTasks)
+    {
+        unknownTasks = [];
+        if (!string.Equals(payload.What, "UnknownTask", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(payload.SubTask)
+            && !string.Equals(payload.SubTask, "ProcessTask", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (payload.Details?["tasks"] is JsonArray tasks)
+        {
+            unknownTasks = tasks
+                .Select(static node => node?.ToString().Trim() ?? string.Empty)
+                .Where(static name => name.Length > 0)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+        }
+
+        return true;
+    }
+
+    private async Task HandleUnknownTaskInChainAsync(
+        CoreCallbackEvent callback,
+        IReadOnlyList<string> unknownTasks)
+    {
+        var listed = unknownTasks.Count == 0 ? "<unknown>" : string.Join(", ", unknownTasks);
+        var message = string.Format(
+            CultureInfo.CurrentCulture,
+            GetRootText(
+                "UnknownTaskInChain",
+                "The task chain references an undefined task ({0}). The resource may be damaged or mismatched with the application version. Tasks have been stopped."),
+            listed);
+        LastErrorMessage = message;
+
+        var alreadyBroken = Runtime.IsResourceBroken;
+        Runtime.MarkResourceBroken($"TaskQueue.SubTaskError.UnknownTask:{listed}");
+        if (!alreadyBroken)
+        {
+            // WPF logs the formatted error, then shows the repair prompt. The queue panel gets
+            // both the error and the repair guidance so the block is never silent.
+            AppendLogEntry(callback.Timestamp, message, "ERROR", updateThumbnail: false);
+            AppendLogEntry(
+                callback.Timestamp,
+                GetRootText(
+                    "ResourceBrokenRepairGuidance",
+                    "Go to Settings > Version update to check for a resource update (or download the full package again) and restart MAA. The block is lifted once the resources reload successfully."),
+                "WARNING",
+                updateThumbnail: false,
+                notifyActivity: false);
+        }
+
+        await RecordFailedResultAsync(
+            "TaskQueue.SubTaskError.UnknownTask",
+            UiOperationResult.Fail(UiErrorCode.ResourceBroken, message),
+            CancellationToken.None);
+
+        // 只有主队列持有的运行才由本页停止：Copilot/工具箱的运行归各自页面收尾，
+        // 这里只置资源破损位拦截后续启动（WPF 只有一个任务队列，故直接停止）。
+        if (Interlocked.CompareExchange(ref _resourceBrokenStopRequested, 1, 0) == 0
+            && Runtime.SessionService.IsRunOwner(TaskQueueRunOwner)
+            && CurrentSessionState is SessionState.Running or SessionState.Stopping)
+        {
+            _ = StopAsync(userInitiated: false);
+        }
+    }
+
     private void QueueAutomaticNotifications(
         CoreCallbackEvent callback,
         CallbackPayload payload,
@@ -8388,6 +8476,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private async Task HandleCallbackCoreAsync(CoreCallbackEvent callback, RunOwnershipLease? callbackRunLease)
     {
+        // 资源破损检测必须先于运行归属判定：未知任务说明资源与代码不匹配，无论当前运行
+        // 由主队列还是 Copilot/工具箱发起，都要置资源破损态并阻止后续启动。
+        if (string.Equals(callback.MsgName, "SubTaskError", StringComparison.Ordinal)
+            && TryGetUnknownTaskNames(ParseCallbackPayload(callback.PayloadJson), out var unknownTasks))
+        {
+            await HandleUnknownTaskInChainAsync(callback, unknownTasks);
+        }
+
         var currentOwner = Runtime.SessionService.CurrentRunOwner;
         if (!string.IsNullOrWhiteSpace(currentOwner) && !Runtime.SessionService.IsRunOwner(TaskQueueRunOwner))
         {

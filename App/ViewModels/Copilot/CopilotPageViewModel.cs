@@ -793,16 +793,15 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        if (Runtime.RequiresRestart)
+        if (Runtime.TryGetTaskStartBlock("Copilot.Start") is { } startBlock)
         {
-            // WPF parity (Bootstrapper.TryGetTaskBlockReason): a stop timeout or a removed GPU
-            // inference device leaves Core untrusted; Copilot is gated like the main queue.
-            LastErrorMessage = RootTexts.GetOrDefault(
-                "RestartRecommendation",
-                "It is recommended to restart MAA to restore normal state");
+            // WPF parity (Bootstrapper.TryGetTaskBlockReason, a413ff2cfd): Copilot shares the
+            // unified start gate with the main queue — resource broken > restart required >
+            // core still loading, and the block reason is always surfaced.
+            LastErrorMessage = startBlock.Message;
             await RecordFailedResultAsync(
-                "Copilot.Start.RequiresRestart",
-                UiOperationResult.Fail(UiErrorCode.RequiresRestart, LastErrorMessage),
+                "Copilot.Start." + startBlock.Kind,
+                UiOperationResult.Fail(startBlock.ErrorCode, startBlock.Message),
                 cancellationToken);
             return;
         }

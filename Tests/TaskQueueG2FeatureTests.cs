@@ -925,6 +925,103 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
+    public async Task SubTaskError_UnknownTask_ShouldMarkResourceBrokenLogStopAndBlockEveryStartEntry()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        var stopCallsBefore = fixture.Bridge.StopCallCount;
+
+        await InvokeCallbackCoreAsync(
+            vm,
+            new CoreCallbackEvent(
+                10,
+                "SubTaskError",
+                """{"taskchain":"StartUp","subtask":"ProcessTask","task_id":10,"what":"UnknownTask","details":{"tasks":["MissingTaskA","MissingTaskB"]}}""",
+                DateTimeOffset.UtcNow),
+            null);
+
+        // WPF 2e0ff15edd: 未定义任务 = 资源与程序版本不匹配，必须进入资源破损态并记错误日志。
+        Assert.True(fixture.Runtime.IsResourceBroken);
+        var unknownTaskText = vm.RootTexts.GetOrDefault("UnknownTaskInChain", "UnknownTaskInChain")
+            .Replace("{0}", "MissingTaskA, MissingTaskB", StringComparison.Ordinal);
+        Assert.Contains(
+            vm.LogCards.SelectMany(card => card.Items),
+            item => item.Content.Contains(unknownTaskText, StringComparison.Ordinal)
+                    && string.Equals(item.Level, "ERROR", StringComparison.OrdinalIgnoreCase));
+        var guidanceText = vm.RootTexts.GetOrDefault("ResourceBrokenRepairGuidance", "ResourceBrokenRepairGuidance");
+        Assert.Contains(
+            vm.LogCards.SelectMany(card => card.Items),
+            item => item.Content.Contains(guidanceText, StringComparison.Ordinal));
+
+        // 主队列持有的运行由队列页停止；同一条链的重复回调只能触发一次停止。
+        Assert.True(await WaitForConditionAsync(
+            () => fixture.Bridge.StopCallCount == stopCallsBefore + 1 && !vm.IsRunning,
+            retry: 200,
+            delayMs: 20));
+        await InvokeCallbackCoreAsync(
+            vm,
+            new CoreCallbackEvent(
+                11,
+                "SubTaskError",
+                """{"taskchain":"StartUp","subtask":"ProcessTask","task_id":10,"what":"UnknownTask","details":{"tasks":["MissingTaskA"]}}""",
+                DateTimeOffset.UtcNow),
+            null);
+        await Task.Delay(100);
+        Assert.Equal(stopCallsBefore + 1, fixture.Bridge.StopCallCount);
+
+        // 主队列与单次运行都被统一拦截，且把本地化原因回显给用户。
+        var blockedText = vm.RootTexts.GetOrDefault("ResourceBrokenTaskBlocked", "ResourceBrokenTaskBlocked");
+        var startCallsBefore = fixture.Bridge.StartCallCount;
+        await vm.StartAsync();
+        Assert.Equal(startCallsBefore, fixture.Bridge.StartCallCount);
+        Assert.Equal(blockedText, vm.LastErrorMessage);
+
+        vm.SelectedTask = vm.Tasks[0];
+        await vm.RunSelectedTaskOnceAsync();
+        Assert.Equal(startCallsBefore, fixture.Bridge.StartCallCount);
+        Assert.Equal(blockedText, vm.LastErrorMessage);
+
+        // 修复引导：资源重载成功后自动解除拦截，可再次启动。
+        var reload = await fixture.Runtime.SessionService.ReloadResourceWhenIdleAsync(
+            waitTimeout: TimeSpan.FromSeconds(2));
+        Assert.True(reload.Success);
+        Assert.False(fixture.Runtime.IsResourceBroken);
+        Assert.Null(fixture.Runtime.TryGetTaskStartBlock("Test"));
+
+        await vm.StartAsync();
+        Assert.Equal(startCallsBefore + 1, fixture.Bridge.StartCallCount);
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task SubTaskError_NonUnknownTask_ShouldNotMarkResourceBroken()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackCoreAsync(
+            vm,
+            new CoreCallbackEvent(
+                12,
+                "SubTaskError",
+                """{"taskchain":"Fight","subtask":"RecognizeDrops","task_id":12}""",
+                DateTimeOffset.UtcNow),
+            null);
+
+        Assert.False(fixture.Runtime.IsResourceBroken);
+        Assert.Null(fixture.Runtime.TryGetTaskStartBlock("Test"));
+    }
+
+    [Fact]
     public async Task ConnectionInfo_ResolutionChanged_ShouldLogErrorWithNewResolution()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -3539,7 +3636,8 @@ public sealed class TaskQueueG2FeatureTests
             var readyAdbPath = await TestConnectionFixtureSupport.PrepareReadyRuntimeAsync(root, config, "taskqueue-g2-ready");
 
             var bridge = new CapturingBridge();
-            var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine());
+            var taskStartGate = new TaskStartGate(log);
+            var session = new UnifiedSessionService(bridge, config, log, new SessionStateMachine(), taskStartGate);
             var taskQueue = new TaskQueueFeatureService(session, config);
 
             var platform = new PlatformServiceBundle
@@ -3562,6 +3660,7 @@ public sealed class TaskQueueG2FeatureTests
             var runtime = new MAAUnifiedRuntime
             {
                 CoreBridge = bridge,
+                TaskStartGate = taskStartGate,
                 ConfigurationService = config,
                 ResourceWorkflowService = new ResourceWorkflowService(root, bridge, log),
                 SessionService = session,
@@ -3761,6 +3860,16 @@ public sealed class TaskQueueG2FeatureTests
             return hadQueuedWork
                 ? CoreResult<bool>.Ok(true)
                 : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "not running"));
+        }
+
+        public int ReloadResourceCallCount { get; private set; }
+
+        public Task<CoreResult<bool>> ReloadResourceAsync(
+            string? clientType = null,
+            CancellationToken cancellationToken = default)
+        {
+            ReloadResourceCallCount++;
+            return Task.FromResult(CoreResult<bool>.Ok(true));
         }
 
         public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)
