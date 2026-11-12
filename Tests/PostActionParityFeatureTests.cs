@@ -386,9 +386,18 @@ public sealed class PostActionParityFeatureTests
 
         if (OperatingSystem.IsMacOS())
         {
-            Assert.False(capability.Supported);
-            Assert.Equal("macos-placeholder", capability.Provider);
-            Assert.Contains("not implemented", capability.Message, StringComparison.OrdinalIgnoreCase);
+            // macOS 走系统 CGSession 助手：存在即支持，缺失则显式降级而不是假成功。
+            Assert.Equal("macos-cgsession", capability.Provider);
+            if (capability.Supported)
+            {
+                Assert.Contains("CGSession", capability.Message, StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.Contains("CGSession", capability.Message, StringComparison.Ordinal);
+                Assert.True(capability.HasFallback);
+            }
+
             return;
         }
 

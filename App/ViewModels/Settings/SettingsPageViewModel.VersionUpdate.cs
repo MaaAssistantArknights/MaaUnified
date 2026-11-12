@@ -78,6 +78,66 @@ public sealed partial class SettingsPageViewModel
         VersionUpdateErrorMessage = string.Empty;
     }
 
+    /// <summary>
+    /// 导入本地更新包（WPF 63d39b42c1 / 112b242020 的拖入安装入口）：校验包名、平台架构与
+    /// 版本方向后注册为待安装包；同版本允许作为完整包修复。用户取消选择时返回取消结果。
+    /// </summary>
+    /// <param name="packagePath">用户选择的更新包路径。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>注册结果。</returns>
+    public async Task<UiOperationResult> ImportLocalUpdatePackageAsync(
+        string packagePath,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(packagePath) || !File.Exists(packagePath))
+        {
+            var missing = RootTexts.GetOrDefault(
+                "Settings.VersionUpdate.ImportPackage.Missing",
+                "所选更新包不存在，请重新选择。");
+            VersionUpdateStatusMessage = string.Empty;
+            VersionUpdateErrorMessage = missing;
+            await RecordFailedResultAsync(
+                "Settings.VersionUpdate.ImportPackage",
+                UiOperationResult.Fail(UiErrorCode.VersionUpdateInvalidParameters, missing),
+                cancellationToken);
+            return UiOperationResult.Fail(UiErrorCode.VersionUpdateInvalidParameters, missing);
+        }
+
+        var registration = PendingAppUpdateService.TryRegisterPendingUpdatePackage(
+            ResolveRuntimeBaseDirectory(),
+            packagePath,
+            ResolveSoftwareUpdateCurrentVersion(),
+            allowSameVersionReinstall: true);
+        if (!registration.Registered)
+        {
+            VersionUpdateStatusMessage = string.Empty;
+            VersionUpdateErrorMessage = registration.Message;
+            await RecordFailedResultAsync(
+                "Settings.VersionUpdate.ImportPackage",
+                UiOperationResult.Fail(UiErrorCode.VersionUpdateInvalidParameters, registration.Message),
+                cancellationToken);
+            return UiOperationResult.Fail(UiErrorCode.VersionUpdateInvalidParameters, registration.Message);
+        }
+
+        VersionUpdateName = registration.TargetVersion ?? VersionUpdateName;
+        VersionUpdatePackage = Path.GetFullPath(packagePath);
+        VersionUpdateDoNotShow = false;
+        SetPendingVersionUpdateAvailability(true);
+        VersionUpdateErrorMessage = string.Empty;
+        VersionUpdateStatusMessage = registration.SameVersionReinstall
+            ? RootTexts.GetOrDefault(
+                "Settings.VersionUpdate.ImportPackage.SameVersion",
+                "已注册同版本完整包，可在下次启动时修复安装。")
+            : RootTexts.GetOrDefault(
+                "Settings.VersionUpdate.ImportPackage.Success",
+                "已注册更新包，可在下次启动时安装。");
+        await RecordEventAsync(
+            "Settings.VersionUpdate.ImportPackage",
+            $"Registered local update package: {Path.GetFileName(packagePath)} (target {registration.TargetVersion}).",
+            cancellationToken);
+        return UiOperationResult.Ok(VersionUpdateStatusMessage);
+    }
+
     public async Task SaveVersionUpdateProxyAsync(CancellationToken cancellationToken = default)
     {
         VersionUpdateStatusMessage = string.Empty;

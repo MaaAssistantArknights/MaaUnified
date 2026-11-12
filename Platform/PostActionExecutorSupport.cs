@@ -464,13 +464,16 @@ internal static class PostActionExecutorSupport
 /// Lock-screen capability and execution.
 /// WPF parity: <c>Utilities/PowerManagement.cs</c> <c>LockScreen()</c> (d58cb0825b) calls
 /// <c>LockWorkStation</c>, and the post-action flow cancels the countdown before locking.
-/// MAAUnified implements the Windows API (the only API WPF uses) plus a best-effort Linux
-/// session lock; macOS is an explicit placeholder because macOS exposes no supported API for
-/// locking the console session without user interaction.
+/// MAAUnified implements the Windows API (the only API WPF uses), a best-effort Linux session
+/// lock, and macOS via the system `CGSession -suspend` helper (the same non-interactive path
+/// used by login-window tooling); when the helper is unavailable the capability degrades.
 /// </summary>
 internal static class LockScreenHelper
 {
     private const string Provider = "post-action";
+
+    private const string MacLockScreenHelperPath =
+        "/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession";
 
     private static readonly (string FileName, string Arguments, string Provider)[] LinuxLockCommands =
     [
@@ -509,12 +512,17 @@ internal static class LockScreenHelper
 
         if (OperatingSystem.IsMacOS())
         {
-            return new PlatformCapabilityStatus(
-                false,
-                "Lock screen is not implemented on macOS (placeholder): there is no supported non-interactive lock API.",
-                Provider: "macos-placeholder",
-                HasFallback: true,
-                FallbackMode: "log-only");
+            return File.Exists(MacLockScreenHelperPath)
+                ? new PlatformCapabilityStatus(
+                    true,
+                    "Lock screen is available via the macOS CGSession helper.",
+                    Provider: "macos-cgsession")
+                : new PlatformCapabilityStatus(
+                    false,
+                    "Lock screen requires the macOS CGSession helper, which was not found.",
+                    Provider: "macos-cgsession",
+                    HasFallback: true,
+                    FallbackMode: "log-only");
         }
 
         return new PlatformCapabilityStatus(
@@ -550,6 +558,26 @@ internal static class LockScreenHelper
                 "Lock screen command accepted.",
                 command.FileName,
                 command.Arguments,
+                cancellationToken);
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            if (!File.Exists(MacLockScreenHelperPath))
+            {
+                return PlatformOperation.Failed(
+                    "macos-cgsession",
+                    "Lock screen requires the macOS CGSession helper, which was not found.",
+                    PlatformErrorCodes.PostActionUnsupported,
+                    "post-action.LockScreen");
+            }
+
+            return await PostActionExecutorSupport.ExecuteDirectCommandAsync(
+                "macos-cgsession",
+                "post-action.LockScreen",
+                "Lock screen command accepted.",
+                MacLockScreenHelperPath,
+                "-suspend",
                 cancellationToken);
         }
 

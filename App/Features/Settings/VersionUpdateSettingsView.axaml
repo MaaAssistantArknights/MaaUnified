@@ -227,7 +227,7 @@
         <Grid Margin="0,8,0,0"
               HorizontalAlignment="Left"
               RowDefinitions="Auto,10,Auto"
-              ColumnDefinitions="Auto,12,Auto,24,Auto">
+              ColumnDefinitions="Auto,12,Auto,24,Auto,24,Auto">
           <Button Grid.Row="0"
                   Grid.Column="0"
                   HorizontalAlignment="Left"
@@ -242,6 +242,12 @@
                   Content="{Binding RootTexts[Settings.VersionUpdate.Changelog]}"
                   IsEnabled="{Binding CanRunVersionUpdateActions}"
                   Click="OnOpenChangelogClick" />
+          <Button Grid.Row="0"
+                  Grid.Column="6"
+                  HorizontalAlignment="Left"
+                  Classes="app-button app-secondary"
+                  Content="{Binding RootTexts[Settings.VersionUpdate.ImportPackage]}"
+                  Click="OnImportLocalUpdatePackageClick" />
 
           <Button Grid.Row="2"
                   Grid.Column="0"

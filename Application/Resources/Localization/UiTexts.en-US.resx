@@ -4465,6 +4465,18 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.VersionUpdate.Changelog" xml:space="preserve">
     <value>Changelog</value>
   </data>
+  <data name="Settings.VersionUpdate.ImportPackage" xml:space="preserve">
+    <value>Import update package</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Missing" xml:space="preserve">
+    <value>The selected update package does not exist. Choose it again.</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.SameVersion" xml:space="preserve">
+    <value>Same-version full package registered; it will repair the installation on the next launch.</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Success" xml:space="preserve">
+    <value>Update package registered; it will be installed on the next launch.</value>
+  </data>
   <data name="Settings.VersionUpdate.Channel" xml:space="preserve">
     <value>Update channel</value>
   </data>

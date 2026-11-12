@@ -3022,6 +3022,18 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="Settings.VersionUpdate.Changelog" xml:space="preserve">
     <value>更新日誌</value>
   </data>
+  <data name="Settings.VersionUpdate.ImportPackage" xml:space="preserve">
+    <value>匯入本機更新包</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Missing" xml:space="preserve">
+    <value>所選更新包不存在，請重新選擇。</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.SameVersion" xml:space="preserve">
+    <value>已註冊同版本完整包，可在下次啟動時修復安裝。</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Success" xml:space="preserve">
+    <value>已註冊更新包，可在下次啟動時安裝。</value>
+  </data>
   <data name="Settings.VersionUpdate.Channel" xml:space="preserve">
     <value>更新通道</value>
   </data>

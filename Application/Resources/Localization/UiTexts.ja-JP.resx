@@ -3133,6 +3133,18 @@ DEBUGディレクトリに保存される画像には数量制限があり、超
   <data name="Settings.VersionUpdate.Changelog" xml:space="preserve">
     <value>更新履歴</value>
   </data>
+  <data name="Settings.VersionUpdate.ImportPackage" xml:space="preserve">
+    <value>更新パッケージを読み込む</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Missing" xml:space="preserve">
+    <value>選択した更新パッケージが見つかりません。選び直してください。</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.SameVersion" xml:space="preserve">
+    <value>同一バージョンの完全パッケージを登録しました。次回起動時に修復します。</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Success" xml:space="preserve">
+    <value>更新パッケージを登録しました。次回起動時にインストールします。</value>
+  </data>
   <data name="Settings.VersionUpdate.Channel" xml:space="preserve">
     <value>更新チャンネル</value>
   </data>

@@ -3134,6 +3134,18 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   <data name="Settings.VersionUpdate.Changelog" xml:space="preserve">
     <value>업데이트 로그</value>
   </data>
+  <data name="Settings.VersionUpdate.ImportPackage" xml:space="preserve">
+    <value>로컬 업데이트 패키지 가져오기</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Missing" xml:space="preserve">
+    <value>선택한 업데이트 패키지가 없습니다. 다시 선택하세요.</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.SameVersion" xml:space="preserve">
+    <value>동일 버전 전체 패키지가 등록되었습니다. 다음 실행 시 설치를 복구합니다.</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Success" xml:space="preserve">
+    <value>업데이트 패키지가 등록되었습니다. 다음 실행 시 설치됩니다.</value>
+  </data>
   <data name="Settings.VersionUpdate.Channel" xml:space="preserve">
     <value>업데이트 채널</value>
   </data>

@@ -4466,6 +4466,18 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.VersionUpdate.Changelog" xml:space="preserve">
     <value>更新日志</value>
   </data>
+  <data name="Settings.VersionUpdate.ImportPackage" xml:space="preserve">
+    <value>导入本地更新包</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Missing" xml:space="preserve">
+    <value>所选更新包不存在，请重新选择。</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.SameVersion" xml:space="preserve">
+    <value>已注册同版本完整包，可在下次启动时修复安装。</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Success" xml:space="preserve">
+    <value>已注册更新包，可在下次启动时安装。</value>
+  </data>
   <data name="Settings.VersionUpdate.Channel" xml:space="preserve">
     <value>更新渠道</value>
   </data>
