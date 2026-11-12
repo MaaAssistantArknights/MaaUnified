@@ -45,6 +45,7 @@ internal static class LegacyTaskSchemaConverter
         ["CustomTask"] = "Custom",
         ["SwitchThemeTask"] = "SwitchTheme",
         ["OperProgressTask"] = "OperProgress",
+        ["DepotMaintainTask"] = "DepotMaintain",
         // Accept already migrated type names.
         ["StartUp"] = "StartUp",
         ["CloseDown"] = "CloseDown",
@@ -60,6 +61,7 @@ internal static class LegacyTaskSchemaConverter
         ["Custom"] = "Custom",
         ["SwitchTheme"] = "SwitchTheme",
         ["OperProgress"] = "OperProgress",
+        ["DepotMaintain"] = "DepotMaintain",
     };
 
     public static bool TryConvertLegacyTask(
@@ -117,6 +119,7 @@ internal static class LegacyTaskSchemaConverter
                 "Custom" => ConvertCustom(legacyTask),
                 "SwitchTheme" => ConvertSwitchTheme(legacyTask),
                 "OperProgress" => ConvertOperProgress(legacyTask, operNames ?? OperNameIndex.Shared),
+                "DepotMaintain" => ConvertDepotMaintain(legacyTask),
                 _ => [],
             };
         }
@@ -926,6 +929,53 @@ internal static class LegacyTaskSchemaConverter
         return new JsonObject
         {
             ["task_names"] = ToJsonArray(SplitCustomTaskNames(GetString(task, "CustomTaskName"))),
+        };
+    }
+
+    // WPF dev-v2 (38b2e9e4f2 / 948f23f8ae / 0e99c81442 / be9cc84fd2 / a7ee2c2bf7 /
+    // e7ef27745e / 0302381585): DepotMaintainTask stores the plan list plus the flags that
+    // shape the compiled Core chains. Plans keep their order and per-plan budgets; the
+    // value type of TaskId is dropped because it is a per-run Core id, not config.
+    private static JsonObject ConvertDepotMaintain(JsonObject task)
+    {
+        var plans = new JsonArray();
+        var legacyPlans = task["PlanList"] ?? task["Plans"] ?? task["planList"];
+        if (legacyPlans is JsonArray planArray)
+        {
+            foreach (var node in planArray)
+            {
+                if (node is not JsonObject plan)
+                {
+                    continue;
+                }
+
+                plans.Add(new JsonObject
+                {
+                    ["stage"] = (GetString(plan, "Stage") ?? string.Empty).Trim(),
+                    ["drop_id"] = (GetString(plan, "DropId") ?? string.Empty).Trim(),
+                    ["drop_count"] = Math.Max(0, GetInt(plan, "DropCount", 0)),
+                    ["use_medicine"] = GetBool(plan, "UseMedicine", false),
+                    ["medicine_count"] = Math.Max(0, GetInt(plan, "MedicineCount", 0)),
+                    ["use_stone"] = GetBool(plan, "UseStone", false),
+                    ["stone_count"] = Math.Max(0, GetInt(plan, "StoneCount", 0)),
+                });
+            }
+        }
+
+        return new JsonObject
+        {
+            ["update_depot"] = GetBool(task, "UpdateDepot", true),
+            ["is_stage_manually"] = GetBool(task, "IsStageManually", false),
+            ["skip_during_activity"] = GetBool(task, "SkipDuringActivity", false),
+            ["skip_during_resource_collection"] = GetBool(task, "SkipDuringResourceCollection", false),
+            ["only_first_insufficient_plan"] = GetBool(task, "OnlyFirstInsufficientPlan", false),
+            ["sort_by_progress"] = GetBool(task, "SortByProgress", false),
+            ["count_dual_chip_as_chip_pack"] = GetBool(task, "CountDualChipAsChipPack", false),
+            ["use_auto_series"] = GetBool(task, "UseAutoSeries", false),
+            ["use_medicine"] = GetBool(task, "UseMedicine", true),
+            ["use_stone"] = GetBool(task, "UseStone", true),
+            ["use_expiring_medicine"] = GetBool(task, "UseExpiringMedicine", false),
+            ["plans"] = plans,
         };
     }
 

@@ -113,6 +113,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         TaskModuleTypes.Roguelike,
         TaskModuleTypes.SwitchTheme,
         TaskModuleTypes.OperProgress,
+        TaskModuleTypes.DepotMaintain,
         TaskModuleTypes.SingleStep,
         TaskModuleTypes.UserDataUpdate,
         TaskModuleTypes.Custom,
@@ -215,6 +216,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 "オペレーター育成",
                 "오퍼레이터 육성",
             ],
+            [TaskModuleTypes.DepotMaintain] =
+            [
+                "DepotMaintain",
+                "Depot Maintain",
+                "库存保持",
+                "庫存保持",
+                "在庫維持",
+                "재고 유지",
+            ],
             [TaskModuleTypes.UserDataUpdate] =
             [
                 "UserDataUpdate",
@@ -306,6 +316,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private readonly ReclamationModuleViewModel _fallbackReclamationModule;
     private readonly SwitchThemeModuleViewModel _fallbackSwitchThemeModule;
     private readonly OperProgressModuleViewModel _fallbackOperProgressModule;
+    private readonly DepotMaintainModuleViewModel _fallbackDepotMaintainModule;
     private readonly UserDataUpdateModuleViewModel _fallbackUserDataUpdateModule;
     private readonly SingleStepModuleViewModel _fallbackSingleStepModule;
     private readonly CustomModuleViewModel _fallbackCustomModule;
@@ -533,6 +544,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _fallbackReclamationModule = new ReclamationModuleViewModel(runtime, Texts);
         _fallbackSwitchThemeModule = new SwitchThemeModuleViewModel(runtime, Texts);
         _fallbackOperProgressModule = new OperProgressModuleViewModel(runtime, Texts);
+        _fallbackDepotMaintainModule = new DepotMaintainModuleViewModel(runtime, Texts);
         _fallbackUserDataUpdateModule = new UserDataUpdateModuleViewModel(runtime, Texts);
         _fallbackSingleStepModule = new SingleStepModuleViewModel(runtime, Texts);
         _fallbackCustomModule = new CustomModuleViewModel(runtime, Texts);
@@ -628,6 +640,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public SwitchThemeModuleViewModel SwitchThemeModule => ResolveModuleForProjection<SwitchThemeModuleViewModel>() ?? _fallbackSwitchThemeModule;
 
     public OperProgressModuleViewModel OperProgressModule => ResolveModuleForProjection<OperProgressModuleViewModel>() ?? _fallbackOperProgressModule;
+
+    public DepotMaintainModuleViewModel DepotMaintainModule => ResolveModuleForProjection<DepotMaintainModuleViewModel>() ?? _fallbackDepotMaintainModule;
 
     public UserDataUpdateModuleViewModel UserDataUpdateModule => ResolveModuleForProjection<UserDataUpdateModuleViewModel>() ?? _fallbackUserDataUpdateModule;
 
@@ -726,6 +740,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public bool IsSwitchThemeTaskSelected => IsSelectedTaskType(TaskModuleTypes.SwitchTheme);
 
     public bool IsOperProgressTaskSelected => IsSelectedTaskType(TaskModuleTypes.OperProgress);
+
+    public bool IsDepotMaintainTaskSelected => IsSelectedTaskType(TaskModuleTypes.DepotMaintain);
 
     public bool IsUserDataUpdateTaskSelected => IsSelectedTaskType(TaskModuleTypes.UserDataUpdate);
 
@@ -1173,6 +1189,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public string AddTaskMenuOperProgressText => ResolveModuleDisplayName(TaskModuleTypes.OperProgress);
 
+    public string AddTaskMenuDepotMaintainText => ResolveModuleDisplayName(TaskModuleTypes.DepotMaintain);
+
     public string AddTaskMenuUserDataUpdateText => ResolveModuleDisplayName(TaskModuleTypes.UserDataUpdate);
 
     public string AddTaskMenuSingleStepText => ResolveModuleDisplayName(TaskModuleTypes.SingleStep);
@@ -1240,6 +1258,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         && !IsAwardTaskSelected
         && !IsSwitchThemeTaskSelected
         && !IsOperProgressTaskSelected
+        && !IsDepotMaintainTaskSelected
         && !IsUserDataUpdateTaskSelected
         && !IsSingleStepTaskSelected;
 
@@ -1669,6 +1688,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(AddTaskMenuMallText));
         OnPropertyChanged(nameof(AddTaskMenuAwardText));
         OnPropertyChanged(nameof(AddTaskMenuRoguelikeText));
+        OnPropertyChanged(nameof(AddTaskMenuDepotMaintainText));
         OnPropertyChanged(nameof(AddTaskMenuReclamationText));
         OnPropertyChanged(nameof(AddTaskMenuUserDataUpdateText));
         OnPropertyChanged(nameof(AddTaskMenuSingleStepText));
@@ -2317,6 +2337,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             TaskModuleTypes.Reclamation => new ReclamationModuleViewModel(Runtime, Texts),
             TaskModuleTypes.SwitchTheme => new SwitchThemeModuleViewModel(Runtime, Texts),
             TaskModuleTypes.OperProgress => new OperProgressModuleViewModel(Runtime, Texts),
+            TaskModuleTypes.DepotMaintain => new DepotMaintainModuleViewModel(Runtime, Texts),
             TaskModuleTypes.UserDataUpdate => new UserDataUpdateModuleViewModel(Runtime, Texts),
             TaskModuleTypes.SingleStep => new SingleStepModuleViewModel(Runtime, Texts),
             TaskModuleTypes.Custom => new CustomModuleViewModel(Runtime, Texts),
@@ -2980,6 +3001,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(ReclamationModule));
         OnPropertyChanged(nameof(SwitchThemeModule));
         OnPropertyChanged(nameof(OperProgressModule));
+        OnPropertyChanged(nameof(DepotMaintainModule));
         OnPropertyChanged(nameof(UserDataUpdateModule));
         OnPropertyChanged(nameof(SingleStepModule));
         OnPropertyChanged(nameof(CustomModule));
@@ -3000,6 +3022,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(IsReclamationTaskSelected));
         OnPropertyChanged(nameof(IsSwitchThemeTaskSelected));
         OnPropertyChanged(nameof(IsOperProgressTaskSelected));
+        OnPropertyChanged(nameof(IsDepotMaintainTaskSelected));
         OnPropertyChanged(nameof(IsUserDataUpdateTaskSelected));
         OnPropertyChanged(nameof(IsSingleStepTaskSelected));
         OnPropertyChanged(nameof(IsCustomTaskSelected));
@@ -3056,6 +3079,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _fallbackReclamationModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         _fallbackSwitchThemeModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         _fallbackOperProgressModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackDepotMaintainModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         _fallbackUserDataUpdateModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         _fallbackSingleStepModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         _fallbackCustomModule.IsAdvancedMode = _isAdvancedSettingsSelected;
@@ -3674,6 +3698,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
                 ResetRuntimeLogState();
                 ResetAllTaskStatuses();
+                SyncTaskIdsFromSession();
                 CurrentSessionState = Runtime.SessionService.CurrentState;
                 _currentRunId = Guid.NewGuid().ToString("N");
                 _lastPostActionRunId = string.Empty;
@@ -6028,6 +6053,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _fallbackReclamationModule.ClearBinding();
         _fallbackSwitchThemeModule.ClearBinding();
         _fallbackOperProgressModule.ClearBinding();
+        _fallbackDepotMaintainModule.ClearBinding();
         _fallbackUserDataUpdateModule.ClearBinding();
         _fallbackSingleStepModule.ClearBinding();
         _fallbackCustomModule.ClearBinding();
@@ -8819,7 +8845,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         {
             case "TaskChainStart":
                 _currentRunId = runId;
-                UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Running);
+                UpdateTaskStatus(taskIndex, metadata.TaskId, taskChain, TaskQueueItemStatus.Running);
                 AppendWpfCallbackLog(callback, metadata, taskIndex);
                 await RecordRuntimeStatusAsync(
                     runId,
@@ -8831,7 +8857,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     resolveSource: resolveSource);
                 break;
             case "SubTaskStart":
-                UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Running);
+                UpdateTaskStatus(taskIndex, metadata.TaskId, taskChain, TaskQueueItemStatus.Running);
                 StatusMessage = $"{taskChain ?? "Task"}::{metadata.SubTask ?? "SubTask"} running.";
                 // Event-bearing pipeline tasks publish through the notification dispatcher; their
                 // log line is presentation-only so the same publication cannot trigger twice.
@@ -8851,7 +8877,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     resolveSource: resolveSource);
                 break;
             case "SubTaskCompleted":
-                UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Running);
+                UpdateTaskStatus(taskIndex, metadata.TaskId, taskChain, TaskQueueItemStatus.Running);
                 StatusMessage = $"{taskChain ?? "Task"}::{metadata.SubTask ?? "SubTask"} completed.";
                 await UpdateMallDailyExecutionMarkerAsync(metadata, taskIndex);
                 TrackAchievementsFromCallback(metadata, callback.MsgName);
@@ -8866,7 +8892,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     resolveSource: resolveSource);
                 break;
             case "TaskChainCompleted":
-                UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Success);
+                UpdateTaskStatus(taskIndex, metadata.TaskId, taskChain, TaskQueueItemStatus.Success);
                 // WPF parity (AsstProxy TaskChainCompleted -> UpdateMainTasksProgress).
                 if (IsMainTaskChainForProgress(taskChain))
                 {
@@ -8903,7 +8929,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     resolveSource: resolveSource);
                 break;
             case "TaskChainError":
-                UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Error);
+                UpdateTaskStatus(taskIndex, metadata.TaskId, taskChain, TaskQueueItemStatus.Error);
                 ClearRoguelikeCombatStateIfTaskCompleted(taskChain);
                 LastErrorMessage = $"{callback.MsgName}: {callback.PayloadJson}";
                 AppendWpfCallbackLog(callback, metadata, taskIndex, publishNotification: false);
@@ -9630,14 +9656,40 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return "TaskQueue";
     }
 
-    private void UpdateTaskStatus(int? taskIndex, string? taskChain, string status)
+    /// <summary>
+    /// 回填本轮每个队列条目对应的 Core 任务 id（WPF dev-v2 9e846609aa：LinkStart 序列化
+    /// 返回 id 后写入条目，执行结束清空）。一个条目可能对应多条链，逐链状态由回调按 id 推进。
+    /// </summary>
+    private void SyncTaskIdsFromSession()
     {
-        if (IsValidTaskIndex(taskIndex, Tasks.Count))
+        for (var index = 0; index < Tasks.Count; index++)
         {
-            var task = Tasks[taskIndex!.Value];
-            task.Status = status;
-            RefreshTaskItemLocalization(task);
+            Tasks[index].SetTaskIds(Runtime.SessionService.GetCoreTaskIdsForQueueIndex(index));
         }
+    }
+
+    private void UpdateTaskStatus(int? taskIndex, int? taskId, string? taskChain, string status)
+    {
+        if (!IsValidTaskIndex(taskIndex, Tasks.Count))
+        {
+            return;
+        }
+
+        var task = Tasks[taskIndex!.Value];
+
+        // WPF dev-v2 (9e846609aa/caec74ff1f/be31b86dbd): one queue row may own several
+        // core chains (UserDataUpdate 2, DepotMaintain 1+N). When the callback carries a
+        // task id that belongs to this row, update only that chain and re-aggregate with
+        // Error > InProgress > all Completed > Skipped > Idle; the last chain must not
+        // overwrite the whole row. Rows without chain ids keep the single-chain behavior.
+        if (taskId.HasValue && task.TryApplyChainStatus(taskId.Value, status))
+        {
+            RefreshTaskItemLocalization(task);
+            return;
+        }
+
+        task.Status = status;
+        RefreshTaskItemLocalization(task);
     }
 
     /// <summary>
@@ -9741,6 +9793,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         foreach (var task in Tasks.Where(t => string.Equals(t.Status, TaskQueueItemStatus.Running, StringComparison.OrdinalIgnoreCase)))
         {
+            // The run is over: drop the per-chain ids so a late callback of the same run
+            // cannot re-aggregate the row back to Running.
+            task.ClearTaskIds();
             task.Status = status;
             RefreshTaskItemLocalization(task);
         }
@@ -9750,6 +9805,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         foreach (var task in Tasks)
         {
+            // WPF dev-v2 (be31b86dbd): core task ids live for one run only; the next
+            // LinkStart reassigns them after the append completes, so stale chain ids
+            // from a previous run can never drive the row aggregation.
+            task.ClearTaskIds();
             if (string.Equals(task.Status, TaskQueueItemStatus.Idle, StringComparison.OrdinalIgnoreCase))
             {
                 continue;

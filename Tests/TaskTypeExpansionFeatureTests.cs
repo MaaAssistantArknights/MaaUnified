@@ -9,6 +9,7 @@ using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.TaskParams;
+using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 
@@ -734,6 +735,33 @@ public sealed class TaskTypeExpansionFeatureTests
             "Game.Role.Special",
             "Award.SignInEvent",
             "Award.SignInEventTip",
+            "TaskQueue.Module.DepotMaintain",
+            "DepotMaintain.Title",
+            "DepotMaintain.Plans",
+            "DepotMaintain.AddPlan",
+            "DepotMaintain.EmptyHint",
+            "DepotMaintain.UpdateDepot",
+            "DepotMaintain.SkipDuringActivity",
+            "DepotMaintain.SkipDuringResourceCollection",
+            "DepotMaintain.OnlyFirstInsufficientPlan",
+            "DepotMaintain.SortByProgress",
+            "DepotMaintain.CountDualChipAsChipPack",
+            "DepotMaintain.UseAutoSeries",
+            "DepotMaintain.EnableUseMedicine",
+            "DepotMaintain.EnableUseStone",
+            "DepotMaintain.UseExpiringMedicine",
+            "DepotMaintain.Stage",
+            "DepotMaintain.Drop",
+            "DepotMaintain.DropCount",
+            "DepotMaintain.MedicineCount",
+            "DepotMaintain.StoneCount",
+            "DepotMaintain.PlanUseMedicine",
+            "DepotMaintain.PlanUseStone",
+            "DepotMaintain.Inventory",
+            "DepotMaintain.NotSelected",
+            "DepotMaintain.Remove",
+            "DepotMaintain.MoveUp",
+            "DepotMaintain.MoveDown",
         };
 
         foreach (var language in languages)
@@ -745,6 +773,370 @@ public sealed class TaskTypeExpansionFeatureTests
                 Assert.False(string.Equals(value, key, StringComparison.Ordinal), $"Missing `{key}` for `{language}`");
             }
         }
+    }
+
+    [Fact]
+    public async Task ExpandDepotMaintain_BuildsDepotThenFightChains()
+    {
+        // WPF dev-v2 38b2e9e4f2: DepotMaintain expands into 1 Depot chain + 1 Fight chain
+        // per insufficient plan, with drops = the missing amount and times = int.MaxValue.
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        var utcNow = new DateTime(2026, 11, 12, 3, 0, 0, DateTimeKind.Utc);
+        var parameters = new DepotMaintainParams
+        {
+            UpdateDepot = true,
+            Plans =
+            [
+                new DepotMaintainPlan { Stage = "1-7", DropId = "30012", DropCount = 10, UseMedicine = true, MedicineCount = 2 },
+                new DepotMaintainPlan { Stage = "1-7", DropId = "30013", DropCount = 5 },
+            ],
+        }.ToJson();
+        var depotCounts = new Dictionary<string, int>(StringComparer.Ordinal) { ["30012"] = 4 };
+
+        var expansion = TaskParamCompiler.ExpandDepotMaintain(
+            "depot",
+            parameters,
+            profile,
+            fixture.Config.CurrentConfig,
+            utcNow,
+            BuildStageState(utcNow),
+            depotCounts);
+
+        Assert.False(expansion.Skipped);
+        Assert.Equal(3, expansion.Tasks.Count);
+        Assert.Equal("Depot", expansion.Tasks[0].Type);
+        Assert.Equal("Fight", expansion.Tasks[1].Type);
+        Assert.Equal("Fight", expansion.Tasks[2].Type);
+
+        var firstFight = Assert.IsType<JsonObject>(JsonNode.Parse(expansion.Tasks[1].ParamsJson));
+        Assert.Equal("1-7", firstFight["stage"]!.GetValue<string>());
+        Assert.Equal(6, firstFight["drops"]!["30012"]!.GetValue<int>());
+        Assert.Equal(int.MaxValue, firstFight["times"]!.GetValue<int>());
+        Assert.Equal(1, firstFight["series"]!.GetValue<int>());
+        Assert.Equal(2, firstFight["medicine"]!.GetValue<int>());
+        Assert.Equal(0, firstFight["expiring_medicine"]!.GetValue<int>());
+
+        var secondFight = Assert.IsType<JsonObject>(JsonNode.Parse(expansion.Tasks[2].ParamsJson));
+        Assert.Equal(5, secondFight["drops"]!["30013"]!.GetValue<int>());
+        Assert.Equal(2, expansion.PlanDecisions.Count(decision => decision.Outcome == DepotMaintainPlanOutcome.Enqueued));
+    }
+
+    [Fact]
+    public async Task ExpandDepotMaintain_AutoSeriesAndExpiringMedicine()
+    {
+        // WPF 0e99c81442 (Series = UseAutoSeries ? 0 : 1) and 948f23f8ae (expiring
+        // medicine window = 2 days, expiring_medicine = 9999).
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        var utcNow = new DateTime(2026, 11, 12, 3, 0, 0, DateTimeKind.Utc);
+        var parameters = new DepotMaintainParams
+        {
+            UpdateDepot = false,
+            UseAutoSeries = true,
+            UseExpiringMedicine = true,
+            Plans = [new DepotMaintainPlan { Stage = "1-7", DropId = "30012", DropCount = 5 }],
+        }.ToJson();
+
+        var expansion = TaskParamCompiler.ExpandDepotMaintain(
+            "depot",
+            parameters,
+            profile,
+            fixture.Config.CurrentConfig,
+            utcNow,
+            BuildStageState(utcNow),
+            new Dictionary<string, int>(StringComparer.Ordinal) { ["30012"] = 1 });
+
+        var fight = Assert.Single(expansion.Tasks);
+        var fightParams = Assert.IsType<JsonObject>(JsonNode.Parse(fight.ParamsJson));
+        Assert.Equal(0, fightParams["series"]!.GetValue<int>());
+        Assert.Equal(9999, fightParams["expiring_medicine"]!.GetValue<int>());
+        Assert.Equal(DepotMaintainParams.ExpiringMedicineDays, fightParams["medicine_expire_days"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task ExpandDepotMaintain_EmptyPlans_OnlyRefreshesDepotOrSkips()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        var utcNow = new DateTime(2026, 11, 12, 3, 0, 0, DateTimeKind.Utc);
+
+        var refreshOnly = TaskParamCompiler.ExpandDepotMaintain(
+            "depot",
+            new DepotMaintainParams { UpdateDepot = true }.ToJson(),
+            profile,
+            fixture.Config.CurrentConfig,
+            utcNow,
+            BuildStageState(utcNow),
+            new Dictionary<string, int>(StringComparer.Ordinal));
+        Assert.False(refreshOnly.Skipped);
+        var depotTask = Assert.Single(refreshOnly.Tasks);
+        Assert.Equal("Depot", depotTask.Type);
+
+        var nothing = TaskParamCompiler.ExpandDepotMaintain(
+            "depot",
+            new DepotMaintainParams { UpdateDepot = false }.ToJson(),
+            profile,
+            fixture.Config.CurrentConfig,
+            utcNow,
+            BuildStageState(utcNow),
+            new Dictionary<string, int>(StringComparer.Ordinal));
+        Assert.True(nothing.Skipped);
+        Assert.Equal(DepotMaintainSkipReason.NoPlans, nothing.SkipReason);
+        Assert.Empty(nothing.Tasks);
+    }
+
+    [Fact]
+    public async Task ExpandDepotMaintain_SkipsWholeTaskDuringActivityOrResourceCollection()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        var utcNow = new DateTime(2026, 11, 12, 3, 0, 0, DateTimeKind.Utc);
+        var parameters = new DepotMaintainParams
+        {
+            UpdateDepot = true,
+            SkipDuringActivity = true,
+            SkipDuringResourceCollection = true,
+            Plans = [new DepotMaintainPlan { Stage = "1-7", DropId = "30012", DropCount = 5 }],
+        }.ToJson();
+
+        var activityState = BuildStageState(
+            utcNow,
+            new StageActivityStage(
+                "CW-5",
+                "CW-5",
+                null,
+                new StageActivityWindow("tip", "CW", utcNow.AddHours(-1), utcNow.AddHours(24))));
+        var skippedForActivity = TaskParamCompiler.ExpandDepotMaintain(
+            "depot",
+            parameters,
+            profile,
+            fixture.Config.CurrentConfig,
+            utcNow,
+            activityState,
+            new Dictionary<string, int>(StringComparer.Ordinal));
+        Assert.True(skippedForActivity.Skipped);
+        Assert.Equal(DepotMaintainSkipReason.ActivityOpen, skippedForActivity.SkipReason);
+        Assert.Empty(skippedForActivity.Tasks);
+
+        var resourceState = BuildStageState(
+            utcNow,
+            new StageActivityStage(
+                "resource",
+                "resource",
+                null,
+                new StageActivityWindow("tip", "resource", utcNow.AddHours(-1), utcNow.AddHours(24), IsResourceCollection: true)));
+        var skippedForResource = TaskParamCompiler.ExpandDepotMaintain(
+            "depot",
+            parameters,
+            profile,
+            fixture.Config.CurrentConfig,
+            utcNow,
+            resourceState,
+            new Dictionary<string, int>(StringComparer.Ordinal));
+        Assert.True(skippedForResource.Skipped);
+        Assert.Equal(DepotMaintainSkipReason.ResourceCollectionOpen, skippedForResource.SkipReason);
+        Assert.Empty(skippedForResource.Tasks);
+    }
+
+    [Fact]
+    public async Task ExpandDepotMaintain_OnlyFirstInsufficientPlanStopsAfterFirstDispatch()
+    {
+        // WPF e7ef27745e: only the first insufficient plan is dispatched; later plans wait
+        // for the next run.
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        var utcNow = new DateTime(2026, 11, 12, 3, 0, 0, DateTimeKind.Utc);
+        var parameters = new DepotMaintainParams
+        {
+            UpdateDepot = true,
+            OnlyFirstInsufficientPlan = true,
+            Plans =
+            [
+                new DepotMaintainPlan { Stage = "1-7", DropId = "30012", DropCount = 5 },
+                new DepotMaintainPlan { Stage = "1-7", DropId = "30013", DropCount = 5 },
+            ],
+        }.ToJson();
+
+        var expansion = TaskParamCompiler.ExpandDepotMaintain(
+            "depot",
+            parameters,
+            profile,
+            fixture.Config.CurrentConfig,
+            utcNow,
+            BuildStageState(utcNow),
+            new Dictionary<string, int>(StringComparer.Ordinal));
+
+        Assert.Equal(2, expansion.Tasks.Count);
+        Assert.Equal("Depot", expansion.Tasks[0].Type);
+        Assert.Equal("Fight", expansion.Tasks[1].Type);
+        Assert.Single(expansion.PlanDecisions, decision => decision.Outcome == DepotMaintainPlanOutcome.Enqueued);
+    }
+
+    [Fact]
+    public async Task ExpandDepotMaintain_NoInventoryDataWithoutRefreshStopsFarming()
+    {
+        // WPF 0302381585: without inventory data farming stops. The task-local depot refresh
+        // keeps the plans queued (WPF precheck falls back to a 0 cache), so the same task with
+        // UpdateDepot still dispatches both plans.
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        var utcNow = new DateTime(2026, 11, 12, 3, 0, 0, DateTimeKind.Utc);
+        var plans = new List<DepotMaintainPlan>
+        {
+            new() { Stage = "1-7", DropId = "30012", DropCount = 5 },
+            new() { Stage = "1-7", DropId = "30013", DropCount = 5 },
+        };
+
+        var withoutRefresh = TaskParamCompiler.ExpandDepotMaintain(
+            "depot",
+            new DepotMaintainParams { UpdateDepot = false, Plans = plans }.ToJson(),
+            profile,
+            fixture.Config.CurrentConfig,
+            utcNow,
+            BuildStageState(utcNow),
+            new Dictionary<string, int>(StringComparer.Ordinal));
+        Assert.True(withoutRefresh.Skipped);
+        Assert.Empty(withoutRefresh.Tasks);
+        Assert.Equal(2, withoutRefresh.PlanDecisions.Count(decision => decision.Outcome == DepotMaintainPlanOutcome.InventoryDataMissing));
+
+        var withRefresh = TaskParamCompiler.ExpandDepotMaintain(
+            "depot",
+            new DepotMaintainParams { UpdateDepot = true, Plans = plans }.ToJson(),
+            profile,
+            fixture.Config.CurrentConfig,
+            utcNow,
+            BuildStageState(utcNow),
+            new Dictionary<string, int>(StringComparer.Ordinal));
+        Assert.False(withRefresh.Skipped);
+        Assert.Equal(3, withRefresh.Tasks.Count);
+    }
+
+    [Fact]
+    public async Task ExpandDepotMaintain_CountDualChipAsChipPackUsesFormulaIndex()
+    {
+        // WPF be9cc84fd2: dual chips count toward the chip-pack target through their
+        // crafting recipe (each dual chip consumes 2 chip packs).
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        var utcNow = new DateTime(2026, 11, 12, 3, 0, 0, DateTimeKind.Utc);
+        var depotCounts = new Dictionary<string, int>(StringComparer.Ordinal) { ["3263"] = 4 };
+        var formulas = new Dictionary<string, IReadOnlyDictionary<string, int>>(StringComparer.Ordinal)
+        {
+            ["3263"] = new Dictionary<string, int>(StringComparer.Ordinal)
+            {
+                [ItemFormulaIndex.DualChipCatalystItemId] = 1,
+                ["3262"] = 2,
+            },
+        };
+        var plan = new DepotMaintainParams
+        {
+            UpdateDepot = false,
+            Plans = [new DepotMaintainPlan { Stage = "1-7", DropId = "3262", DropCount = 10 }],
+        };
+
+        var plain = TaskParamCompiler.ExpandDepotMaintain(
+            "depot",
+            plan.ToJson(),
+            profile,
+            fixture.Config.CurrentConfig,
+            utcNow,
+            BuildStageState(utcNow),
+            depotCounts,
+            itemFormulas: formulas);
+        var plainFight = Assert.IsType<JsonObject>(JsonNode.Parse(Assert.Single(plain.Tasks).ParamsJson));
+        Assert.Equal(10, plainFight["drops"]!["3262"]!.GetValue<int>());
+
+        plan.CountDualChipAsChipPack = true;
+        var converted = TaskParamCompiler.ExpandDepotMaintain(
+            "depot",
+            plan.ToJson(),
+            profile,
+            fixture.Config.CurrentConfig,
+            utcNow,
+            BuildStageState(utcNow),
+            depotCounts,
+            itemFormulas: formulas);
+        var convertedFight = Assert.IsType<JsonObject>(JsonNode.Parse(Assert.Single(converted.Tasks).ParamsJson));
+        Assert.Equal(2, convertedFight["drops"]!["3262"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task ExpandDepotMaintain_SortByProgressDispatchesLowestAchievementFirst()
+    {
+        // WPF a7ee2c2bf7: SortByProgress orders the dispatched plans (not the stored list)
+        // by achievement rate ascending.
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        var utcNow = new DateTime(2026, 11, 12, 3, 0, 0, DateTimeKind.Utc);
+        var depotCounts = new Dictionary<string, int>(StringComparer.Ordinal) { ["30012"] = 80 };
+        var plans = new List<DepotMaintainPlan>
+        {
+            new() { Stage = "1-7", DropId = "30012", DropCount = 100 },
+            new() { Stage = "1-7", DropId = "30013", DropCount = 100 },
+        };
+
+        var parameters = new DepotMaintainParams { UpdateDepot = false, SortByProgress = true, Plans = plans };
+        var sorted = TaskParamCompiler.ExpandDepotMaintain(
+            "depot",
+            parameters.ToJson(),
+            profile,
+            fixture.Config.CurrentConfig,
+            utcNow,
+            BuildStageState(utcNow),
+            depotCounts);
+        var firstSorted = Assert.IsType<JsonObject>(JsonNode.Parse(sorted.Tasks[0].ParamsJson));
+        Assert.Equal(100, firstSorted["drops"]!["30013"]!.GetValue<int>());
+
+        parameters.SortByProgress = false;
+        var unsorted = TaskParamCompiler.ExpandDepotMaintain(
+            "depot",
+            parameters.ToJson(),
+            profile,
+            fixture.Config.CurrentConfig,
+            utcNow,
+            BuildStageState(utcNow),
+            depotCounts);
+        var firstUnsorted = Assert.IsType<JsonObject>(JsonNode.Parse(unsorted.Tasks[0].ParamsJson));
+        Assert.Equal(20, firstUnsorted["drops"]!["30012"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task AppendTasksFromCurrentProfile_DepotMaintainExpandsChainsAndMapsIds()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        profile.TaskQueue.Clear();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.DepotMaintain, "depot-maintain")).Success);
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(
+            0,
+            new DepotMaintainParams
+            {
+                UpdateDepot = true,
+                Plans = [new DepotMaintainPlan { Stage = "1-7", DropId = "4001", DropCount = 500 }],
+            }.ToJson())).Success);
+
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.DepotResult] = JsonValue.Create("""{"4001":100}""");
+        Assert.True((await fixture.Runtime.SessionService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+
+        var appended = await fixture.Runtime.SessionService.AppendTasksFromCurrentProfileAsync();
+
+        Assert.True(appended.Success);
+        Assert.Equal(2, appended.Value);
+        Assert.Equal(2, fixture.Bridge.AppendedTasks.Count);
+        Assert.Equal("Depot", fixture.Bridge.AppendedTasks[0].Type);
+        Assert.Equal("Fight", fixture.Bridge.AppendedTasks[1].Type);
+        var fightParams = Assert.IsType<JsonObject>(JsonNode.Parse(fixture.Bridge.AppendedTasks[1].ParamsJson));
+        Assert.Equal(400, fightParams["drops"]!["4001"]!.GetValue<int>());
+        Assert.Equal(int.MaxValue, fightParams["times"]!.GetValue<int>());
+        Assert.Equal([1, 2], fixture.Runtime.SessionService.GetCoreTaskIdsForQueueIndex(0));
+    }
+
+    private static StageActivityState BuildStageState(DateTime utcNow, params StageActivityStage[] extraStages)
+    {
+        var stages = new List<StageActivityStage>(StageActivityStage.CreatePermanentStages());
+        stages.AddRange(extraStages);
+        return new StageActivityState("Official", stages, utcNow, false);
     }
 
     private sealed class TestFixture : IAsyncDisposable

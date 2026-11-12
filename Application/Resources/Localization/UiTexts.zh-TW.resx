@@ -160,6 +160,84 @@
   <data name="Custom.Title" xml:space="preserve">
     <value>自訂任務</value>
   </data>
+  <data name="DepotMaintain.AddPlan" xml:space="preserve">
+    <value>新增計畫</value>
+  </data>
+  <data name="DepotMaintain.CountDualChipAsChipPack" xml:space="preserve">
+    <value>雙晶片折算計入晶片組</value>
+  </data>
+  <data name="DepotMaintain.Drop" xml:space="preserve">
+    <value>材料</value>
+  </data>
+  <data name="DepotMaintain.DropCount" xml:space="preserve">
+    <value>目標數量</value>
+  </data>
+  <data name="DepotMaintain.EmptyHint" xml:space="preserve">
+    <value>尚未新增計畫；執行時只進行庫存辨識，不會刷取材料。</value>
+  </data>
+  <data name="DepotMaintain.EnableUseMedicine" xml:space="preserve">
+    <value>啟用 ｢使用藥劑｣</value>
+  </data>
+  <data name="DepotMaintain.EnableUseStone" xml:space="preserve">
+    <value>啟用 ｢使用源石｣</value>
+  </data>
+  <data name="DepotMaintain.Inventory" xml:space="preserve">
+    <value>現有庫存</value>
+  </data>
+  <data name="DepotMaintain.MedicineCount" xml:space="preserve">
+    <value>藥劑數量</value>
+  </data>
+  <data name="DepotMaintain.MoveDown" xml:space="preserve">
+    <value>下移</value>
+  </data>
+  <data name="DepotMaintain.MoveUp" xml:space="preserve">
+    <value>上移</value>
+  </data>
+  <data name="DepotMaintain.NotSelected" xml:space="preserve">
+    <value>不選擇</value>
+  </data>
+  <data name="DepotMaintain.OnlyFirstInsufficientPlan" xml:space="preserve">
+    <value>僅執行第一個庫存不足的計畫</value>
+  </data>
+  <data name="DepotMaintain.PlanUseMedicine" xml:space="preserve">
+    <value>使用藥劑</value>
+  </data>
+  <data name="DepotMaintain.PlanUseStone" xml:space="preserve">
+    <value>使用源石</value>
+  </data>
+  <data name="DepotMaintain.Plans" xml:space="preserve">
+    <value>計畫列表</value>
+  </data>
+  <data name="DepotMaintain.Remove" xml:space="preserve">
+    <value>刪除</value>
+  </data>
+  <data name="DepotMaintain.SkipDuringActivity" xml:space="preserve">
+    <value>活動期間跳過本任務</value>
+  </data>
+  <data name="DepotMaintain.SkipDuringResourceCollection" xml:space="preserve">
+    <value>資源全開放期間跳過本任務</value>
+  </data>
+  <data name="DepotMaintain.SortByProgress" xml:space="preserve">
+    <value>依庫存達成率排序執行</value>
+  </data>
+  <data name="DepotMaintain.Stage" xml:space="preserve">
+    <value>關卡</value>
+  </data>
+  <data name="DepotMaintain.StoneCount" xml:space="preserve">
+    <value>源石數量</value>
+  </data>
+  <data name="DepotMaintain.Title" xml:space="preserve">
+    <value>庫存保持</value>
+  </data>
+  <data name="DepotMaintain.UpdateDepot" xml:space="preserve">
+    <value>任務開始前更新庫存資料</value>
+  </data>
+  <data name="DepotMaintain.UseAutoSeries" xml:space="preserve">
+    <value>AUTO 代理倍率</value>
+  </data>
+  <data name="DepotMaintain.UseExpiringMedicine" xml:space="preserve">
+    <value>使用 48 小時內過期的理智藥</value>
+  </data>
   <data name="Dialog.Common.Cancel" xml:space="preserve">
     <value>取消</value>
   </data>
@@ -588,6 +666,9 @@
   </data>
   <data name="SwitchTheme.Title" xml:space="preserve">
     <value>更換主題</value>
+  </data>
+  <data name="TaskQueue.Module.DepotMaintain" xml:space="preserve">
+    <value>庫存保持</value>
   </data>
   <data name="TaskQueue.Module.OperProgress" xml:space="preserve">
     <value>幹員培養</value>

@@ -19,6 +19,7 @@ public static class TaskModuleTypes
     public const string PostAction = "PostAction";
     public const string SwitchTheme = "SwitchTheme";
     public const string OperProgress = "OperProgress";
+    public const string DepotMaintain = "DepotMaintain";
 
     public static string Normalize(string? type)
     {
@@ -56,6 +57,7 @@ public static class TaskModuleParameterDefaults
             TaskModuleTypes.UserDataUpdate => CreateUserDataUpdateDefaults(),
             TaskModuleTypes.SwitchTheme => CreateSwitchThemeDefaults(),
             TaskModuleTypes.OperProgress => CreateOperProgressDefaults(),
+            TaskModuleTypes.DepotMaintain => CreateDepotMaintainDefaults(),
             _ => new JsonObject(),
         };
     }
@@ -163,6 +165,11 @@ public static class TaskModuleParameterDefaults
             ["update_depot"] = true,
             ["trigger_interval"] = "EveryTime",
         };
+    }
+
+    public static JsonObject CreateDepotMaintainDefaults()
+    {
+        return new DepotMaintainParams().ToJson();
     }
 }
 
@@ -744,6 +751,154 @@ public sealed class SwitchThemeParams
         {
             ["themes"] = TaskParamJsonReader.ToJsonArray(TaskParamJsonReader.NormalizeNames(Themes)),
         };
+    }
+}
+
+/// <summary>
+/// 库存保持任务（WPF dev-v2 38b2e9e4f2 起）。一个队列条目在编译期展开为多条 Core
+/// 任务链：先按 <see cref="UpdateDepot"/> 追加 1 条 <c>Depot</c> 识别链，再为每个库存
+/// 不足的计划追加 1 条 <c>Fight</c> 链（<c>drops</c> = 缺口，<c>times</c> = int.MaxValue）。
+/// 参数不直接下发给 Core，由 <c>TaskParamCompiler.ExpandDepotMaintain</c> 逐计划展开。
+/// </summary>
+public sealed class DepotMaintainParams
+{
+    /// <summary>
+    /// 临期药阈值（天）：WPF DepotMaintainTask.ExpiringMedicineDays = 2，
+    /// 仅使用 2 天内过期的理智药。
+    /// </summary>
+    public const int ExpiringMedicineDays = 2;
+
+    public bool UpdateDepot { get; set; } = true;
+
+    public bool IsStageManually { get; set; }
+
+    public bool SkipDuringActivity { get; set; }
+
+    public bool SkipDuringResourceCollection { get; set; }
+
+    public bool OnlyFirstInsufficientPlan { get; set; }
+
+    public bool SortByProgress { get; set; }
+
+    public bool CountDualChipAsChipPack { get; set; }
+
+    public bool UseAutoSeries { get; set; }
+
+    public bool UseMedicine { get; set; } = true;
+
+    public bool UseStone { get; set; } = true;
+
+    public bool UseExpiringMedicine { get; set; }
+
+    public List<DepotMaintainPlan> Plans { get; set; } = [];
+
+    public static DepotMaintainParams FromJson(JsonObject? obj)
+    {
+        obj ??= TaskModuleParameterDefaults.CreateDepotMaintainDefaults();
+        var result = new DepotMaintainParams
+        {
+            UpdateDepot = TaskParamJsonReader.ReadBool(obj, "update_depot", true),
+            IsStageManually = TaskParamJsonReader.ReadBool(obj, "is_stage_manually"),
+            SkipDuringActivity = TaskParamJsonReader.ReadBool(obj, "skip_during_activity"),
+            SkipDuringResourceCollection = TaskParamJsonReader.ReadBool(obj, "skip_during_resource_collection"),
+            OnlyFirstInsufficientPlan = TaskParamJsonReader.ReadBool(obj, "only_first_insufficient_plan"),
+            SortByProgress = TaskParamJsonReader.ReadBool(obj, "sort_by_progress"),
+            CountDualChipAsChipPack = TaskParamJsonReader.ReadBool(obj, "count_dual_chip_as_chip_pack"),
+            UseAutoSeries = TaskParamJsonReader.ReadBool(obj, "use_auto_series"),
+            UseMedicine = TaskParamJsonReader.ReadBool(obj, "use_medicine", true),
+            UseStone = TaskParamJsonReader.ReadBool(obj, "use_stone", true),
+            UseExpiringMedicine = TaskParamJsonReader.ReadBool(obj, "use_expiring_medicine"),
+        };
+
+        if (TaskParamJsonReader.FindNode(obj, "plans") is JsonArray plans)
+        {
+            foreach (var node in plans)
+            {
+                if (node is JsonObject plan)
+                {
+                    result.Plans.Add(DepotMaintainPlan.FromJson(plan));
+                }
+            }
+        }
+
+        return result;
+    }
+
+    public JsonObject ToJson()
+    {
+        return new JsonObject
+        {
+            ["update_depot"] = UpdateDepot,
+            ["is_stage_manually"] = IsStageManually,
+            ["skip_during_activity"] = SkipDuringActivity,
+            ["skip_during_resource_collection"] = SkipDuringResourceCollection,
+            ["only_first_insufficient_plan"] = OnlyFirstInsufficientPlan,
+            ["sort_by_progress"] = SortByProgress,
+            ["count_dual_chip_as_chip_pack"] = CountDualChipAsChipPack,
+            ["use_auto_series"] = UseAutoSeries,
+            ["use_medicine"] = UseMedicine,
+            ["use_stone"] = UseStone,
+            ["use_expiring_medicine"] = UseExpiringMedicine,
+            ["plans"] = new JsonArray(Plans.Select(plan => (JsonNode)plan.ToJson()).ToArray<JsonNode?>()),
+        };
+    }
+
+    public DepotMaintainParams Clone()
+    {
+        return FromJson(ToJson());
+    }
+}
+
+/// <summary>
+/// 库存保持的单个计划：目标关卡、材料 id 与目标库存数量，以及本计划可用的药剂/源石预算。
+/// </summary>
+public sealed class DepotMaintainPlan
+{
+    public string Stage { get; set; } = string.Empty;
+
+    public string DropId { get; set; } = string.Empty;
+
+    public int DropCount { get; set; }
+
+    public bool UseMedicine { get; set; }
+
+    public int MedicineCount { get; set; }
+
+    public bool UseStone { get; set; }
+
+    public int StoneCount { get; set; }
+
+    public static DepotMaintainPlan FromJson(JsonObject plan)
+    {
+        return new DepotMaintainPlan
+        {
+            Stage = TaskParamJsonReader.ReadString(plan, "stage").Trim(),
+            DropId = TaskParamJsonReader.ReadString(plan, "drop_id").Trim(),
+            DropCount = Math.Max(0, TaskParamJsonReader.ReadInt(plan, "drop_count")),
+            UseMedicine = TaskParamJsonReader.ReadBool(plan, "use_medicine"),
+            MedicineCount = Math.Max(0, TaskParamJsonReader.ReadInt(plan, "medicine_count")),
+            UseStone = TaskParamJsonReader.ReadBool(plan, "use_stone"),
+            StoneCount = Math.Max(0, TaskParamJsonReader.ReadInt(plan, "stone_count")),
+        };
+    }
+
+    public JsonObject ToJson()
+    {
+        return new JsonObject
+        {
+            ["stage"] = Stage,
+            ["drop_id"] = DropId,
+            ["drop_count"] = DropCount,
+            ["use_medicine"] = UseMedicine,
+            ["medicine_count"] = MedicineCount,
+            ["use_stone"] = UseStone,
+            ["stone_count"] = StoneCount,
+        };
+    }
+
+    public DepotMaintainPlan Clone()
+    {
+        return FromJson(ToJson());
     }
 }
 

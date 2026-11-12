@@ -703,6 +703,84 @@ Remaining credits: </value>
   <data name="Deploy" xml:space="preserve">
     <value>Deploy</value>
   </data>
+  <data name="DepotMaintain.AddPlan" xml:space="preserve">
+    <value>Add plan</value>
+  </data>
+  <data name="DepotMaintain.CountDualChipAsChipPack" xml:space="preserve">
+    <value>Count dual chips as chip packs</value>
+  </data>
+  <data name="DepotMaintain.Drop" xml:space="preserve">
+    <value>Item</value>
+  </data>
+  <data name="DepotMaintain.DropCount" xml:space="preserve">
+    <value>Target amount</value>
+  </data>
+  <data name="DepotMaintain.EmptyHint" xml:space="preserve">
+    <value>No plan yet; only the inventory snapshot is refreshed at run time.</value>
+  </data>
+  <data name="DepotMaintain.EnableUseMedicine" xml:space="preserve">
+    <value>Enable "Use sanity potion"</value>
+  </data>
+  <data name="DepotMaintain.EnableUseStone" xml:space="preserve">
+    <value>Enable "Use originite prime"</value>
+  </data>
+  <data name="DepotMaintain.Inventory" xml:space="preserve">
+    <value>In stock</value>
+  </data>
+  <data name="DepotMaintain.MedicineCount" xml:space="preserve">
+    <value>Potions</value>
+  </data>
+  <data name="DepotMaintain.MoveDown" xml:space="preserve">
+    <value>Move down</value>
+  </data>
+  <data name="DepotMaintain.MoveUp" xml:space="preserve">
+    <value>Move up</value>
+  </data>
+  <data name="DepotMaintain.NotSelected" xml:space="preserve">
+    <value>Not selected</value>
+  </data>
+  <data name="DepotMaintain.OnlyFirstInsufficientPlan" xml:space="preserve">
+    <value>Run only the first plan whose inventory is insufficient</value>
+  </data>
+  <data name="DepotMaintain.PlanUseMedicine" xml:space="preserve">
+    <value>Use potion</value>
+  </data>
+  <data name="DepotMaintain.PlanUseStone" xml:space="preserve">
+    <value>Use originite prime</value>
+  </data>
+  <data name="DepotMaintain.Plans" xml:space="preserve">
+    <value>Plans</value>
+  </data>
+  <data name="DepotMaintain.Remove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="DepotMaintain.SkipDuringActivity" xml:space="preserve">
+    <value>Skip this task while an event is in progress</value>
+  </data>
+  <data name="DepotMaintain.SkipDuringResourceCollection" xml:space="preserve">
+    <value>Skip this task while resource collection is open all day</value>
+  </data>
+  <data name="DepotMaintain.SortByProgress" xml:space="preserve">
+    <value>Run plans in inventory-progress order</value>
+  </data>
+  <data name="DepotMaintain.Stage" xml:space="preserve">
+    <value>Stage</value>
+  </data>
+  <data name="DepotMaintain.StoneCount" xml:space="preserve">
+    <value>Originite prime</value>
+  </data>
+  <data name="DepotMaintain.Title" xml:space="preserve">
+    <value>Depot maintenance</value>
+  </data>
+  <data name="DepotMaintain.UpdateDepot" xml:space="preserve">
+    <value>Update inventory data before the task starts</value>
+  </data>
+  <data name="DepotMaintain.UseAutoSeries" xml:space="preserve">
+    <value>AUTO series</value>
+  </data>
+  <data name="DepotMaintain.UseExpiringMedicine" xml:space="preserve">
+    <value>Use sanity potions expiring within 48 hours</value>
+  </data>
   <data name="Dialog.Common.Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
@@ -1341,6 +1419,9 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   </data>
   <data name="SwitchTheme.Title" xml:space="preserve">
     <value>Switch Theme</value>
+  </data>
+  <data name="TaskQueue.Module.DepotMaintain" xml:space="preserve">
+    <value>Depot Maintenance</value>
   </data>
   <data name="TaskQueue.Module.OperProgress" xml:space="preserve">
     <value>Operator Progression</value>

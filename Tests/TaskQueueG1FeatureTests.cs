@@ -2104,6 +2104,126 @@ public sealed class TaskQueueG1FeatureTests
         Assert.Equal(expectedPreviousCoreParams, fixture.Bridge.SetTaskParamsCalls[2].ParamsJson);
     }
 
+    [Fact]
+    public void TaskQueueItem_MultipleCoreTaskIds_AggregatePerChainStatus()
+    {
+        // WPF dev-v2 (9e846609aa/caec74ff1f/be31b86dbd): one queue row owns several core
+        // chains; the row aggregates Error > InProgress > all Completed > Skipped > Idle
+        // and keeps a per-chain completed counter instead of letting the last chain
+        // overwrite the whole row.
+        var vm = new TaskQueueItemViewModel("DepotMaintain", "depot", true);
+        vm.SetTaskIds([11, 12]);
+
+        Assert.Equal(2, vm.ChainCount);
+        Assert.Equal(["Idle", "Idle"], vm.ChainStatuses);
+
+        Assert.True(vm.TryApplyChainStatus(11, TaskQueueItemStatus.Running));
+        Assert.True(vm.TryApplyChainStatus(12, TaskQueueItemStatus.Running));
+        Assert.Equal(TaskQueueItemStatus.Running, vm.Status);
+
+        Assert.True(vm.TryApplyChainStatus(11, TaskQueueItemStatus.Success));
+        Assert.Equal(TaskQueueItemStatus.Running, vm.Status);
+        Assert.Equal(1, vm.CompletedChainCount);
+
+        Assert.True(vm.TryApplyChainStatus(12, TaskQueueItemStatus.Success));
+        Assert.Equal(TaskQueueItemStatus.Success, vm.Status);
+        Assert.Equal(2, vm.CompletedChainCount);
+
+        // Error outranks a still-running sibling.
+        vm.SetTaskIds([11, 12]);
+        vm.TryApplyChainStatus(11, TaskQueueItemStatus.Success);
+        vm.TryApplyChainStatus(12, TaskQueueItemStatus.Running);
+        Assert.Equal(TaskQueueItemStatus.Running, vm.Status);
+        vm.TryApplyChainStatus(12, TaskQueueItemStatus.Error);
+        Assert.True(vm.IsStatusError);
+        Assert.Equal(2, vm.CompletedChainCount);
+
+        // All completed outranks a skipped sibling; Skipped applies only when nothing ran.
+        vm.SetTaskIds([11, 12]);
+        vm.TryApplyChainStatus(11, TaskQueueItemStatus.Success);
+        vm.TryApplyChainStatus(12, TaskQueueItemStatus.Skipped);
+        Assert.True(vm.IsStatusSkipped);
+        Assert.Equal(1, vm.CompletedChainCount);
+
+        // Unknown ids are not this row's chains: the caller falls back to the legacy path.
+        Assert.False(vm.TryApplyChainStatus(99, TaskQueueItemStatus.Error));
+        Assert.Equal(TaskQueueItemStatus.Skipped, vm.Status);
+    }
+
+    [Fact]
+    public void TaskQueueItem_SingleChain_KeepsLegacyStatusBehavior()
+    {
+        var vm = new TaskQueueItemViewModel("Fight", "fight", true);
+        vm.SetTaskIds([7]);
+
+        Assert.True(vm.TryApplyChainStatus(7, TaskQueueItemStatus.Running));
+        Assert.Equal(TaskQueueItemStatus.Running, vm.Status);
+        Assert.True(vm.TryApplyChainStatus(7, TaskQueueItemStatus.Success));
+        Assert.Equal(TaskQueueItemStatus.Success, vm.Status);
+        Assert.Equal(1, vm.CompletedChainCount);
+
+        // Rows that were never assigned chain ids keep the direct status writes.
+        var legacy = new TaskQueueItemViewModel("Fight", "fight", true);
+        Assert.Empty(legacy.TaskIds);
+        legacy.Status = TaskQueueItemStatus.Error;
+        Assert.True(legacy.IsStatusError);
+        Assert.False(legacy.TryApplyChainStatus(1, TaskQueueItemStatus.Success));
+    }
+
+    [Fact]
+    public async Task TaskQueuePage_MultiChainCallbacks_AggregateWithoutLastChainOverwrite()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.UserDataUpdate, "update", enabled: true)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        var row = Assert.Single(vm.Tasks);
+        row.SetTaskIds([1, 2]);
+        MapCoreTaskId(fixture.Runtime.SessionService, 1, 0);
+        MapCoreTaskId(fixture.Runtime.SessionService, 2, 0);
+
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(0, "TaskChainStart", """{"task_chain":"OperBox","taskid":1}""", DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(0, "TaskChainStart", """{"task_chain":"Depot","taskid":2}""", DateTimeOffset.UtcNow));
+        Assert.Equal(TaskQueueItemStatus.Running, row.Status);
+
+        // The first chain finishing must not collapse the row to Completed; the sibling
+        // is still running.
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(0, "TaskChainCompleted", """{"task_chain":"OperBox","taskid":1}""", DateTimeOffset.UtcNow));
+        Assert.Equal(TaskQueueItemStatus.Running, row.Status);
+        Assert.Equal(1, row.CompletedChainCount);
+
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(0, "TaskChainCompleted", """{"task_chain":"Depot","taskid":2}""", DateTimeOffset.UtcNow));
+        Assert.Equal(TaskQueueItemStatus.Success, row.Status);
+        Assert.Equal(2, row.CompletedChainCount);
+    }
+
+    [Fact]
+    public async Task SessionService_MapsEveryAppendedChainToItsQueueIndex()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync(TaskModuleTypes.UserDataUpdate, "update", enabled: true)).Success);
+        Assert.True((await fixture.Runtime.SessionService.ConnectAsync("127.0.0.1:5555", "General", null)).Success);
+
+        var appended = await fixture.Runtime.SessionService.AppendTasksFromCurrentProfileAsync();
+
+        Assert.True(appended.Success);
+        Assert.Equal(2, appended.Value);
+        var ids = fixture.Runtime.SessionService.GetCoreTaskIdsForQueueIndex(0);
+        Assert.Equal(2, ids.Count);
+        Assert.Equal([1, 2], ids);
+        Assert.Empty(fixture.Runtime.SessionService.GetCoreTaskIdsForQueueIndex(1));
+    }
+
     private sealed class TestFixture : IAsyncDisposable
     {
         private TestFixture(

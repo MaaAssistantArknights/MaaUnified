@@ -1321,6 +1321,102 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task GuiNewImport_DepotMaintainTask_IsSupportedManagedType()
+    {
+        // WPF dev-v2 P0-08 (38b2e9e4f2 ... 0302381585): DepotMaintainTask must import as a
+        // supported managed row instead of degrading into a disabled unsupported row.
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "DepotMaintainTask",
+                      "Name": "Depot",
+                      "IsEnable": true,
+                      "UpdateDepot": true,
+                      "IsStageManually": true,
+                      "SkipDuringActivity": true,
+                      "SkipDuringResourceCollection": false,
+                      "OnlyFirstInsufficientPlan": true,
+                      "SortByProgress": true,
+                      "CountDualChipAsChipPack": true,
+                      "UseAutoSeries": true,
+                      "UseMedicine": false,
+                      "UseStone": true,
+                      "UseExpiringMedicine": true,
+                      "PlanList": [
+                        {
+                          "Stage": "1-7",
+                          "DropId": "30012",
+                          "DropCount": 120,
+                          "UseMedicine": true,
+                          "MedicineCount": 2,
+                          "UseStone": false,
+                          "StoneCount": 0,
+                          "TaskId": 3
+                        },
+                        {
+                          "Stage": "CE-6",
+                          "DropId": "4001",
+                          "DropCount": 5000000,
+                          "UseMedicine": false,
+                          "MedicineCount": 0,
+                          "UseStone": true,
+                          "StoneCount": 1
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        Assert.DoesNotContain(
+            report.Warnings,
+            warning => warning.Contains("Unsupported legacy task type", StringComparison.Ordinal));
+
+        var task = Assert.Single(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        Assert.Equal(TaskModuleTypes.DepotMaintain, task.Type);
+        Assert.True(task.IsEnabled);
+        Assert.True(task.Params["update_depot"]?.GetValue<bool>());
+        Assert.True(task.Params["is_stage_manually"]?.GetValue<bool>());
+        Assert.True(task.Params["skip_during_activity"]?.GetValue<bool>());
+        Assert.False(task.Params["skip_during_resource_collection"]?.GetValue<bool>());
+        Assert.True(task.Params["only_first_insufficient_plan"]?.GetValue<bool>());
+        Assert.True(task.Params["sort_by_progress"]?.GetValue<bool>());
+        Assert.True(task.Params["count_dual_chip_as_chip_pack"]?.GetValue<bool>());
+        Assert.True(task.Params["use_auto_series"]?.GetValue<bool>());
+        Assert.False(task.Params["use_medicine"]?.GetValue<bool>());
+        Assert.True(task.Params["use_stone"]?.GetValue<bool>());
+        Assert.True(task.Params["use_expiring_medicine"]?.GetValue<bool>());
+
+        var plans = Assert.IsType<JsonArray>(task.Params["plans"]);
+        Assert.Equal(2, plans.Count);
+        Assert.Equal("1-7", plans[0]!["stage"]!.GetValue<string>());
+        Assert.Equal("30012", plans[0]!["drop_id"]!.GetValue<string>());
+        Assert.Equal(120, plans[0]!["drop_count"]!.GetValue<int>());
+        Assert.True(plans[0]!["use_medicine"]!.GetValue<bool>());
+        Assert.Equal(2, plans[0]!["medicine_count"]!.GetValue<int>());
+        Assert.False(plans[0]!["use_stone"]!.GetValue<bool>());
+        Assert.Equal("CE-6", plans[1]!["stage"]!.GetValue<string>());
+        Assert.Equal(5000000, plans[1]!["drop_count"]!.GetValue<int>());
+        // TaskId is a per-run Core id, not configuration.
+        Assert.Null(plans[0]!["task_id"]);
+    }
+
+    [Fact]
     public async Task GuiNewImport_InfrastDevV2Params_MapToManagedShape()
     {
         // WPF dev-v2 c281b7aaca / 59963a90cb / 97d5e8ac38 / 3e570d1c23: the three

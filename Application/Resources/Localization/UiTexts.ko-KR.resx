@@ -268,6 +268,84 @@
   <data name="Custom.Title" xml:space="preserve">
     <value>커스텀</value>
   </data>
+  <data name="DepotMaintain.AddPlan" xml:space="preserve">
+    <value>계획 추가</value>
+  </data>
+  <data name="DepotMaintain.CountDualChipAsChipPack" xml:space="preserve">
+    <value>트윈 칩을 칩 세트로 환산하여 계산</value>
+  </data>
+  <data name="DepotMaintain.Drop" xml:space="preserve">
+    <value>재료</value>
+  </data>
+  <data name="DepotMaintain.DropCount" xml:space="preserve">
+    <value>목표 수량</value>
+  </data>
+  <data name="DepotMaintain.EmptyHint" xml:space="preserve">
+    <value>계획이 없습니다. 실행 시에는 재고 인식만 수행하고 재료를 파밍하지 않습니다.</value>
+  </data>
+  <data name="DepotMaintain.EnableUseMedicine" xml:space="preserve">
+    <value>｢이성 회복제｣ 사용 활성화</value>
+  </data>
+  <data name="DepotMaintain.EnableUseStone" xml:space="preserve">
+    <value>｢오리지늄｣ 사용 활성화</value>
+  </data>
+  <data name="DepotMaintain.Inventory" xml:space="preserve">
+    <value>현재 재고</value>
+  </data>
+  <data name="DepotMaintain.MedicineCount" xml:space="preserve">
+    <value>이성 회복제 수</value>
+  </data>
+  <data name="DepotMaintain.MoveDown" xml:space="preserve">
+    <value>아래로</value>
+  </data>
+  <data name="DepotMaintain.MoveUp" xml:space="preserve">
+    <value>위로</value>
+  </data>
+  <data name="DepotMaintain.NotSelected" xml:space="preserve">
+    <value>선택 안 함</value>
+  </data>
+  <data name="DepotMaintain.OnlyFirstInsufficientPlan" xml:space="preserve">
+    <value>재고가 부족한 첫 번째 계획만 실행</value>
+  </data>
+  <data name="DepotMaintain.PlanUseMedicine" xml:space="preserve">
+    <value>이성 회복제 사용</value>
+  </data>
+  <data name="DepotMaintain.PlanUseStone" xml:space="preserve">
+    <value>오리지늄 사용</value>
+  </data>
+  <data name="DepotMaintain.Plans" xml:space="preserve">
+    <value>계획 목록</value>
+  </data>
+  <data name="DepotMaintain.Remove" xml:space="preserve">
+    <value>삭제</value>
+  </data>
+  <data name="DepotMaintain.SkipDuringActivity" xml:space="preserve">
+    <value>이벤트 진행 중에는 이 작업 건너뛰기</value>
+  </data>
+  <data name="DepotMaintain.SkipDuringResourceCollection" xml:space="preserve">
+    <value>물자 비축 상시 개방 중에는 이 작업 건너뛰기</value>
+  </data>
+  <data name="DepotMaintain.SortByProgress" xml:space="preserve">
+    <value>재고 달성률 순으로 실행</value>
+  </data>
+  <data name="DepotMaintain.Stage" xml:space="preserve">
+    <value>스테이지</value>
+  </data>
+  <data name="DepotMaintain.StoneCount" xml:space="preserve">
+    <value>오리지늄 수</value>
+  </data>
+  <data name="DepotMaintain.Title" xml:space="preserve">
+    <value>재고 유지</value>
+  </data>
+  <data name="DepotMaintain.UpdateDepot" xml:space="preserve">
+    <value>작업 시작 전 재고 데이터 업데이트</value>
+  </data>
+  <data name="DepotMaintain.UseAutoSeries" xml:space="preserve">
+    <value>AUTO 대리 배수</value>
+  </data>
+  <data name="DepotMaintain.UseExpiringMedicine" xml:space="preserve">
+    <value>48시간 이내에 만료되는 이성 회복제 사용</value>
+  </data>
   <data name="Dialog.Common.Cancel" xml:space="preserve">
     <value>취소</value>
   </data>
@@ -696,6 +774,9 @@
   </data>
   <data name="SwitchTheme.Title" xml:space="preserve">
     <value>테마 변경</value>
+  </data>
+  <data name="TaskQueue.Module.DepotMaintain" xml:space="preserve">
+    <value>재고 유지</value>
   </data>
   <data name="TaskQueue.Module.OperProgress" xml:space="preserve">
     <value>오퍼레이터 육성</value>

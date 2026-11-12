@@ -703,6 +703,84 @@
   <data name="Deploy" xml:space="preserve">
     <value>部署</value>
   </data>
+  <data name="DepotMaintain.AddPlan" xml:space="preserve">
+    <value>添加计划</value>
+  </data>
+  <data name="DepotMaintain.CountDualChipAsChipPack" xml:space="preserve">
+    <value>双芯片折算计入芯片组</value>
+  </data>
+  <data name="DepotMaintain.Drop" xml:space="preserve">
+    <value>材料</value>
+  </data>
+  <data name="DepotMaintain.DropCount" xml:space="preserve">
+    <value>目标数量</value>
+  </data>
+  <data name="DepotMaintain.EmptyHint" xml:space="preserve">
+    <value>尚未添加计划；运行时只执行库存识别，不会刷取材料。</value>
+  </data>
+  <data name="DepotMaintain.EnableUseMedicine" xml:space="preserve">
+    <value>启用 ｢使用药剂｣</value>
+  </data>
+  <data name="DepotMaintain.EnableUseStone" xml:space="preserve">
+    <value>启用 ｢使用源石｣</value>
+  </data>
+  <data name="DepotMaintain.Inventory" xml:space="preserve">
+    <value>现有库存</value>
+  </data>
+  <data name="DepotMaintain.MedicineCount" xml:space="preserve">
+    <value>药剂数量</value>
+  </data>
+  <data name="DepotMaintain.MoveDown" xml:space="preserve">
+    <value>下移</value>
+  </data>
+  <data name="DepotMaintain.MoveUp" xml:space="preserve">
+    <value>上移</value>
+  </data>
+  <data name="DepotMaintain.NotSelected" xml:space="preserve">
+    <value>不选择</value>
+  </data>
+  <data name="DepotMaintain.OnlyFirstInsufficientPlan" xml:space="preserve">
+    <value>仅执行第一个库存不足的计划</value>
+  </data>
+  <data name="DepotMaintain.PlanUseMedicine" xml:space="preserve">
+    <value>使用药剂</value>
+  </data>
+  <data name="DepotMaintain.PlanUseStone" xml:space="preserve">
+    <value>使用源石</value>
+  </data>
+  <data name="DepotMaintain.Plans" xml:space="preserve">
+    <value>计划列表</value>
+  </data>
+  <data name="DepotMaintain.Remove" xml:space="preserve">
+    <value>删除</value>
+  </data>
+  <data name="DepotMaintain.SkipDuringActivity" xml:space="preserve">
+    <value>活动期间跳过本任务</value>
+  </data>
+  <data name="DepotMaintain.SkipDuringResourceCollection" xml:space="preserve">
+    <value>资源全开放期间跳过本任务</value>
+  </data>
+  <data name="DepotMaintain.SortByProgress" xml:space="preserve">
+    <value>按库存达成率排序执行</value>
+  </data>
+  <data name="DepotMaintain.Stage" xml:space="preserve">
+    <value>关卡</value>
+  </data>
+  <data name="DepotMaintain.StoneCount" xml:space="preserve">
+    <value>源石数量</value>
+  </data>
+  <data name="DepotMaintain.Title" xml:space="preserve">
+    <value>库存保持</value>
+  </data>
+  <data name="DepotMaintain.UpdateDepot" xml:space="preserve">
+    <value>任务开始前更新库存数据</value>
+  </data>
+  <data name="DepotMaintain.UseAutoSeries" xml:space="preserve">
+    <value>AUTO 代理倍率</value>
+  </data>
+  <data name="DepotMaintain.UseExpiringMedicine" xml:space="preserve">
+    <value>使用 48 小时内过期的理智药</value>
+  </data>
   <data name="Dialog.Common.Cancel" xml:space="preserve">
     <value>取消</value>
   </data>
@@ -1341,6 +1419,9 @@
   </data>
   <data name="SwitchTheme.Title" xml:space="preserve">
     <value>更换主题</value>
+  </data>
+  <data name="TaskQueue.Module.DepotMaintain" xml:space="preserve">
+    <value>库存保持</value>
   </data>
   <data name="TaskQueue.Module.OperProgress" xml:space="preserve">
     <value>干员培养</value>

@@ -5,6 +5,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Compat.Runtime;
+using MAAUnified.CoreBridge;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.Application.Services.TaskParams;
@@ -18,6 +19,56 @@ public sealed class TaskCompileOutput
     public required IReadOnlyList<TaskValidationIssue> Issues { get; init; }
 
     public bool HasBlockingIssues => Issues.Any(i => i.Blocking);
+}
+
+/// <summary>
+/// 库存保持（WPF dev-v2 P0-08）整任务跳过原因。任一命中时该队列条目本轮不追加任何
+/// Core 任务链。
+/// </summary>
+public enum DepotMaintainSkipReason
+{
+    None,
+    NoPlans,
+    ActivityOpen,
+    ResourceCollectionOpen,
+}
+
+/// <summary>
+/// 单个库存保持计划在展开期的结论，用于日志与测试断言。
+/// </summary>
+public enum DepotMaintainPlanOutcome
+{
+    Enqueued,
+    InvalidDropItem,
+    ZeroDropCount,
+    InventoryEnough,
+    InventoryDataMissing,
+    StageMissing,
+    StageClosed,
+}
+
+public sealed record DepotMaintainPlanDecision(
+    int PlanIndex,
+    DepotMaintainPlanOutcome Outcome,
+    string DropId,
+    int NeededCount);
+
+/// <summary>
+/// 库存保持任务的编译期展开结果：<see cref="Tasks"/> 为按顺序追加的 Core 任务链
+/// （1 条 Depot 识别链 + 每计划 1 条 Fight 链），<see cref="PlanDecisions"/> 记录
+/// 每个计划的取舍，<see cref="Issues"/> 为非阻断诊断（致命问题走 Blocking）。
+/// </summary>
+public sealed class DepotMaintainExpansion
+{
+    public required IReadOnlyList<CoreTaskRequest> Tasks { get; init; }
+
+    public required IReadOnlyList<DepotMaintainPlanDecision> PlanDecisions { get; init; }
+
+    public required IReadOnlyList<TaskValidationIssue> Issues { get; init; }
+
+    public DepotMaintainSkipReason SkipReason { get; init; } = DepotMaintainSkipReason.None;
+
+    public bool Skipped => SkipReason != DepotMaintainSkipReason.None;
 }
 
 public static class TaskParamCompiler
@@ -156,6 +207,7 @@ public static class TaskParamCompiler
             "PostAction" => "PostAction",
             "SwitchTheme" => "SwitchTheme",
             "OperProgress" => "OperProgress",
+            "DepotMaintain" => "DepotMaintain",
             _ => normalized,
         };
     }
@@ -179,6 +231,7 @@ public static class TaskParamCompiler
             "Custom" => (normalizedType, CompileCustom(new CustomTaskParamsDto(), profile, config).Params),
             "SwitchTheme" => (normalizedType, TaskModuleParameterDefaults.CreateSwitchThemeDefaults()),
             "OperProgress" => (normalizedType, TaskModuleParameterDefaults.CreateOperProgressDefaults()),
+            "DepotMaintain" => (normalizedType, TaskModuleParameterDefaults.CreateDepotMaintainDefaults()),
             _ => (normalizedType, new JsonObject()),
         };
     }
@@ -800,7 +853,12 @@ public static class TaskParamCompiler
         return false;
     }
 
-    private static IReadOnlyDictionary<string, int> ReadDepotCounts(UnifiedConfig? config)
+    /// <summary>
+    /// 读取配置中最近一次仓库识别结果（本地缓存），供库存目标类任务与库存保持编辑器复用。
+    /// </summary>
+    /// <param name="config">当前配置；空表示无配置。</param>
+    /// <returns>物品 id 到数量的映射；无缓存时为空表。</returns>
+    public static IReadOnlyDictionary<string, int> ReadDepotCounts(UnifiedConfig? config)
     {
         var result = new Dictionary<string, int>(StringComparer.Ordinal);
         if (config is null
@@ -2071,6 +2129,7 @@ public static class TaskParamCompiler
             "Custom" => CompileCustomFromTask(task, profile, config, strict),
             "SwitchTheme" => CompileSwitchThemeFromTask(task),
             "OperProgress" => CompileOperProgressFromTask(task),
+            "DepotMaintain" => CompileDepotMaintainFromTask(task),
             _ => new TaskCompileOutput
             {
                 NormalizedType = normalized,
@@ -2605,6 +2664,352 @@ public static class TaskParamCompiler
             },
             Issues = issues,
         };
+    }
+
+    // WPF dev-v2 (38b2e9e4f2、948f23f8ae、0e99c81442、be9cc84fd2、a7ee2c2bf7、e7ef27745e、
+    // 0302381585): DepotMaintain is a queue-level task, not a Core task. The stored
+    // parameters describe the depot snapshot refresh plus the plan list; the append
+    // step expands them into 1 Depot chain + N Fight chains (see ExpandDepotMaintain).
+    private static TaskCompileOutput CompileDepotMaintainFromTask(UnifiedTaskItem task)
+    {
+        var model = DepotMaintainParams.FromJson(task.Params);
+        var issues = new List<TaskValidationIssue>();
+        var plans = new List<DepotMaintainPlan>();
+        foreach (var plan in model.Plans)
+        {
+            if (string.IsNullOrWhiteSpace(plan.DropId))
+            {
+                issues.Add(new TaskValidationIssue(
+                    "DepotMaintainPlanInvalidDropItem",
+                    "depot_maintain.plans",
+                    "DepotMaintain plan without a target drop item is skipped at run time.",
+                    Blocking: false));
+            }
+
+            if (plan.DropCount <= 0)
+            {
+                issues.Add(new TaskValidationIssue(
+                    "DepotMaintainPlanZeroDropCount",
+                    "depot_maintain.plans",
+                    "DepotMaintain plan with a non-positive target count is skipped at run time.",
+                    Blocking: false));
+            }
+
+            plans.Add(plan.Clone());
+        }
+
+        if (plans.Count == 0 && !model.UpdateDepot)
+        {
+            // WPF logs "PlanNoPlan" (TaskQueue.DepotMaintain.PlanNoPlan) and appends nothing
+            // when both the depot refresh and the plan list are empty.
+            issues.Add(new TaskValidationIssue(
+                "DepotMaintainNoPlan",
+                "depot_maintain.plans",
+                "DepotMaintain has neither a depot refresh nor any plan; nothing will be appended.",
+                Blocking: false));
+        }
+
+        model.Plans = plans;
+        return new TaskCompileOutput
+        {
+            NormalizedType = TaskModuleTypes.DepotMaintain,
+            Params = model.ToJson(),
+            Issues = issues,
+        };
+    }
+
+    /// <summary>
+    /// 把库存保持任务展开为 Core 任务链（WPF DepotMaintainTaskUserControlModel.ISerialize）：
+    /// 先按 <see cref="DepotMaintainParams.UpdateDepot"/> 追加 1 条 <c>Depot</c> 识别链，
+    /// 再为每个库存不足的计划追加 1 条 <c>Fight</c> 链（<c>drops</c> = 缺口，
+    /// <c>times</c> = int.MaxValue）。支持活动/资源全开放整任务跳过、按达成率排序、
+    /// 仅执行第一个不足计划、AUTO 倍率、双芯片折算与临期药；无库存数据时不下发刷取。
+    /// </summary>
+    /// <param name="taskName">队列条目名，用于生成 Core 侧任务名。</param>
+    /// <param name="parameters">已归一化的库存保持参数。</param>
+    /// <param name="profile">当前档案（提供药剂/源石等作战设置默认值）。</param>
+    /// <param name="config">当前配置（读取库存缓存等全局数据）。</param>
+    /// <param name="nowUtc">判定用的当前时间；缺省为 <see cref="DateTime.UtcNow"/>。</param>
+    /// <param name="stageActivityState">关卡/活动状态；缺省读取本机关卡缓存。</param>
+    /// <param name="depotCounts">库存数量表；缺省读取配置中的最近一次识别缓存。</param>
+    /// <param name="baseDirectory">资源根目录（读取物品配方）；缺省用运行时根目录。</param>
+    /// <param name="itemFormulas">物品配方索引；缺省按 <paramref name="baseDirectory"/> 读取。</param>
+    /// <returns>展开结果。</returns>
+    public static DepotMaintainExpansion ExpandDepotMaintain(
+        string taskName,
+        JsonObject parameters,
+        UnifiedProfile profile,
+        UnifiedConfig config,
+        DateTime? nowUtc = null,
+        StageActivityState? stageActivityState = null,
+        IReadOnlyDictionary<string, int>? depotCounts = null,
+        string? baseDirectory = null,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>>? itemFormulas = null)
+    {
+        var model = DepotMaintainParams.FromJson(parameters);
+        var issues = new List<TaskValidationIssue>();
+        var decisions = new List<DepotMaintainPlanDecision>();
+        var tasks = new List<CoreTaskRequest>();
+        var timestamp = nowUtc ?? DateTime.UtcNow;
+        var clientType = ResolveStringSetting(profile, config, "Start.ClientType", "ClientType") ?? "Official";
+        var stageState = stageActivityState ?? new StageManagerFeatureService().GetStageActivityState(clientType);
+        var currentDay = MallDailyResetHelper.GetYjDate(timestamp, clientType).DayOfWeek;
+
+        if (model.SkipDuringActivity && IsSideStoryActivityOpen(stageState, timestamp))
+        {
+            issues.Add(new TaskValidationIssue(
+                "DepotMaintainSkippedActivity",
+                "depot_maintain.skip_during_activity",
+                "A SideStory activity is in progress; the depot-maintain task is skipped.",
+                Blocking: false));
+            return new DepotMaintainExpansion
+            {
+                Tasks = [],
+                PlanDecisions = [],
+                Issues = issues,
+                SkipReason = DepotMaintainSkipReason.ActivityOpen,
+            };
+        }
+
+        if (model.SkipDuringResourceCollection && IsResourceCollectionOpen(stageState, timestamp))
+        {
+            issues.Add(new TaskValidationIssue(
+                "DepotMaintainSkippedResourceCollection",
+                "depot_maintain.skip_during_resource_collection",
+                "Resource collection all-day opening is in progress; the depot-maintain task is skipped.",
+                Blocking: false));
+            return new DepotMaintainExpansion
+            {
+                Tasks = [],
+                PlanDecisions = [],
+                Issues = issues,
+                SkipReason = DepotMaintainSkipReason.ResourceCollectionOpen,
+            };
+        }
+
+        if (model.UpdateDepot)
+        {
+            tasks.Add(new CoreTaskRequest("Depot", $"{taskName}-Depot", true, "{}"));
+        }
+
+        if (model.Plans.Count == 0)
+        {
+            if (!model.UpdateDepot)
+            {
+                issues.Add(new TaskValidationIssue(
+                    "DepotMaintainNoPlan",
+                    "depot_maintain.plans",
+                    "DepotMaintain has neither a depot refresh nor any plan; nothing will be appended.",
+                    Blocking: false));
+            }
+
+            return new DepotMaintainExpansion
+            {
+                Tasks = tasks,
+                PlanDecisions = decisions,
+                Issues = issues,
+                SkipReason = model.UpdateDepot ? DepotMaintainSkipReason.None : DepotMaintainSkipReason.NoPlans,
+            };
+        }
+
+        var counts = depotCounts ?? ReadDepotCounts(config);
+        var hasInventoryData = counts.Count > 0;
+        var formulas = model.CountDualChipAsChipPack
+            ? itemFormulas ?? ItemFormulaIndex.Load(baseDirectory)
+            : null;
+
+        var order = Enumerable.Range(0, model.Plans.Count).ToList();
+        if (model.SortByProgress && model.Plans.Count > 1)
+        {
+            order = [.. order.OrderBy(index => ResolveDepotMaintainProgress(model.Plans[index], counts, formulas))];
+            issues.Add(new TaskValidationIssue(
+                "DepotMaintainPlansSortedByProgress",
+                "depot_maintain.plans",
+                "DepotMaintain plans are dispatched by inventory progress (ascending); the stored plan order is unchanged.",
+                Blocking: false));
+        }
+
+        foreach (var index in order)
+        {
+            var plan = model.Plans[index];
+            if (string.IsNullOrWhiteSpace(plan.DropId))
+            {
+                decisions.Add(new DepotMaintainPlanDecision(index, DepotMaintainPlanOutcome.InvalidDropItem, plan.DropId, 0));
+                issues.Add(new TaskValidationIssue(
+                    "DepotMaintainPlanInvalidDropItem",
+                    "depot_maintain.plans",
+                    $"Plan #{index + 1} has no target drop item; it is skipped.",
+                    Blocking: false));
+                continue;
+            }
+
+            if (plan.DropCount <= 0)
+            {
+                decisions.Add(new DepotMaintainPlanDecision(index, DepotMaintainPlanOutcome.ZeroDropCount, plan.DropId, 0));
+                issues.Add(new TaskValidationIssue(
+                    "DepotMaintainPlanZeroDropCount",
+                    "depot_maintain.plans",
+                    $"Plan #{index + 1} has a non-positive target count; it is skipped.",
+                    Blocking: false));
+                continue;
+            }
+
+            // WPF 0302381585 stops farming when no inventory data is available. When the
+            // task refreshes the depot first, the precheck intentionally falls back to a
+            // 0 cache (like WPF) so plans stay queued and are re-evaluated after recognition.
+            if (!hasInventoryData && !model.UpdateDepot)
+            {
+                decisions.Add(new DepotMaintainPlanDecision(index, DepotMaintainPlanOutcome.InventoryDataMissing, plan.DropId, plan.DropCount));
+                issues.Add(new TaskValidationIssue(
+                    "DepotMaintainPlanInventoryDataMissing",
+                    "depot_maintain.depot",
+                    $"Plan #{index + 1}: no inventory data is available, so farming is skipped this run.",
+                    Blocking: false));
+                continue;
+            }
+
+            var currentCount = counts.TryGetValue(plan.DropId, out var cached) ? cached : 0;
+            if (formulas is not null)
+            {
+                currentCount += ItemFormulaIndex.GetDualChipConversion(plan.DropId, counts, formulas);
+            }
+
+            var needed = plan.DropCount - currentCount;
+            if (needed <= 0)
+            {
+                decisions.Add(new DepotMaintainPlanDecision(index, DepotMaintainPlanOutcome.InventoryEnough, plan.DropId, 0));
+                issues.Add(new TaskValidationIssue(
+                    "DepotMaintainPlanInventoryEnough",
+                    "depot_maintain.plans",
+                    $"Plan #{index + 1}: inventory already satisfies the target.",
+                    Blocking: false));
+                continue;
+            }
+
+            var stage = plan.Stage.Trim();
+            if (string.IsNullOrWhiteSpace(stage))
+            {
+                decisions.Add(new DepotMaintainPlanDecision(index, DepotMaintainPlanOutcome.StageMissing, plan.DropId, needed));
+                issues.Add(new TaskValidationIssue(
+                    "DepotMaintainPlanNoStage",
+                    "depot_maintain.plans",
+                    $"Plan #{index + 1} has no stage; it is skipped.",
+                    Blocking: false));
+                continue;
+            }
+
+            // WPF GetFightStage([plan.Stage]): only dispatch when the stage is open today.
+            // Unknown stage codes stay dispatchable, matching the fight task behavior.
+            if (stageState.Find(stage) is { } stageInfo && !stageInfo.IsOpen(timestamp, currentDay))
+            {
+                decisions.Add(new DepotMaintainPlanDecision(index, DepotMaintainPlanOutcome.StageClosed, plan.DropId, needed));
+                issues.Add(new TaskValidationIssue(
+                    "DepotMaintainPlanStageClosed",
+                    "depot_maintain.plans",
+                    $"Plan #{index + 1}: stage `{stage}` is not open today; it is skipped.",
+                    Blocking: false));
+                continue;
+            }
+
+            var fight = CompileFight(
+                new FightTaskParamsDto
+                {
+                    Stage = stage,
+                    StagePlan = [stage],
+                    // WPF keeps the plan stage verbatim (GetFightStage already resolved it).
+                    IsStageManually = true,
+                    HideUnavailableStage = false,
+                    StageResetMode = "Ignore",
+                    UseMedicine = true,
+                    Medicine = model.UseMedicine && plan.UseMedicine ? plan.MedicineCount : 0,
+                    UseStone = true,
+                    Stone = model.UseStone && plan.UseStone ? plan.StoneCount : 0,
+                    Times = int.MaxValue,
+                    EnableTimesLimit = true,
+                    Series = model.UseAutoSeries ? 0 : 1,
+                    UseExpiringMedicine = model.UseExpiringMedicine,
+                    // CompileFight derives expiring_medicine/medicine_expire_days from this window.
+                    MedicineExpireDays = DepotMaintainParams.ExpiringMedicineDays,
+                    EnableTargetDrop = true,
+                    DropId = plan.DropId,
+                    DropCount = needed,
+                    IsInventoryTarget = false,
+                },
+                profile,
+                config,
+                timestamp,
+                stageState);
+
+            // A plan may still resolve to "no runnable fight"; keep it a per-plan decision
+            // instead of failing the whole depot-maintain task.
+            if (fight.Issues.Any(issue => string.Equals(issue.Code, SkipAppendIssueCode, StringComparison.Ordinal)))
+            {
+                decisions.Add(new DepotMaintainPlanDecision(index, DepotMaintainPlanOutcome.InventoryEnough, plan.DropId, needed));
+                issues.AddRange(fight.Issues.Where(issue => !string.Equals(issue.Code, SkipAppendIssueCode, StringComparison.Ordinal)));
+                continue;
+            }
+
+            issues.AddRange(fight.Issues);
+
+            var coreParams = BuildCoreParams(TaskModuleTypes.Fight, fight.Params);
+            tasks.Add(new CoreTaskRequest(
+                TaskModuleTypes.Fight,
+                $"{taskName}-{index + 1}",
+                true,
+                coreParams.ToJsonString()));
+            decisions.Add(new DepotMaintainPlanDecision(index, DepotMaintainPlanOutcome.Enqueued, plan.DropId, needed));
+            issues.Add(new TaskValidationIssue(
+                "DepotMaintainPlanEnqueued",
+                "depot_maintain.plans",
+                $"Plan #{index + 1}: farming {needed} `{plan.DropId}` on `{stage}`.",
+                Blocking: false));
+
+            // WPF e7ef27745e: only the first insufficient plan is dispatched; the rest are
+            // filled by later runs.
+            if (model.OnlyFirstInsufficientPlan)
+            {
+                break;
+            }
+        }
+
+        return new DepotMaintainExpansion
+        {
+            Tasks = tasks,
+            PlanDecisions = decisions,
+            Issues = issues,
+            SkipReason = tasks.Count > 0 ? DepotMaintainSkipReason.None : DepotMaintainSkipReason.NoPlans,
+        };
+    }
+
+    private static double ResolveDepotMaintainProgress(
+        DepotMaintainPlan plan,
+        IReadOnlyDictionary<string, int> counts,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>>? formulas)
+    {
+        if (string.IsNullOrWhiteSpace(plan.DropId) || plan.DropCount <= 0)
+        {
+            return double.MaxValue;
+        }
+
+        var currentCount = counts.TryGetValue(plan.DropId, out var cached) ? cached : 0;
+        if (formulas is not null)
+        {
+            currentCount += ItemFormulaIndex.GetDualChipConversion(plan.DropId, counts, formulas);
+        }
+
+        return (double)currentCount / plan.DropCount;
+    }
+
+    private static bool IsSideStoryActivityOpen(StageActivityState state, DateTime utcNow)
+    {
+        return state.Stages.Any(stage =>
+            stage.Activity is { IsResourceCollection: false } activity && activity.IsBeingOpen(utcNow));
+    }
+
+    private static bool IsResourceCollectionOpen(StageActivityState state, DateTime utcNow)
+    {
+        return state.Stages.Any(stage =>
+            stage.Activity is { IsResourceCollection: true } activity && activity.IsBeingOpen(utcNow));
     }
 
     private static TaskCompileOutput CompileAwardFromTask(UnifiedTaskItem task)

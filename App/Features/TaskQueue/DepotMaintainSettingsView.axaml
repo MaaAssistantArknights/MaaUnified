@@ -1,0 +1,187 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
+             x:Class="MAAUnified.App.Features.TaskQueue.DepotMaintainSettingsView">
+  <UserControl.Styles>
+    <Style Selector="StackPanel.depot-maintain-section,
+                     controls|AdaptiveSpacingStackPanel.depot-maintain-section">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+    </Style>
+    <Style Selector="StackPanel.depot-maintain-card,
+                     controls|AdaptiveSpacingStackPanel.depot-maintain-card">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+    </Style>
+    <Style Selector="StackPanel.depot-maintain-plan,
+                     controls|AdaptiveSpacingStackPanel.depot-maintain-plan">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+    </Style>
+    <Style Selector="TextBlock.depot-maintain-note">
+      <Setter Property="Opacity" Value="0.78" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="Button.depot-maintain-move-button">
+      <Setter Property="Width" Value="22" />
+      <Setter Property="MinWidth" Value="22" />
+      <Setter Property="Height" Value="22" />
+      <Setter Property="MinHeight" Value="22" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.Chevron}" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Focusable" Value="False" />
+    </Style>
+    <Style Selector="Button.depot-maintain-move-button:pointerover">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.SettingsInput.GroupActionBackgroundHover}" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.SettingsInput.ChevronHover}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto" Margin="2">
+    <controls:AdaptiveSpacingStackPanel Classes="task-settings-section depot-maintain-section">
+      <Border Classes="app-surface app-card">
+        <controls:AdaptiveSpacingStackPanel Classes="depot-maintain-card">
+          <TextBlock Classes="app-caption" Text="{Binding TitleText}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding UpdateDepotText}"
+                    IsChecked="{Binding UpdateDepot}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding SkipDuringActivityText}"
+                    IsChecked="{Binding SkipDuringActivity}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding SkipDuringResourceCollectionText}"
+                    IsChecked="{Binding SkipDuringResourceCollection}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding OnlyFirstInsufficientPlanText}"
+                    IsChecked="{Binding OnlyFirstInsufficientPlan}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding SortByProgressText}"
+                    IsChecked="{Binding SortByProgress}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding CountDualChipAsChipPackText}"
+                    IsChecked="{Binding CountDualChipAsChipPack}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding UseAutoSeriesText}"
+                    IsChecked="{Binding UseAutoSeries}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding UseMedicineText}"
+                    IsChecked="{Binding UseMedicine}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding UseStoneText}"
+                    IsChecked="{Binding UseStone}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding UseExpiringMedicineText}"
+                    IsChecked="{Binding UseExpiringMedicine}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+
+      <Border Classes="app-surface app-card">
+        <controls:AdaptiveSpacingStackPanel Classes="depot-maintain-card">
+          <TextBlock Classes="app-caption" Text="{Binding PlansText}" />
+
+          <ItemsControl ItemsSource="{Binding Plans}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:DepotMaintainModuleViewModel+DepotMaintainPlanRow">
+                <Border Classes="grouped-card-frame compact">
+                  <controls:AdaptiveSpacingStackPanel Classes="depot-maintain-plan">
+                    <Grid ColumnDefinitions="Auto,*,Auto,4,Auto,4,Auto">
+                      <TextBlock Grid.Column="0"
+                                 Margin="0,0,6,0"
+                                 Classes="app-caption"
+                                 VerticalAlignment="Center"
+                                 Text="{Binding Index}" />
+                      <controls:AppSelect Grid.Column="1"
+                                          ItemsSource="{Binding DataContext.StageOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                          SelectedValueBinding="{Binding Value}"
+                                          SelectedValue="{Binding Stage}">
+                        <controls:AppSelect.ItemTemplate>
+                          <DataTemplate x:DataType="vm:DepotMaintainModuleViewModel+StringChoice">
+                            <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                          </DataTemplate>
+                        </controls:AppSelect.ItemTemplate>
+                      </controls:AppSelect>
+                      <Button Grid.Column="2"
+                              Classes="depot-maintain-move-button"
+                              Content="↑"
+                              Tag="{Binding}"
+                              ToolTip.Tip="{Binding DataContext.MoveUpText, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              Click="OnMovePlanUpClick" />
+                      <Button Grid.Column="4"
+                              Classes="depot-maintain-move-button"
+                              Content="↓"
+                              Tag="{Binding}"
+                              ToolTip.Tip="{Binding DataContext.MoveDownText, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              Click="OnMovePlanDownClick" />
+                      <Button Grid.Column="6"
+                              Classes="settings-dropdown-delete-button"
+                              Tag="{Binding}"
+                              ToolTip.Tip="{Binding DataContext.RemoveText, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              Click="OnRemovePlanClick" />
+                    </Grid>
+
+                    <Grid ColumnDefinitions="*,4,*">
+                      <controls:AppSelect Grid.Column="0"
+                                          ItemsSource="{Binding DataContext.DropOptions, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                          SelectedValueBinding="{Binding Value}"
+                                          SelectedValue="{Binding DropId}">
+                        <controls:AppSelect.ItemTemplate>
+                          <DataTemplate x:DataType="vm:FightTaskModuleViewModel+DropOption">
+                            <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                          </DataTemplate>
+                        </controls:AppSelect.ItemTemplate>
+                      </controls:AppSelect>
+                      <controls:AppNumberInput Grid.Column="2"
+                                               Minimum="0"
+                                               Maximum="99999999"
+                                               Value="{Binding DropCount}" />
+                    </Grid>
+
+                    <Grid ColumnDefinitions="Auto,*,4,Auto,*">
+                      <CheckBox Grid.Column="0"
+                                Classes="app-checkbox"
+                                Content="{Binding DataContext.PlanUseMedicineText, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                IsChecked="{Binding UseMedicine}" />
+                      <controls:AppNumberInput Grid.Column="1"
+                                               Minimum="0"
+                                               Maximum="999"
+                                               Value="{Binding MedicineCount}" />
+                      <CheckBox Grid.Column="3"
+                                Classes="app-checkbox"
+                                Content="{Binding DataContext.PlanUseStoneText, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                IsChecked="{Binding UseStone}" />
+                      <controls:AppNumberInput Grid.Column="4"
+                                               Minimum="0"
+                                               Maximum="999"
+                                               Value="{Binding StoneCount}" />
+                    </Grid>
+
+                    <TextBlock Classes="subtle depot-maintain-note">
+                      <Run Text="{Binding InventoryLabel}" />
+                      <Run Text=": " />
+                      <Run Text="{Binding InventoryDisplay}" />
+                    </TextBlock>
+                  </controls:AdaptiveSpacingStackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Classes="subtle depot-maintain-note"
+                     IsVisible="{Binding ShowEmptyHint}"
+                     Text="{Binding EmptyHintText}" />
+
+          <Button Classes="app-button app-secondary"
+                  Content="{Binding AddPlanText}"
+                  Click="OnAddPlanClick" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+    </controls:AdaptiveSpacingStackPanel>
+  </Grid>
+</UserControl>

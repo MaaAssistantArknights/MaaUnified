@@ -268,6 +268,84 @@
   <data name="Custom.Title" xml:space="preserve">
     <value>カスタム</value>
   </data>
+  <data name="DepotMaintain.AddPlan" xml:space="preserve">
+    <value>計画を追加</value>
+  </data>
+  <data name="DepotMaintain.CountDualChipAsChipPack" xml:space="preserve">
+    <value>ツインチップを合成してチップセットとして計上</value>
+  </data>
+  <data name="DepotMaintain.Drop" xml:space="preserve">
+    <value>素材</value>
+  </data>
+  <data name="DepotMaintain.DropCount" xml:space="preserve">
+    <value>目標数</value>
+  </data>
+  <data name="DepotMaintain.EmptyHint" xml:space="preserve">
+    <value>計画がありません。実行時は在庫認識のみを行い、素材は周回しません。</value>
+  </data>
+  <data name="DepotMaintain.EnableUseMedicine" xml:space="preserve">
+    <value>｢理性回復剤｣ の使用を有効化</value>
+  </data>
+  <data name="DepotMaintain.EnableUseStone" xml:space="preserve">
+    <value>｢源石｣ の使用を有効化</value>
+  </data>
+  <data name="DepotMaintain.Inventory" xml:space="preserve">
+    <value>現在の在庫</value>
+  </data>
+  <data name="DepotMaintain.MedicineCount" xml:space="preserve">
+    <value>理性回復剤数</value>
+  </data>
+  <data name="DepotMaintain.MoveDown" xml:space="preserve">
+    <value>下へ</value>
+  </data>
+  <data name="DepotMaintain.MoveUp" xml:space="preserve">
+    <value>上へ</value>
+  </data>
+  <data name="DepotMaintain.NotSelected" xml:space="preserve">
+    <value>未選択</value>
+  </data>
+  <data name="DepotMaintain.OnlyFirstInsufficientPlan" xml:space="preserve">
+    <value>在庫不足の最初の計画のみ実行</value>
+  </data>
+  <data name="DepotMaintain.PlanUseMedicine" xml:space="preserve">
+    <value>理性回復剤を使用</value>
+  </data>
+  <data name="DepotMaintain.PlanUseStone" xml:space="preserve">
+    <value>源石を使用</value>
+  </data>
+  <data name="DepotMaintain.Plans" xml:space="preserve">
+    <value>計画リスト</value>
+  </data>
+  <data name="DepotMaintain.Remove" xml:space="preserve">
+    <value>削除</value>
+  </data>
+  <data name="DepotMaintain.SkipDuringActivity" xml:space="preserve">
+    <value>イベント開催中はこのタスクをスキップ</value>
+  </data>
+  <data name="DepotMaintain.SkipDuringResourceCollection" xml:space="preserve">
+    <value>資源収集の全日開放中はこのタスクをスキップ</value>
+  </data>
+  <data name="DepotMaintain.SortByProgress" xml:space="preserve">
+    <value>在庫達成率順に実行</value>
+  </data>
+  <data name="DepotMaintain.Stage" xml:space="preserve">
+    <value>ステージ</value>
+  </data>
+  <data name="DepotMaintain.StoneCount" xml:space="preserve">
+    <value>源石数</value>
+  </data>
+  <data name="DepotMaintain.Title" xml:space="preserve">
+    <value>在庫維持</value>
+  </data>
+  <data name="DepotMaintain.UpdateDepot" xml:space="preserve">
+    <value>タスク開始前に在庫データを更新</value>
+  </data>
+  <data name="DepotMaintain.UseAutoSeries" xml:space="preserve">
+    <value>AUTO 連戦回数</value>
+  </data>
+  <data name="DepotMaintain.UseExpiringMedicine" xml:space="preserve">
+    <value>48 時間以内に期限が切れる理性回復剤を使用</value>
+  </data>
   <data name="Dialog.Common.Cancel" xml:space="preserve">
     <value>キャンセル</value>
   </data>
@@ -696,6 +774,9 @@
   </data>
   <data name="SwitchTheme.Title" xml:space="preserve">
     <value>テーマ変更</value>
+  </data>
+  <data name="TaskQueue.Module.DepotMaintain" xml:space="preserve">
+    <value>在庫維持</value>
   </data>
   <data name="TaskQueue.Module.OperProgress" xml:space="preserve">
     <value>オペレーター育成</value>

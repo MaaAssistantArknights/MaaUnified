@@ -396,6 +396,33 @@ public sealed class UnifiedSessionService
         }
     }
 
+    /// <summary>
+    /// Gets the Core task ids queued by the profile append batch for one queue row.
+    /// WPF dev-v2 (9e846609aa) lets a single row own several Core chains (UserDataUpdate
+    /// 2, DepotMaintain 1 + plans); the queue page mirrors those ids so per-chain status
+    /// callbacks can be aggregated instead of overwriting the whole row.
+    /// Ad-hoc runs (Copilot/Toolbox/WebApi) also register mappings, but those never belong
+    /// to a queue row, so they are excluded.
+    /// </summary>
+    /// <param name="queueIndex">Queue row index inside the current profile.</param>
+    /// <returns>Core task ids in append order; empty when the batch does not own the row.</returns>
+    public IReadOnlyList<int> GetCoreTaskIdsForQueueIndex(int queueIndex)
+    {
+        lock (_taskIndexMapGate)
+        {
+            if (!_taskIndexMappingsBelongToProfileBatch)
+            {
+                return [];
+            }
+
+            return _taskIndexByCoreTaskId
+                .Where(pair => pair.Value == queueIndex)
+                .Select(pair => pair.Key)
+                .OrderBy(static id => id)
+                .ToArray();
+        }
+    }
+
     public async Task<CoreResult<bool>> SetQueuedTaskParamsAsync(
         int taskIndex,
         string paramsJson,
@@ -1010,6 +1037,68 @@ public sealed class UnifiedSessionService
                     appended += 1;
                     Interlocked.Increment(ref _currentAppendAttemptQueuedTaskCount);
                     _logService.Info($"Appended task #{appendCoreResult.Value}: {userDataTask.Name}");
+                    await ThrowIfAppendCanceledAsync(appended, cancellationToken, "profile append canceled").ConfigureAwait(false);
+                }
+
+                continue;
+            }
+
+            if (string.Equals(compiled.NormalizedType, TaskModuleTypes.DepotMaintain, StringComparison.OrdinalIgnoreCase))
+            {
+                // WPF dev-v2 (P0-08, 38b2e9e4f2): DepotMaintain is expanded at append time
+                // into 1 Depot recognition chain + 1 Fight chain per plan. Every chain of
+                // the row maps to the same queue index so the queue page can aggregate the
+                // per-chain status (P1-05).
+                var expansion = TaskParamCompiler.ExpandDepotMaintain(
+                    task.Name,
+                    compiled.Params,
+                    profile,
+                    _configService.CurrentConfig);
+
+                foreach (var issue in expansion.Issues)
+                {
+                    if (string.Equals(issue.Code, "DepotMaintainPlanEnqueued", StringComparison.Ordinal))
+                    {
+                        _logService.Info($"Depot maintain plan `{task.Name}`: {issue.Message}");
+                    }
+                    else
+                    {
+                        _logService.Warn($"Depot maintain `{task.Name}`: {issue.Code}: {issue.Message}");
+                    }
+                }
+
+                if (expansion.Skipped)
+                {
+                    _logService.Info($"Skipped task `{task.Name}` because depot maintain resolved no runnable chain ({expansion.SkipReason}).");
+                    continue;
+                }
+
+                foreach (var depotMaintainTask in expansion.Tasks)
+                {
+                    // MaaCore exposes no remove/clear API. Once the first append is issued,
+                    // finish the batch so cancellation cannot leave a partial native queue.
+                    await ThrowIfAppendCanceledAsync(appended, cancellationToken, "profile append canceled").ConfigureAwait(false);
+                    CoreResult<int> appendCoreResult;
+                    try
+                    {
+                        appendCoreResult = await _bridge.AppendTaskAsync(depotMaintainTask, CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        ClearTaskIdMappings();
+                        Interlocked.Exchange(ref _currentAppendAttemptQueuedTaskCount, 0);
+                        throw;
+                    }
+                    if (!appendCoreResult.Success)
+                    {
+                        _logService.Warn($"Append task failed `{task.Name}`: {appendCoreResult.Error?.Code} {appendCoreResult.Error?.Message}");
+                        return await FailAppendBatchAsync(appendCoreResult.Error!, "profile append failed", clearQueueOnFailure: true).ConfigureAwait(false);
+                    }
+
+                    SetTaskIdMapping(appendCoreResult.Value, queueIndex);
+                    appended += 1;
+                    Interlocked.Increment(ref _currentAppendAttemptQueuedTaskCount);
+                    _logService.Info($"Appended task #{appendCoreResult.Value}: {depotMaintainTask.Name}");
                     await ThrowIfAppendCanceledAsync(appended, cancellationToken, "profile append canceled").ConfigureAwait(false);
                 }
 

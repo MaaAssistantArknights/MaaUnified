@@ -37,6 +37,9 @@
     <DataTemplate DataType="taskVm:OperProgressModuleViewModel">
       <taskViews:OperProgressSettingsView />
     </DataTemplate>
+    <DataTemplate DataType="taskVm:DepotMaintainModuleViewModel">
+      <taskViews:DepotMaintainSettingsView />
+    </DataTemplate>
     <DataTemplate DataType="taskVm:UserDataUpdateModuleViewModel">
       <taskViews:UserDataUpdateSettingsView />
     </DataTemplate>
