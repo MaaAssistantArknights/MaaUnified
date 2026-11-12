@@ -95,6 +95,13 @@ internal static class Program
             RecordStartupStage("Main.LinuxPackagedRuntimeSeed.Ready", $"resourceSeeded={linuxSeedResult.ResourceSeeded}; resourceSeedReason={linuxSeedResult.ResourceSeedReason}; nativeLibraries={linuxSeedResult.NativeLibraryCount}");
         }
 
+        // 外部更新器成功标记必须先消费：它表示更新器已在重启前完成安装，配置里的待安装包
+        // 状态若不清掉，本次启动会再次应用同一个包并重复写失败标记（WPF 217db38484）。
+        if (PendingAppUpdateService.TryConsumeDelegatedUpdateSuccess(runtimeBaseDirectory))
+        {
+            RecordStartupStage("Main.PendingUpdate.DelegatedSuccessConsumed", "External updater reported a successful install.");
+        }
+
         var pendingUpdateResult = PendingAppUpdateService.TryApplyPendingUpdatePackage(runtimeBaseDirectory);
         if (pendingUpdateResult.Status == PendingAppUpdateStatus.Applied)
         {

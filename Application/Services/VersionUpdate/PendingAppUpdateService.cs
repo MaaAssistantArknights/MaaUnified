@@ -43,6 +43,44 @@ public sealed record PendingUpdateRegistrationResult(
 
 public static class PendingAppUpdateService
 {
+    /// <summary>
+    /// 消费外部更新器成功标记（WPF <c>PendingUpdateApplier.TryConsumeDelegatedUpdateSuccess</c>，
+    /// <c>217db38484</c>）：成功文件存在说明更新器已在重启前完成安装。清除待安装包状态、
+    /// 失败标记与修复标记并删除成功文件，避免下一次启动重复应用或误报失败。
+    /// </summary>
+    /// <param name="baseDirectory">安装根目录。</param>
+    /// <returns>消费到成功标记时为 <see langword="true"/>。</returns>
+    public static bool TryConsumeDelegatedUpdateSuccess(string baseDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
+        var successPath = Path.Combine(baseDirectory, ExternalUpdaterDelegation.SuccessStatusFileName);
+        if (!File.Exists(successPath))
+        {
+            return false;
+        }
+
+        var configStore = MAAUnifiedRuntimeFactory.CreateConfigStore(baseDirectory);
+        var commitLock = configStore.AcquireCommitLockAsync().AsTask().GetAwaiter().GetResult();
+        try
+        {
+            var config = TryLoadConfig(configStore);
+            if (config is not null)
+            {
+                ClearPendingPackageState(config);
+                SaveConfig(configStore, config);
+            }
+        }
+        finally
+        {
+            commitLock.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+
+        PendingUpdateFailureState.Clear(baseDirectory);
+        UpdateRepairState.Clear(baseDirectory);
+        TryDeleteFile(successPath);
+        return true;
+    }
+
     public static PendingAppUpdateInfo? ResolvePendingUpdate(string baseDirectory)
     {
         var config = TryLoadConfig(MAAUnifiedRuntimeFactory.CreateConfigStore(baseDirectory));

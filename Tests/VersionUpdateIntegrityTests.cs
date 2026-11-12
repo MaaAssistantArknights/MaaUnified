@@ -304,6 +304,28 @@ public sealed class VersionUpdateIntegrityTests
     }
 
     [Fact]
+    public async Task TryConsumeDelegatedUpdateSuccess_ShouldClearPendingAndFailureStateOnce()
+    {
+        using var root = TestRoot.Create();
+        await SavePendingUpdateConfigAsync(root.Path);
+        PendingUpdateFailureState.Write(root.Path, "previous attempt failed");
+        var successPath = Path.Combine(root.Path, ExternalUpdaterDelegation.SuccessStatusFileName);
+        await File.WriteAllTextAsync(successPath, "ok");
+
+        Assert.True(PendingAppUpdateService.TryConsumeDelegatedUpdateSuccess(root.Path));
+        Assert.False(File.Exists(successPath));
+        Assert.False(PendingUpdateFailureState.Exists(root.Path));
+        Assert.False(UpdateRepairState.RequiresFullPackage(root.Path));
+
+        var config = await new AvaloniaJsonConfigStore(root.Path).LoadAsync();
+        Assert.NotNull(config);
+        Assert.Equal(string.Empty, config!.GlobalValues[ConfigurationKeys.VersionUpdatePackage]!.GetValue<string>());
+
+        // 成功标记只能消费一次，第二次启动不再重复清状态。
+        Assert.False(PendingAppUpdateService.TryConsumeDelegatedUpdateSuccess(root.Path));
+    }
+
+    [Fact]
     public async Task TryRegisterPendingUpdatePackage_WhenOlderOrUnrecognizedPackage_IsRejected()
     {
         using var root = TestRoot.Create();

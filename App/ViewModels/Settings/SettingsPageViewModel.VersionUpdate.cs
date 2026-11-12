@@ -664,9 +664,11 @@ public sealed partial class SettingsPageViewModel
                 or PackageResolutionStatus.AppImageManualInstallRequired
             ? string.Empty
             : checkResult.PreparedPackagePath ?? string.Empty;
-        VersionUpdateDoNotShow = !checkResult.IsNewVersion;
+        // 同版本完整包修复（P0-12/P0-13）：IsNewVersion 为 false 但仍解析到了可用包，
+        // 也要保持修复入口可见，否则 filelist 损坏时用户看不到重装入口。
+        VersionUpdateDoNotShow = !checkResult.IsNewVersion && !checkResult.HasPackage;
         VersionUpdateIsFirstBoot = false;
-        SetPendingVersionUpdateAvailability(checkResult.IsNewVersion);
+        SetPendingVersionUpdateAvailability(checkResult.IsNewVersion || checkResult.HasPackage);
 
         var persistResult = await Runtime.VersionUpdateFeatureService.SavePolicyAsync(
             BuildVersionUpdatePolicy(),
