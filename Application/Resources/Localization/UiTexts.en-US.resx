@@ -6720,6 +6720,9 @@ A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created b
   <data name="Settings.Game.EnableRunDurationLimit" xml:space="preserve">
     <value>Limit run duration</value>
   </data>
+  <data name="Settings.Game.EnableRunDurationLimit.Tip" xml:space="preserve">
+    <value>Checked: every run. Indeterminate: this run only. Stops the run when the limit is reached.</value>
+  </data>
   <data name="Settings.Game.RunDurationLimitMinutes" xml:space="preserve">
     <value>Run duration limit (min)</value>
   </data>

@@ -5876,6 +5876,9 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="Settings.Game.EnableRunDurationLimit" xml:space="preserve">
     <value>限制單次運行時長</value>
   </data>
+  <data name="Settings.Game.EnableRunDurationLimit.Tip" xml:space="preserve">
+    <value>勾選＝每輪生效，半選＝僅本次；到點停止目前執行。</value>
+  </data>
   <data name="Settings.Game.RunDurationLimitMinutes" xml:space="preserve">
     <value>運行時長上限（分鐘）</value>
   </data>

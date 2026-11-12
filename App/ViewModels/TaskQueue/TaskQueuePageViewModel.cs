@@ -340,6 +340,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private CancellationTokenSource? _stallReminderCts;
     private int _stallReminderCount;
     private CancellationTokenSource? _runDurationLimitCts;
+    // WPF RunningState/TaskQueueViewModel 5a55fc8ac1: 本轮时长上限来自 ｢仅本次｣（配置为 null），
+    // 本轮结束后把该值写回 false，半选只生效一次。
+    private bool _runDurationLimitOnce;
     private int _stopScriptLaunched;
     // Resource-broken (UnknownTask) 停止请求发射权：一条链可能连发多次 SubTaskError，
     // 只允许触发一次停止，新一轮运行开始时重置。
@@ -7740,7 +7743,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     {
         CancelRunDurationLimitWatch();
         var config = Runtime.ConfigurationService.CurrentConfig;
-        if (!TryReadProfileBool(config, ConfigurationKeys.EnableRunDurationLimit, false))
+        // 三态（WPF 5a55fc8ac1）：false 关闭；true 每轮生效；null 为 ｢仅本次｣，本轮同样计时，
+        // 但结束后要写回 false。
+        var enableRunDurationLimit = TryReadProfileNullableBool(
+            config,
+            ConfigurationKeys.EnableRunDurationLimit,
+            false);
+        if (enableRunDurationLimit is false)
         {
             return;
         }
@@ -7756,6 +7765,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         var runId = _currentRunId;
         var cts = new CancellationTokenSource();
         _runDurationLimitCts = cts;
+        _runDurationLimitOnce = enableRunDurationLimit is null;
         _ = RunRunDurationLimitWatchAsync(limitMinutes, executePostActions, runId, cts.Token);
     }
 
@@ -7831,6 +7841,56 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _runDurationLimitCts?.Cancel();
         _runDurationLimitCts?.Dispose();
         _runDurationLimitCts = null;
+    }
+
+    /// <summary>
+    /// 本轮结束后清除 ｢仅本次｣ 的半选值（WPF <c>TaskQueueViewModel</c> 回到空闲时执行
+    /// <c>EnableRunDurationLimit ??= false</c>）：只有在本次运行确实由半选值起计时时才写回，
+    /// 用户设置的 ｢每轮生效｣ 不受影响。
+    /// </summary>
+    private void ClearRunDurationLimitOnceIfNeeded()
+    {
+        if (!_runDurationLimitOnce)
+        {
+            return;
+        }
+
+        _runDurationLimitOnce = false;
+        _ = PersistRunDurationLimitOnceResetAsync();
+    }
+
+    private async Task PersistRunDurationLimitOnceResetAsync()
+    {
+        try
+        {
+            if (!Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+            {
+                return;
+            }
+
+            // 与 WPF 的 ??= 一致：只有仍是半选（JSON null）时才写回，其它值保持原样。
+            if (!profile.Values.TryGetValue(ConfigurationKeys.EnableRunDurationLimit, out var node) || node is not null)
+            {
+                return;
+            }
+
+            profile.Values[ConfigurationKeys.EnableRunDurationLimit] = JsonValue.Create(false);
+            _ = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
+                "TaskQueue.RunDurationLimit.OnceReset",
+                ResolveTaskQueueSaveDisplayName(),
+                "TaskQueue.RunDurationLimit.OnceReset.Save",
+                Runtime.DiagnosticsService,
+                async cancellationToken =>
+                {
+                    await Runtime.ConfigurationService.SaveAsync(cancellationToken);
+                    return true;
+                },
+                CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Runtime.LogService.Warn($"TaskQueue.RunDurationLimit.OnceReset: failed to clear the one-shot value: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -9175,6 +9235,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 _taskQueueRunActive = false;
                 CancelStallReminder();
                 CancelRunDurationLimitWatch();
+                ClearRunDurationLimitOnceIfNeeded();
                 // WPF SetStopped() logs "Stopped" (split on both sides) when the
                 // stop callback arrives. notifyActivity stays false so the stall
                 // reminder cancelled above is not restarted by this final entry.
@@ -9295,6 +9356,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 }
                 CancelStallReminder();
                 CancelRunDurationLimitWatch();
+                ClearRunDurationLimitOnceIfNeeded();
                 CompleteTaskQueueRunOwnership();
 
                 break;
@@ -10470,6 +10532,37 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return TryReadGlobalBool(config.GlobalValues, key, fallback);
     }
 
+    /// <summary>
+    /// 读取三态布尔（WPF dev-v2 <c>5a55fc8ac1</c> <c>RuntimeSettings.EnableRunDurationLimit</c>）。
+    /// 档案里的 JSON null 是 ｢仅本次｣ 的有效取值，必须与缺键（回落全局/默认值）区分开。
+    /// </summary>
+    /// <param name="config">当前配置。</param>
+    /// <param name="key">设置键。</param>
+    /// <param name="fallback">键缺失或值不可解析时的默认值。</param>
+    /// <returns>三态值。</returns>
+    private static bool? TryReadProfileNullableBool(UnifiedConfig config, string key, bool? fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(config.CurrentProfile)
+            && config.Profiles.TryGetValue(config.CurrentProfile, out var profile)
+            && profile.Values.TryGetValue(key, out var node))
+        {
+            if (node is null)
+            {
+                return null;
+            }
+
+            return TryReadBoolNode(node, out var value) ? value : fallback;
+        }
+
+        // 档案未配置时沿用既有读取顺序：先看全局同名键，再回落到默认值。
+        if (config.GlobalValues.TryGetValue(key, out var globalNode) && globalNode is not null)
+        {
+            return TryReadBoolNode(globalNode, out var globalValue) ? globalValue : fallback;
+        }
+
+        return fallback;
+    }
+
     private static int TryReadProfileInt(UnifiedConfig config, string key, int fallback)
     {
         if (TryGetProfileNode(config, key, out var node)
@@ -10826,6 +10919,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             UpdateMainTasksProgress(0);
             CancelStallReminder();
             CancelRunDurationLimitWatch();
+            ClearRunDurationLimitOnceIfNeeded();
             SyncStoppedUiStateIfSessionNotActive();
         }
 

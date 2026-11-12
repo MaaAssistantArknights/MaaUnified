@@ -149,7 +149,9 @@
 
       <CheckBox Classes="app-checkbox"
                 Content="{Binding RootTexts[Settings.Game.EnableRunDurationLimit]}"
-                IsChecked="{Binding EnableRunDurationLimit}" />
+                IsChecked="{Binding EnableRunDurationLimit}"
+                IsThreeState="True"
+                ToolTip.Tip="{Binding RootTexts[Settings.Game.EnableRunDurationLimit.Tip]}" />
 
       <Grid Classes="settings-page-two-column"
             ColumnDefinitions="Auto,24,Auto"

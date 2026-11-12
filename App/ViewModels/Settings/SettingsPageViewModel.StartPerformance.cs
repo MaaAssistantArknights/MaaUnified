@@ -113,11 +113,12 @@ public sealed partial class SettingsPageViewModel
         IReadOnlyDictionary<string, string>? profileUpdates = null,
         string successScope = "Settings.SaveScoped",
         IReadOnlyList<string>? profileKeysToRemove = null,
+        IReadOnlyList<string>? profileNullValueKeys = null,
         CancellationToken cancellationToken = default)
     {
         globalUpdates ??= EmptySettingUpdates;
         profileUpdates ??= EmptySettingUpdates;
-        if (globalUpdates.Count == 0 && profileUpdates.Count == 0)
+        if (globalUpdates.Count == 0 && profileUpdates.Count == 0 && (profileNullValueKeys?.Count ?? 0) == 0)
         {
             return UiOperationResult.Fail(
                 UiErrorCode.SettingBatchEmpty,
@@ -125,7 +126,8 @@ public sealed partial class SettingsPageViewModel
         }
 
         UnifiedProfile? profile = null;
-        if (profileUpdates.Count > 0 && !Runtime.ConfigurationService.TryGetCurrentProfile(out profile))
+        if ((profileUpdates.Count > 0 || (profileNullValueKeys?.Count ?? 0) > 0)
+            && !Runtime.ConfigurationService.TryGetCurrentProfile(out profile))
         {
             return UiOperationResult.Fail(
                 UiErrorCode.ProfileMissing,
@@ -175,6 +177,23 @@ public sealed partial class SettingsPageViewModel
                     profile.Values[key] = JsonValue.Create(value);
                 }
 
+                if (profileNullValueKeys is not null)
+                {
+                    // 三态空值（WPF 5a55fc8ac1）：写成真正的 JSON null，读取侧据此区分
+                    // ｢仅本次｣ 与 ｢未配置｣，导入/导出也按原值保留。
+                    foreach (var key in profileNullValueKeys)
+                    {
+                        if (string.IsNullOrWhiteSpace(key))
+                        {
+                            return UiOperationResult.Fail(
+                                UiErrorCode.SettingKeyMissing,
+                                RootTexts.GetOrDefault("Settings.SaveScoped.Error.SettingKeyMissing", "Setting key cannot be empty."));
+                        }
+
+                        profile.Values[key] = null;
+                    }
+                }
+
                 if (profileKeysToRemove is not null)
                 {
                     foreach (var key in profileKeysToRemove)
@@ -195,6 +214,7 @@ public sealed partial class SettingsPageViewModel
             await Runtime.ConfigurationService.SaveAsync(cancellationToken);
             // The save is already durable; cancellation must not turn the success
             // diagnostics into a failure that rolls back the persisted values.
+            var profileUpdateCount = profileUpdates.Count + (profileNullValueKeys?.Count ?? 0);
             await RecordEventAsync(
                 successScope,
                 string.Format(
@@ -202,12 +222,12 @@ public sealed partial class SettingsPageViewModel
                         "Settings.SaveScoped.Status.BatchSavedSummary",
                         "Saved settings batch: global={0}, profile={1}"),
                     globalUpdates.Count,
-                    profileUpdates.Count),
+                    profileUpdateCount),
                 CancellationToken.None);
             return UiOperationResult.Ok(
                 string.Format(
                     RootTexts.GetOrDefault("Settings.SaveScoped.Status.SavedCount", "Saved {0} settings."),
-                    globalUpdates.Count + profileUpdates.Count));
+                    globalUpdates.Count + profileUpdateCount));
         }
         catch (Exception ex)
         {
@@ -284,6 +304,7 @@ public sealed partial class SettingsPageViewModel
             profileUpdates: snapshot.ToProfileSettingUpdates(),
             successScope: "Settings.Save.StartPerformance",
             profileKeysToRemove: ProfileScopedPerformanceKeys,
+            profileNullValueKeys: snapshot.ToProfileNullValueKeys(),
             cancellationToken: cancellationToken);
         if (!await ApplyResultAsync(saveResult, "Settings.Save.StartPerformance", cancellationToken))
         {
@@ -630,7 +651,8 @@ public sealed partial class SettingsPageViewModel
                 ReadProfileInt(config, ConfigurationKeys.ReminderIntervalMinutes, DefaultReminderIntervalMinutes),
                 1,
                 MaxTimeoutMinutes),
-            EnableRunDurationLimit: ReadProfileBoolFlexible(config, ConfigurationKeys.EnableRunDurationLimit, false),
+            // 三态（WPF 5a55fc8ac1）：JSON null 与缺键含义不同，前者是 ｢仅本次｣，必须原样读回。
+            EnableRunDurationLimit: ReadProfileNullableBoolFlexible(config, ConfigurationKeys.EnableRunDurationLimit, false),
             RunDurationLimitMinutes: Math.Clamp(
                 ReadProfileInt(config, ConfigurationKeys.RunDurationLimitMinutes, DefaultRunDurationLimitMinutes),
                 1,
@@ -659,7 +681,23 @@ public sealed partial class SettingsPageViewModel
         }
 
         return HasExplicitSettingValues(config.GlobalValues, snapshot.ToGlobalSettingUpdates())
-               && HasExplicitSettingValues(profile.Values, snapshot.ToProfileSettingUpdates());
+               && HasExplicitSettingValues(profile.Values, snapshot.ToProfileSettingUpdates())
+               && HasExplicitNullSettingValues(profile.Values, snapshot.ToProfileNullValueKeys());
+    }
+
+    private static bool HasExplicitNullSettingValues(
+        IReadOnlyDictionary<string, JsonNode?> values,
+        IReadOnlyList<string> keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!values.TryGetValue(key, out var node) || node is not null)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool HasExplicitSettingValues(

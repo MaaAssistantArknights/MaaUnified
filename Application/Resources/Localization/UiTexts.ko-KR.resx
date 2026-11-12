@@ -5874,6 +5874,9 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   <data name="Settings.Game.EnableRunDurationLimit" xml:space="preserve">
     <value>1회 실행 시간 제한</value>
   </data>
+  <data name="Settings.Game.EnableRunDurationLimit.Tip" xml:space="preserve">
+    <value>체크＝매회, 반선택＝이번만. 제한 시간에 도달하면 실행을 중지합니다.</value>
+  </data>
   <data name="Settings.Game.RunDurationLimitMinutes" xml:space="preserve">
     <value>실행 시간 상한 (분)</value>
   </data>

@@ -1013,6 +1013,64 @@ public sealed class SettingsModuleAK2FeatureTests
         return path;
     }
 
+    [Fact]
+    public async Task RunDurationLimit_ExplicitNull_ShouldStayIndeterminateOnLoad()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        profile.Values[ConfigurationKeys.EnableRunDurationLimit] = null;
+        profile.Values[ConfigurationKeys.RunDurationLimitMinutes] = JsonValue.Create(90);
+        profile.Values[ConfigurationKeys.RunDurationLimitExecutePostActions] = JsonValue.Create("False");
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.Null(vm.EnableRunDurationLimit);
+        Assert.True(vm.ShowRunDurationLimitOptions);
+        Assert.Equal(90, vm.RunDurationLimitMinutes);
+        Assert.False(vm.RunDurationLimitExecutePostActions);
+    }
+
+    [Fact]
+    public async Task RunDurationLimit_SaveIndeterminate_ShouldPersistJsonNullAndReloadIndeterminate()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.EnableRunDurationLimit = null;
+        vm.RunDurationLimitMinutes = 120;
+        await vm.SaveStartPerformanceSettingsAsync();
+
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        Assert.True(profile.Values.ContainsKey(ConfigurationKeys.EnableRunDurationLimit));
+        Assert.Null(profile.Values[ConfigurationKeys.EnableRunDurationLimit]);
+
+        var reloaded = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await reloaded.InitializeAsync();
+        Assert.Null(reloaded.EnableRunDurationLimit);
+        Assert.True(reloaded.ShowRunDurationLimitOptions);
+    }
+
+    [Fact]
+    public async Task RunDurationLimit_SaveDisabledAndEnabled_ShouldRoundTrip()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+
+        vm.EnableRunDurationLimit = false;
+        await vm.SaveStartPerformanceSettingsAsync();
+        Assert.Equal("False", profile.Values[ConfigurationKeys.EnableRunDurationLimit]!.GetValue<string>());
+        Assert.False(vm.ShowRunDurationLimitOptions);
+
+        vm.EnableRunDurationLimit = true;
+        await vm.SaveStartPerformanceSettingsAsync();
+        Assert.Equal("True", profile.Values[ConfigurationKeys.EnableRunDurationLimit]!.GetValue<string>());
+        Assert.True(vm.ShowRunDurationLimitOptions);
+    }
+
     private sealed class RuntimeFixture : IAsyncDisposable
     {
         private readonly bool _cleanupRoot;

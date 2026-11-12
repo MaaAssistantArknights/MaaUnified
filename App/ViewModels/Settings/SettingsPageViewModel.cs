@@ -386,7 +386,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private string _yituliuOpenApiToken = string.Empty;
     private bool _operBoxUseYituliuApi;
     private int _reminderIntervalMinutes = DefaultReminderIntervalMinutes;
-    private bool _enableRunDurationLimit;
+    private bool? _enableRunDurationLimit;
     private int _runDurationLimitMinutes = DefaultRunDurationLimitMinutes;
     private bool _runDurationLimitExecutePostActions = true;
     private bool _hasPendingStartPerformanceChanges;
@@ -532,6 +532,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         _uiLanguageCoordinator.LanguageChanged += OnUnifiedLanguageChanged;
         runtime.ConfigurationService.SensitiveStorageStateChanged += HandleSensitiveStorageStateChanged;
         runtime.SessionService.SessionStateChanged += OnSessionStateChanged;
+        runtime.ConfigurationService.ConfigChanged += OnConfigurationChangedForRunDurationLimit;
         _versionUpdateSchedulerTimer.Tick += OnVersionUpdateSchedulerTick;
         RootTexts = new RootLocalizationTextMap("Root.Localization.Settings");
         RootTexts.FallbackReported += info => _localizationFallbackReporter?.Invoke(info);
@@ -573,6 +574,48 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private void OnSessionStateChanged(SessionState state)
     {
         NotifySessionIdleChanged();
+    }
+
+    /// <summary>
+    /// 运行结束时主队列会把 ｢仅本次｣ 的半选值写回 <see langword="false"/>
+    /// （WPF <c>TaskQueueViewModel</c> 在回到空闲时执行 <c>EnableRunDurationLimit ??= false</c>），
+    /// 设置页需要跟着刷新，否则勾选框会停留在半选态。
+    /// </summary>
+    /// <param name="config">保存后的配置。</param>
+    private void OnConfigurationChangedForRunDurationLimit(UnifiedConfig config)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => OnConfigurationChangedForRunDurationLimit(config));
+            return;
+        }
+
+        if (!IsSettingsDataBucketLoaded(SettingsDataBucketStartPerformance))
+        {
+            // 未加载过的分节按需从配置读取，这里不提前写值，避免覆盖用户尚未保存的草稿。
+            return;
+        }
+
+        var persisted = ReadProfileNullableBoolFlexible(config, ConfigurationKeys.EnableRunDurationLimit, false);
+        if (persisted == EnableRunDurationLimit)
+        {
+            return;
+        }
+
+        _suppressStartPerformanceDirtyTracking = true;
+        try
+        {
+            EnableRunDurationLimit = persisted;
+        }
+        finally
+        {
+            _suppressStartPerformanceDirtyTracking = false;
+        }
     }
 
     private void HandleSensitiveStorageStateChanged()
@@ -617,6 +660,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         _disposed = true;
         Runtime.ConfigurationService.SensitiveStorageStateChanged -= HandleSensitiveStorageStateChanged;
         Runtime.SessionService.SessionStateChanged -= OnSessionStateChanged;
+        Runtime.ConfigurationService.ConfigChanged -= OnConfigurationChangedForRunDurationLimit;
         ConnectionGameSharedState.PropertyChanged -= OnConnectionGameSharedStateChanged;
         _scheduledWakeUpCoordinator.SyncCompleted -= OnScheduledWakeUpSyncCompleted;
         _scheduledWakeUpCoordinator.Dispose();
@@ -3718,7 +3762,13 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         }
     }
 
-    public bool EnableRunDurationLimit
+    /// <summary>
+    /// Gets or sets a value indicating whether 是否启用运行时长上限。三态（WPF dev-v2
+    /// <c>5a55fc8ac1</c> <c>RuntimeSettings.EnableRunDurationLimit</c>）：
+    /// <see langword="false"/> 关闭、<see langword="true"/> 每轮生效、
+    /// <see langword="null"/> 仅本次生效（半选，本轮结束后写回 <see langword="false"/>）。
+    /// </summary>
+    public bool? EnableRunDurationLimit
     {
         get => _enableRunDurationLimit;
         set
@@ -3731,7 +3781,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         }
     }
 
-    public bool ShowRunDurationLimitOptions => EnableRunDurationLimit;
+    /// <summary>
+    /// Gets a value indicating whether 运行时长上限生效（勾选或半选），
+    /// 对应 WPF <c>GameSettingsUserControlModel.RunDurationLimitActive</c>。
+    /// </summary>
+    public bool ShowRunDurationLimitOptions => EnableRunDurationLimit != false;
 
     public int RunDurationLimitMinutes
     {
@@ -11115,6 +11169,25 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private static bool? ReadGlobalNullableBoolFlexible(UnifiedConfig config, string key, bool? fallback)
         => ReadNullableBoolFlexible(config, key, fallback, ConfigValuePreference.GlobalFirst);
 
+    /// <summary>
+    /// 读取三态布尔（WPF dev-v2 <c>5a55fc8ac1</c> <c>RuntimeSettings.EnableRunDurationLimit</c>）。
+    /// 档案里显式写入的 JSON null 表示 ｢仅本次｣，与缺键（回落全局或默认值）语义不同，
+    /// 因此不能复用把 null 当缺省的 <see cref="ReadNullableBoolFlexible"/> 读取顺序。
+    /// </summary>
+    /// <param name="config">当前配置。</param>
+    /// <param name="key">设置键。</param>
+    /// <param name="fallback">键缺失或值不可解析时的默认值。</param>
+    /// <returns>三态值。</returns>
+    private static bool? ReadProfileNullableBoolFlexible(UnifiedConfig config, string key, bool? fallback)
+    {
+        if (TryGetProfileEntry(config, key, out var node))
+        {
+            return node is null ? null : ParseNullableBoolNode(node, fallback);
+        }
+
+        return ReadNullableBoolFlexible(config, key, fallback, ConfigValuePreference.GlobalFirst);
+    }
+
     private static bool? ReadNullableBoolFlexible(
         UnifiedConfig config,
         string key,
@@ -11126,6 +11199,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             return fallback;
         }
 
+        return ParseNullableBoolNode(node, fallback);
+    }
+
+    private static bool? ParseNullableBoolNode(JsonNode node, bool? fallback)
+    {
         if (node is JsonValue value)
         {
             if (value.TryGetValue(out bool parsedBool))
@@ -11333,6 +11411,27 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         node = null;
         return false;
     }
+
+    /// <summary>
+    /// 取档案项的原始节点，包含显式写入的 JSON null（三态设置的 ｢仅本次｣）；
+    /// 与把 null 视为缺键的 <see cref="TryGetProfileValue"/> 区分。
+    /// </summary>
+    /// <param name="config">当前配置。</param>
+    /// <param name="key">设置键。</param>
+    /// <param name="node">命中的节点；显式 null 时同样为 <see langword="null"/>。</param>
+    /// <returns>键是否存在于当前档案。</returns>
+    private static bool TryGetProfileEntry(UnifiedConfig config, string key, out JsonNode? node)
+    {
+        if (!string.IsNullOrWhiteSpace(config.CurrentProfile)
+            && config.Profiles.TryGetValue(config.CurrentProfile, out var profile)
+            && profile.Values.TryGetValue(key, out node))
+        {
+            return true;
+        }
+
+        node = null;
+        return false;
+    }
 }
 
 internal enum ConfigValuePreference
@@ -11438,7 +11537,7 @@ public sealed record StartPerformanceSettingsSnapshot(
     bool EnableStallTimeout,
     int StallTimeoutMinutes,
     int ReminderIntervalMinutes,
-    bool EnableRunDurationLimit,
+    bool? EnableRunDurationLimit,
     int RunDurationLimitMinutes,
     bool RunDurationLimitExecutePostActions,
     string YituliuOpenApiToken,
@@ -11481,15 +11580,30 @@ public sealed record StartPerformanceSettingsSnapshot(
             [ConfigurationKeys.StallTimeoutEnabled] = EnableStallTimeout.ToString(),
             [ConfigurationKeys.StallTimeoutMinutes] = StallTimeoutMinutes.ToString(),
             [ConfigurationKeys.ReminderIntervalMinutes] = ReminderIntervalMinutes.ToString(),
-            [ConfigurationKeys.EnableRunDurationLimit] = EnableRunDurationLimit.ToString(),
             [ConfigurationKeys.RunDurationLimitMinutes] = RunDurationLimitMinutes.ToString(),
             [ConfigurationKeys.RunDurationLimitExecutePostActions] = RunDurationLimitExecutePostActions.ToString(),
             [ThirdPartySettingKeys.YituliuOpenApiToken] = YituliuOpenApiToken,
             [ThirdPartySettingKeys.OperBoxUseYituliuApi] = OperBoxUseYituliuApi.ToString(),
         };
 
+        // 三态（WPF 5a55fc8ac1）：null 代表 ｢仅本次｣，必须落成 JSON null 而不是字符串，
+        // 导入/导出才能保持半选态；收口的空值键由 ToProfileNullValueKeys 单独给出。
+        if (EnableRunDurationLimit is { } enableRunDurationLimit)
+        {
+            updates[ConfigurationKeys.EnableRunDurationLimit] = enableRunDurationLimit.ToString();
+        }
+
         return updates;
     }
+
+    /// <summary>
+    /// 获取需要写成 JSON null 的档案键（当前仅三态的运行时长上限）。
+    /// </summary>
+    /// <returns>键列表；没有空值键时为空列表。</returns>
+    public IReadOnlyList<string> ToProfileNullValueKeys()
+        => EnableRunDurationLimit is null
+            ? [ConfigurationKeys.EnableRunDurationLimit]
+            : [];
 }
 
 public sealed record GpuOptionDisplayItem(

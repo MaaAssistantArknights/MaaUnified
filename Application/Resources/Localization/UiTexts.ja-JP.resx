@@ -5873,6 +5873,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="Settings.Game.EnableRunDurationLimit" xml:space="preserve">
     <value>1回の実行時間を制限する</value>
   </data>
+  <data name="Settings.Game.EnableRunDurationLimit.Tip" xml:space="preserve">
+    <value>チェック＝毎回、半選択＝今回のみ。上限に達すると実行を停止します。</value>
+  </data>
   <data name="Settings.Game.RunDurationLimitMinutes" xml:space="preserve">
     <value>実行時間の上限（分）</value>
   </data>
