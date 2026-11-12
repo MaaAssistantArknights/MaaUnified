@@ -21,7 +21,7 @@
                 <TextBlock Classes="settings-rail-item-text long-wrap"
                            Text="{Binding DisplayName}" />
                 <Button Grid.Column="1"
-                        Classes="settings-rail-collapse"
+                        Classes="app-button settings-rail-collapse"
                         Content="{Binding CollapseGlyph}"
                         Click="OnSectionCollapseToggleClick"
                         Focusable="False" />

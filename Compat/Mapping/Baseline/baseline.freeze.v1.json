@@ -6428,7 +6428,7 @@
         "ui_path": "App/Features/Settings/TimerSettingsView.axaml",
         "log_path": "debug/avalonia-ui-events.log",
         "scope": "Config.Timer.NotifyBeforeScheduledStart",
-        "case_id": "CFG-321"
+        "case_id": "CFG-324"
       },
       "waiver": null,
       "mapping_target": "TimerSettingsSnapshot",

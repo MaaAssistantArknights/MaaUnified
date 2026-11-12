@@ -108,19 +108,19 @@
                         </controls:AppSelect.ItemTemplate>
                       </controls:AppSelect>
                       <Button Grid.Column="2"
-                              Classes="depot-maintain-move-button"
+                              Classes="app-button app-secondary depot-maintain-move-button"
                               Content="↑"
                               Tag="{Binding}"
                               ToolTip.Tip="{Binding DataContext.MoveUpText, RelativeSource={RelativeSource AncestorType=UserControl}}"
                               Click="OnMovePlanUpClick" />
                       <Button Grid.Column="4"
-                              Classes="depot-maintain-move-button"
+                              Classes="app-button app-secondary depot-maintain-move-button"
                               Content="↓"
                               Tag="{Binding}"
                               ToolTip.Tip="{Binding DataContext.MoveDownText, RelativeSource={RelativeSource AncestorType=UserControl}}"
                               Click="OnMovePlanDownClick" />
                       <Button Grid.Column="6"
-                              Classes="settings-dropdown-delete-button"
+                              Classes="app-button app-secondary settings-dropdown-delete-button"
                               Tag="{Binding}"
                               ToolTip.Tip="{Binding DataContext.RemoveText, RelativeSource={RelativeSource AncestorType=UserControl}}"
                               Click="OnRemovePlanClick" />
