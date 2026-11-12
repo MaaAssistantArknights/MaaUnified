@@ -38,10 +38,21 @@ public sealed class AppUpdateWorkflowService
         _platform = ResolvePlatform(operatingSystem, architecture);
     }
 
+    /// <summary>
+    /// 检查软件更新并解析适用于当前平台的更新包。
+    /// </summary>
+    /// <param name="policy">更新策略。</param>
+    /// <param name="currentVersion">当前版本。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="forceFullPackage">
+    /// 安装文件缺失或上次更新失败时强制只解析完整包（WPF <c>da79ff88ad</c>）。
+    /// OTA 增量只含版本间差异，无法修复残留的不一致文件。
+    /// </param>
     public async Task<VersionUpdateCheckResult> CheckForUpdatesAsync(
         VersionUpdatePolicy policy,
         string currentVersion,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool forceFullPackage = false)
     {
         var (httpClient, disposeClient) = ResolveHttpClient(policy);
         try
@@ -67,7 +78,8 @@ public sealed class AppUpdateWorkflowService
                 policy,
                 currentVersion,
                 httpClient,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                forceFullPackage).ConfigureAwait(false);
             if (mirrorChyanResolution.Release is not null)
             {
                 return mirrorChyanResolution.Release;
@@ -108,8 +120,10 @@ public sealed class AppUpdateWorkflowService
             var isNew = IsNewerVersion(targetVersion, currentVersion);
 
             ResolvedPackage? resolvedPackage = null;
-            if (isNew)
+            if (isNew || forceFullPackage)
             {
+                // 修复场景不做版本新旧判断：已是最新版本时也解析同版本完整包用于重装修复。
+
                 resolvedPackage = await ResolvePackageAsync(
                     policy.ResourceApi,
                     policy.VersionType,
@@ -119,7 +133,9 @@ public sealed class AppUpdateWorkflowService
                     targetVersion,
                     releaseValue,
                     httpClient,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken,
+                    currentVersion,
+                    forceFullPackage).ConfigureAwait(false);
             }
 
             var hasUsablePackage = resolvedPackage?.Status == PackageResolutionStatus.Available
@@ -156,13 +172,24 @@ public sealed class AppUpdateWorkflowService
         }
     }
 
+    /// <summary>
+    /// 下载更新包。
+    /// </summary>
+    /// <param name="checkResult">更新检查结果。</param>
+    /// <param name="runtimeBaseDirectory">安装根目录。</param>
+    /// <param name="forceDownload">覆盖已存在的同名包。</param>
+    /// <param name="policy">更新策略。</param>
+    /// <param name="progress">下载进度。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="forceFullPackage">只允许完整包（安装修复场景）。</param>
     public async Task<UiOperationResult<string>> DownloadPackageAsync(
         VersionUpdateCheckResult checkResult,
         string runtimeBaseDirectory,
         bool forceDownload,
         VersionUpdatePolicy? policy,
         IProgress<VersionUpdateProgressInfo>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool forceFullPackage = false)
     {
         if (!checkResult.HasPackage
             || checkResult.PackageDownloadUrl is null
@@ -178,6 +205,13 @@ public sealed class AppUpdateWorkflowService
         var packageName = string.IsNullOrWhiteSpace(checkResult.PackageName)
             ? BuildFallbackPackageName(checkResult.TargetVersion)
             : checkResult.PackageName;
+        if (forceFullPackage && !IsFullPackageForRepair(packageName))
+        {
+            return UiOperationResult<string>.Fail(
+                UiErrorCode.UiOperationFailed,
+                $"The installation requires a full package update; refusing to download `{packageName}`. OTA packages cannot repair missing or inconsistent installation files.");
+        }
+
         var destinationPath = Path.Combine(targetDirectory, packageName);
         var temporaryPath = $"{destinationPath}.temp";
 
@@ -394,7 +428,9 @@ public sealed class AppUpdateWorkflowService
         string targetVersion,
         JsonElement release,
         HttpClient httpClient,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string currentVersion,
+        bool forceFullPackage)
     {
         if (_platform.IsWindows)
         {
@@ -405,7 +441,9 @@ public sealed class AppUpdateWorkflowService
                     channel,
                     targetVersion,
                     httpClient,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken,
+                    currentVersion,
+                    forceFullPackage).ConfigureAwait(false);
                 if (relayPackage is not null)
                 {
                     return relayPackage;
@@ -418,7 +456,7 @@ public sealed class AppUpdateWorkflowService
                 FailureMessageKey: WindowsManualUpdateMessageKey);
         }
 
-        var asset = SelectPackageAsset(release);
+        var asset = SelectPackageAsset(release, currentVersion, forceFullPackage);
         if (asset is not null)
         {
             return allowMirrorUrls ? asset : asset with { MirrorUrls = null };
@@ -436,7 +474,9 @@ public sealed class AppUpdateWorkflowService
         string channel,
         string targetVersion,
         HttpClient httpClient,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string currentVersion,
+        bool forceFullPackage)
     {
         foreach (var candidate in BuildWindowsRelayManifestCandidates(resourceApi))
         {
@@ -459,7 +499,13 @@ public sealed class AppUpdateWorkflowService
                 continue;
             }
 
-            var matched = manifest.Packages.FirstOrDefault(entry => WindowsRelayEntryMatches(entry, manifest, channel, targetVersion));
+            var matched = manifest.Packages.FirstOrDefault(entry => WindowsRelayEntryMatches(
+                entry,
+                manifest,
+                channel,
+                targetVersion,
+                currentVersion,
+                forceFullPackage));
             if (matched is null)
             {
                 continue;
@@ -633,9 +679,40 @@ public sealed class AppUpdateWorkflowService
         WindowsRelayPackageEntry entry,
         WindowsRelayManifest manifest,
         string channel,
-        string targetVersion)
+        string targetVersion,
+        string currentVersion,
+        bool forceFullPackage)
     {
         if (!IsMaaUnifiedPackageReference(entry.Name, entry.Url))
+        {
+            return false;
+        }
+
+        // 包名识别统一决定资产类型：修复场景只认完整包；识别不了的文件名无法保证可修复安装，
+        // 在强制完整包时直接跳过（WPF da79ff88ad 的 OtaRejectedByBrokenInstall 语义）。
+        var packageName = entry.Name ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(packageName)
+            && Uri.TryCreate(entry.Url, UriKind.Absolute, out var packageUri))
+        {
+            packageName = Path.GetFileName(packageUri.AbsolutePath);
+        }
+        if (UpdatePackageNameRecognizer.TryRecognize(packageName, out var identity))
+        {
+            if (forceFullPackage && identity.Kind != UpdatePackageKind.FullPackage)
+            {
+                return false;
+            }
+
+            if (identity.Kind == UpdatePackageKind.OtaPackage)
+            {
+                var sourceComparison = UpdatePackageNameRecognizer.CompareVersions(identity.SourceVersion, currentVersion);
+                if (sourceComparison is null || sourceComparison != 0)
+                {
+                    return false;
+                }
+            }
+        }
+        else if (forceFullPackage)
         {
             return false;
         }
@@ -658,7 +735,10 @@ public sealed class AppUpdateWorkflowService
             && string.Equals(NormalizeArchitecture(entry.Arch), _platform.Architecture, StringComparison.OrdinalIgnoreCase);
     }
 
-    private ResolvedPackage? SelectPackageAsset(JsonElement release)
+    private ResolvedPackage? SelectPackageAsset(
+        JsonElement release,
+        string currentVersion,
+        bool forceFullPackage)
     {
         if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
         {
@@ -690,6 +770,43 @@ public sealed class AppUpdateWorkflowService
 
             var score = ScorePackageName(name);
             if (score <= 0)
+            {
+                continue;
+            }
+
+            // 包名识别用于选择下载资产：平台/架构不匹配直接跳过，OTA 还需源版本正好等于当前版本；
+            // 安装修复场景只接受完整包，识别不了的文件名无法保证可修复安装，一并跳过。
+            if (UpdatePackageNameRecognizer.TryRecognize(name, out var identity))
+            {
+                if (!string.Equals(identity.Platform, _platform.OperatingSystem, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(identity.Architecture, _platform.Architecture, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (forceFullPackage && identity.Kind != UpdatePackageKind.FullPackage)
+                {
+                    continue;
+                }
+
+                if (identity.Kind == UpdatePackageKind.OtaPackage)
+                {
+                    var sourceComparison = UpdatePackageNameRecognizer.CompareVersions(identity.SourceVersion, currentVersion);
+                    if (sourceComparison is not null && sourceComparison != 0)
+                    {
+                        continue;
+                    }
+                }
+
+                var targetComparison = UpdatePackageNameRecognizer.CompareVersions(identity.TargetVersion, currentVersion);
+                if (targetComparison is < 0)
+                {
+                    continue;
+                }
+
+                score += 200;
+            }
+            else if (forceFullPackage)
             {
                 continue;
             }
@@ -762,6 +879,13 @@ public sealed class AppUpdateWorkflowService
     {
         return !string.IsNullOrWhiteSpace(packageName)
             && packageName.Trim().StartsWith("MAAUnified-", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsFullPackageForRepair(string? packageName)
+    {
+        return !string.IsNullOrWhiteSpace(packageName)
+            && UpdatePackageNameRecognizer.TryRecognize(packageName, out var identity)
+            && identity.Kind == UpdatePackageKind.FullPackage;
     }
 
     private static bool LooksLikeDirectReleaseFeedUri(Uri uri)
@@ -1084,7 +1208,8 @@ public sealed class AppUpdateWorkflowService
         VersionUpdatePolicy policy,
         string currentVersion,
         HttpClient httpClient,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool forceFullPackage)
     {
         if (!string.Equals(policy.ResourceUpdateSource, "MirrorChyan", StringComparison.OrdinalIgnoreCase))
         {
@@ -1165,6 +1290,12 @@ public sealed class AppUpdateWorkflowService
 
             if (!IsMaaUnifiedPackageName(packageName))
             {
+                return new MirrorChyanReleaseResolution(null, cdkExpiryUnixSeconds);
+            }
+
+            if (forceFullPackage && !IsFullPackageForRepair(packageName))
+            {
+                // 修复场景拒绝 MirrorChyan 返回的 OTA，交由后续完整包来源兜底。
                 return new MirrorChyanReleaseResolution(null, cdkExpiryUnixSeconds);
             }
 

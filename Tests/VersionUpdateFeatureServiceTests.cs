@@ -1265,6 +1265,318 @@ public sealed class VersionUpdateFeatureServiceTests
     }
 
     [Fact]
+    public async Task CheckForUpdatesAsync_WhenForceFullPackage_SkipsOtaAssetsAndSelectsFullPackage()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-force-full-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v2.0.0",
+                    name = "Release v2.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = new[]
+                    {
+                        new
+                        {
+                            name = "MAAUnifiedComponent-OTA-v1.0.0_v2.0.0-linux-x64.zip",
+                            browser_download_url = "https://example.com/MAAUnifiedComponent-OTA-v1.0.0_v2.0.0-linux-x64.zip",
+                            size = 100,
+                        },
+                        new
+                        {
+                            name = "MAAUnified-v2.0.0-linux-x64.zip",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-linux-x64.zip",
+                            size = 200,
+                        },
+                    },
+                },
+            }));
+
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                operatingSystem: OSPlatform.Linux,
+                architecture: Architecture.X64);
+
+            var result = await workflow.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0",
+                CancellationToken.None,
+                forceFullPackage: true);
+
+            Assert.True(result.HasPackage);
+            Assert.Equal("MAAUnified-v2.0.0-linux-x64.zip", result.PackageName);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_WhenForceFullPackageAndAlreadyLatest_ResolvesSameVersionFullPackage()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-force-full-same-version-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v1.0.0",
+                    name = "Release v1.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = new[]
+                    {
+                        new
+                        {
+                            name = "MAAUnified-v1.0.0-linux-x64.zip",
+                            browser_download_url = "https://example.com/MAAUnified-v1.0.0-linux-x64.zip",
+                            size = 100,
+                        },
+                    },
+                },
+            }));
+
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                operatingSystem: OSPlatform.Linux,
+                architecture: Architecture.X64);
+
+            var result = await workflow.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0",
+                CancellationToken.None,
+                forceFullPackage: true);
+
+            Assert.False(result.IsNewVersion);
+            Assert.True(result.HasPackage);
+            Assert.Equal(PackageResolutionStatus.Available, result.PackageResolutionStatus);
+            Assert.Equal("MAAUnified-v1.0.0-linux-x64.zip", result.PackageName);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_WhenForceFullPackageAndOnlyOtaAvailable_ReportsUnavailable()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-force-full-ota-only-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+
+        try
+        {
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v2.0.0",
+                    name = "Release v2.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = new[]
+                    {
+                        new
+                        {
+                            name = "MAAUnifiedComponent-OTA-v1.0.0_v2.0.0-linux-x64.zip",
+                            browser_download_url = "https://example.com/MAAUnifiedComponent-OTA-v1.0.0_v2.0.0-linux-x64.zip",
+                            size = 100,
+                        },
+                    },
+                },
+            }));
+
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                operatingSystem: OSPlatform.Linux,
+                architecture: Architecture.X64);
+
+            var result = await workflow.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0",
+                CancellationToken.None,
+                forceFullPackage: true);
+
+            Assert.True(result.IsNewVersion);
+            Assert.False(result.HasPackage);
+            Assert.Equal(PackageResolutionStatus.Unavailable, result.PackageResolutionStatus);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task DownloadPackageAsync_WhenForceFullPackageAndOtaPackage_RejectsBeforeDownloading()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-force-full-download-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var requestCount = 0;
+
+        try
+        {
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+            {
+                Interlocked.Increment(ref requestCount);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }));
+            var workflow = new AppUpdateWorkflowService(
+                new NoOpAppLifecycleService(),
+                httpClient,
+                OSPlatform.Linux,
+                Architecture.X64);
+            var checkResult = new VersionUpdateCheckResult(
+                Channel: "Stable",
+                CurrentVersion: "v1.0.0",
+                TargetVersion: "v2.0.0",
+                ReleaseName: "v2.0.0",
+                Summary: "Body",
+                Body: "Body",
+                PackageName: "MAAUnifiedComponent-OTA-v1.0.0_v2.0.0-linux-x64.zip",
+                PackageDownloadUrl: new Uri("https://example.com/MAAUnifiedComponent-OTA-v1.0.0_v2.0.0-linux-x64.zip"),
+                PackageSize: 100,
+                IsNewVersion: true,
+                HasPackage: true,
+                PackageResolutionStatus: PackageResolutionStatus.Available);
+
+            var result = await workflow.DownloadPackageAsync(
+                checkResult,
+                root,
+                forceDownload: true,
+                VersionUpdatePolicy.Default,
+                progress: null,
+                CancellationToken.None,
+                forceFullPackage: true);
+
+            Assert.False(result.Success);
+            Assert.Contains("full package", result.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(0, Volatile.Read(ref requestCount));
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_WhenRepairMarkerExists_ForcesFullPackageSelection()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"maa-unified-repair-marker-full-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        var feedPath = Path.Combine(root, "release-feed.json");
+
+        try
+        {
+            UpdateRepairState.Write(root, "Installation integrity check failed: 1 file(s) missing.");
+            await File.WriteAllTextAsync(feedPath, JsonSerializer.Serialize(new[]
+            {
+                new
+                {
+                    tag_name = "v2.0.0",
+                    name = "Release v2.0.0",
+                    body = "Body",
+                    prerelease = false,
+                    assets = new[]
+                    {
+                        new
+                        {
+                            name = "MAAUnifiedComponent-OTA-v1.0.0_v2.0.0-linux-x64.zip",
+                            browser_download_url = "https://example.com/MAAUnifiedComponent-OTA-v1.0.0_v2.0.0-linux-x64.zip",
+                            size = 100,
+                        },
+                        new
+                        {
+                            name = "MAAUnified-v2.0.0-linux-x64.zip",
+                            browser_download_url = "https://example.com/MAAUnified-v2.0.0-linux-x64.zip",
+                            size = 200,
+                        },
+                    },
+                },
+            }));
+
+            using var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
+                new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent([1, 2, 3]),
+                }));
+            var service = CreateLinuxVersionUpdateFeatureService(root, httpClient);
+            var result = await service.CheckForUpdatesAsync(
+                VersionUpdatePolicy.Default with
+                {
+                    ResourceApi = feedPath,
+                    AutoDownloadUpdatePackage = false,
+                },
+                "v1.0.0");
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Value);
+            Assert.Equal("MAAUnified-v2.0.0-linux-x64.zip", result.Value!.PackageName);
+            // 修复场景忽略「自动下载更新包」偏好，直接准备完整包。
+            Assert.False(string.IsNullOrWhiteSpace(result.Value.PreparedPackagePath));
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
     public async Task CheckForUpdatesAsync_OnWindowsRelayManifest_ReportsDownloadableUpdate()
     {
         var root = Path.Combine(Path.GetTempPath(), $"maa-unified-windows-relay-{Guid.NewGuid():N}");

@@ -37,21 +37,32 @@ public static class UpdateApplyPlatform
     public static UpdateApplyCapabilities Detect(string baseDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
+        var hasUpdater = File.Exists(Path.Combine(baseDirectory, ExternalUpdaterExecutableName));
+        return Detect(CurrentPlatformName(), hasUpdater);
+    }
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+    /// <summary>
+    /// 按平台名探测能力，供测试覆盖 Windows 有/无外部更新器与 macOS/Linux 显式降级分支。
+    /// </summary>
+    /// <param name="platform">平台名（<c>windows</c> / <c>macos</c> / <c>linux</c>）。</param>
+    /// <param name="hasExternalUpdater">安装目录内是否存在外部更新器。</param>
+    internal static UpdateApplyCapabilities Detect(string platform, bool hasExternalUpdater)
+    {
+        if (string.Equals(platform, "windows", StringComparison.OrdinalIgnoreCase))
         {
-            var hasUpdater = File.Exists(Path.Combine(baseDirectory, ExternalUpdaterExecutableName));
             return new UpdateApplyCapabilities(
-                ExternalUpdaterSupported: hasUpdater,
+                ExternalUpdaterSupported: hasExternalUpdater,
                 ExternalUpdaterExecutableName: ExternalUpdaterExecutableName,
-                MutexCoordinationSupported: hasUpdater,
+                MutexCoordinationSupported: hasExternalUpdater,
                 OccupiedFileRetrySupported: true,
-                DegradationReason: hasUpdater
+                DegradationReason: hasExternalUpdater
                     ? string.Empty
                     : $"External updater {ExternalUpdaterExecutableName} is not packaged; applying updates in-process.");
         }
 
-        var platformName = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "macOS" : "Linux";
+        var platformName = string.Equals(platform, "macos", StringComparison.OrdinalIgnoreCase)
+            ? "macOS"
+            : "Linux";
         return new UpdateApplyCapabilities(
             ExternalUpdaterSupported: false,
             ExternalUpdaterExecutableName: ExternalUpdaterExecutableName,
@@ -59,5 +70,15 @@ public static class UpdateApplyPlatform
             OccupiedFileRetrySupported: true,
             DegradationReason:
                 $"External updater delegation and named-mutex coordination are Windows-only; {platformName} applies updates in-process.");
+    }
+
+    internal static string CurrentPlatformName()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return "windows";
+        }
+
+        return RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "macos" : "linux";
     }
 }

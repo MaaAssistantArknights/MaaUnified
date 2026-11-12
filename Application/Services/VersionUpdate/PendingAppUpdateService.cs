@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Compat.Constants;
+using MAAUnified.Compat.Runtime;
 
 namespace MAAUnified.Application.Services.VersionUpdate;
 
@@ -14,6 +15,7 @@ public enum PendingAppUpdateStatus
     None = 0,
     Applied = 1,
     Failed = 2,
+    Delegated = 3,
 }
 
 public sealed record PendingAppUpdateInfo(
@@ -122,6 +124,17 @@ public static class PendingAppUpdateService
             return new PendingUpdateRegistrationResult(false, validation.Reason, identity.TargetVersion);
         }
 
+        if (UpdateRepairState.RequiresFullPackage(baseDirectory)
+            && identity.Kind != UpdatePackageKind.FullPackage)
+        {
+            // 安装文件缺失或上次更新失败期间 OTA 只含版本间差异，无法修复残留的不一致文件
+            // （WPF da79ff88ad / VersionUpdate.OtaRejectedByBrokenInstall）。
+            return new PendingUpdateRegistrationResult(
+                false,
+                "The installation requires a full package update; OTA packages cannot repair missing or inconsistent files.",
+                identity.TargetVersion);
+        }
+
         var fullPackagePath = Path.GetFullPath(packagePath);
         var commitLock = configStore.AcquireCommitLockAsync().AsTask().GetAwaiter().GetResult();
         try
@@ -143,6 +156,11 @@ public static class PendingAppUpdateService
         }
 
         PendingUpdateFailureState.Clear(baseDirectory);
+        if (identity.Kind == UpdatePackageKind.FullPackage)
+        {
+            UpdateRepairState.Clear(baseDirectory);
+        }
+
         var sameVersion = UpdatePackageNameRecognizer.CompareVersions(identity.TargetVersion, currentVersion) == 0;
         return new PendingUpdateRegistrationResult(
             true,
@@ -168,17 +186,215 @@ public static class PendingAppUpdateService
             _ => "x64",
         };
 
+    private static string ResolveMutexName(string baseDirectory)
+    {
+        try
+        {
+            return PackageInstanceGuard.BuildMutexName(RuntimeLayout.ResolveSingleInstanceIdentityPath(baseDirectory));
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string? ResolveRelaunchExecutable(string baseDirectory)
+    {
+        var packagedExecutable = Path.Combine(
+            baseDirectory,
+            OperatingSystem.IsWindows() ? "MAAUnified.exe" : "MAAUnified");
+        return File.Exists(packagedExecutable) ? packagedExecutable : Environment.ProcessPath;
+    }
+
+    /// <summary>
+    /// 委托外部更新器应用待安装更新包。能力不支持、更新器缺失、解压/计划构造失败或进程启动失败时
+    /// 返回 <c>null</c>，调用方继续走进程内应用（非 Windows 的显式降级路径）。
+    /// 启动成功时返回 <see cref="PendingAppUpdateStatus.Delegated"/>，保留更新包与解压目录供更新器使用。
+    /// </summary>
+    private static PendingAppUpdateApplyResult? TryDelegatePendingUpdateToExternalUpdater(
+        string baseDirectory,
+        UnifiedConfig config,
+        PendingAppUpdateInfo pendingUpdate,
+        UpdateApplyCapabilities capabilities,
+        IExternalUpdaterProcessLauncher externalUpdaterLauncher,
+        string? mutexName,
+        string? relaunchExecutablePath,
+        string extractDirectory,
+        string backupDirectory)
+    {
+        if (!capabilities.ExternalUpdaterSupported)
+        {
+            return null;
+        }
+
+        var updaterPath = Path.Combine(baseDirectory, capabilities.ExternalUpdaterExecutableName);
+        if (!File.Exists(updaterPath))
+        {
+            return null;
+        }
+
+        string? planPath = null;
+        try
+        {
+            PrepareExtractionDirectory(extractDirectory);
+            ExtractPackageToDirectory(pendingUpdate.PackagePath, extractDirectory);
+
+            var removeListFile = Path.Combine(extractDirectory, "removelist.txt");
+            var changesFile = Path.Combine(extractDirectory, "changes.json");
+            var isOtaPackage = File.Exists(removeListFile) || File.Exists(changesFile);
+            var removeEntries = isOtaPackage
+                ? BuildDelegatedRemoveEntries(baseDirectory, LoadRemoveList(removeListFile, changesFile))
+                : BuildDelegatedFullPackageRemoveEntries(baseDirectory, extractDirectory);
+            var moveEntries = BuildDelegatedMoveEntries(extractDirectory);
+
+            planPath = Path.Combine(baseDirectory, $"maa-pending-update-{Guid.NewGuid():N}.json");
+            ExternalUpdaterDelegation.WritePlan(
+                planPath,
+                isOtaPackage ? "ota" : "full",
+                removeEntries,
+                moveEntries);
+
+            var spec = new ExternalUpdaterLaunchSpec(
+                ParentProcessId: Environment.ProcessId,
+                ExecutablePath: updaterPath,
+                BaseDirectory: baseDirectory,
+                ExtractDirectory: extractDirectory,
+                BackupDirectory: backupDirectory,
+                PackagePath: pendingUpdate.PackagePath,
+                SuccessStatusFilePath: Path.Combine(baseDirectory, ExternalUpdaterDelegation.SuccessStatusFileName),
+                FailureStatusFilePath: PendingUpdateFailureState.ResolvePath(baseDirectory),
+                RelaunchExecutablePath: relaunchExecutablePath ?? string.Empty,
+                PlanPath: planPath,
+                MutexName: mutexName ?? string.Empty,
+                ShowConsole: ReadGlobalBool(config, ConfigurationKeys.ShowUpdaterConsole, true),
+                ShowProgress: ReadGlobalBool(config, ConfigurationKeys.ShowUpdaterProgress, true));
+
+            if (!externalUpdaterLauncher.TryStart(spec, out var launchMessage))
+            {
+                SafeDeleteDirectory(extractDirectory);
+                TryDeleteFile(planPath);
+                return null;
+            }
+
+            return new PendingAppUpdateApplyResult(
+                PendingAppUpdateStatus.Delegated,
+                $"Delegated pending software update package `{Path.GetFileName(pendingUpdate.PackagePath)}` to external updater. {launchMessage}",
+                pendingUpdate.PackagePath);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            // 解压或计划构造失败：回退进程内路径，由既有异常处理落失败标记/回滚。
+            SafeDeleteDirectory(extractDirectory);
+            if (planPath is not null)
+            {
+                TryDeleteFile(planPath);
+            }
+
+            return null;
+        }
+    }
+
+    private static string[] BuildDelegatedRemoveEntries(string baseDirectory, IEnumerable<string> removeList)
+    {
+        var entries = new List<string>();
+        foreach (var rawEntry in removeList)
+        {
+            // 复用进程内路径校验，非法条目交给进程内路径抛 InvalidDataException 走统一失败处理。
+            _ = ResolveManifestPathUnderRoot(baseDirectory, rawEntry);
+            if (ExternalUpdaterDelegation.TryNormalizePlanEntry(rawEntry, out var normalized))
+            {
+                entries.Add(normalized);
+            }
+        }
+
+        return entries.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static string[] BuildDelegatedFullPackageRemoveEntries(string baseDirectory, string extractDirectory)
+    {
+        return Directory.GetDirectories(extractDirectory)
+            .Select(Path.GetFileName)
+            .Where(static name => !string.IsNullOrWhiteSpace(name))
+            .Where(name => Directory.Exists(Path.Combine(baseDirectory, name!)))
+            .Select(name => name!)
+            .Select(name => ExternalUpdaterDelegation.TryNormalizePlanEntry(name, out var normalized) ? normalized : throw new InvalidDataException($"Illegal path in update package: {name}"))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static string[] BuildDelegatedMoveEntries(string extractDirectory)
+    {
+        return Directory.GetFiles(extractDirectory, "*", SearchOption.AllDirectories)
+            .Where(static file => !IsControlFileName(Path.GetFileName(file)))
+            .Select(file => Path.GetRelativePath(extractDirectory, file))
+            .Select(path => ExternalUpdaterDelegation.TryNormalizePlanEntry(path, out var normalized)
+                ? normalized
+                : throw new InvalidDataException($"Illegal path in update package: {path}"))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static bool ReadGlobalBool(UnifiedConfig config, string key, bool fallback)
+    {
+        if (!config.GlobalValues.TryGetValue(key, out var node) || node is null)
+        {
+            return fallback;
+        }
+
+        if (node is JsonValue value)
+        {
+            if (value.TryGetValue(out bool booleanValue))
+            {
+                return booleanValue;
+            }
+
+            if (value.TryGetValue(out string? text) && bool.TryParse(text, out var parsedText))
+            {
+                return parsedText;
+            }
+        }
+
+        return bool.TryParse(node.ToString(), out var parsed) ? parsed : fallback;
+    }
+
     public static PendingAppUpdateApplyResult TryApplyPendingUpdatePackage(string baseDirectory)
-        => TryApplyPendingUpdatePackage(baseDirectory, MAAUnifiedRuntimeFactory.CreateConfigStore(baseDirectory));
+        => TryApplyPendingUpdatePackage(
+            baseDirectory,
+            MAAUnifiedRuntimeFactory.CreateConfigStore(baseDirectory),
+            UpdateApplyPlatform.Detect(baseDirectory),
+            new ProcessExternalUpdaterProcessLauncher(),
+            ResolveMutexName(baseDirectory),
+            ResolveRelaunchExecutable(baseDirectory));
 
     internal static PendingAppUpdateApplyResult TryApplyPendingUpdatePackage(
         string baseDirectory,
         IUnifiedConfigStore configStore)
+        => TryApplyPendingUpdatePackage(
+            baseDirectory,
+            configStore,
+            UpdateApplyPlatform.Detect(baseDirectory),
+            new ProcessExternalUpdaterProcessLauncher(),
+            ResolveMutexName(baseDirectory),
+            ResolveRelaunchExecutable(baseDirectory));
+
+    internal static PendingAppUpdateApplyResult TryApplyPendingUpdatePackage(
+        string baseDirectory,
+        IUnifiedConfigStore configStore,
+        UpdateApplyCapabilities capabilities,
+        IExternalUpdaterProcessLauncher externalUpdaterLauncher,
+        string? mutexName = null,
+        string? relaunchExecutablePath = null)
     {
         var commitLock = configStore.AcquireCommitLockAsync().AsTask().GetAwaiter().GetResult();
         try
         {
-            return TryApplyPendingUpdatePackageCore(baseDirectory, configStore);
+            return TryApplyPendingUpdatePackageCore(
+                baseDirectory,
+                configStore,
+                capabilities,
+                externalUpdaterLauncher,
+                mutexName,
+                relaunchExecutablePath);
         }
         finally
         {
@@ -188,7 +404,11 @@ public static class PendingAppUpdateService
 
     private static PendingAppUpdateApplyResult TryApplyPendingUpdatePackageCore(
         string baseDirectory,
-        IUnifiedConfigStore configStore)
+        IUnifiedConfigStore configStore,
+        UpdateApplyCapabilities capabilities,
+        IExternalUpdaterProcessLauncher externalUpdaterLauncher,
+        string? mutexName,
+        string? relaunchExecutablePath)
     {
         var config = TryLoadConfig(configStore);
         if (config is null)
@@ -228,6 +448,23 @@ public static class PendingAppUpdateService
 
         var extractDirectory = Path.Combine(baseDirectory, "NewVersionExtract");
         var backupDirectory = Path.Combine(baseDirectory, ".old");
+
+        // Windows 且随包发布了 MAA.Updater.exe 时委托外部更新器：它会在本进程退出后处理
+        // dll/exe 占用、互斥量与回滚。启动失败或非 Windows 显式降级回进程内应用。
+        var delegatedResult = TryDelegatePendingUpdateToExternalUpdater(
+            baseDirectory,
+            config,
+            pendingUpdate,
+            capabilities,
+            externalUpdaterLauncher,
+            mutexName,
+            relaunchExecutablePath,
+            extractDirectory,
+            backupDirectory);
+        if (delegatedResult is not null)
+        {
+            return delegatedResult;
+        }
 
         var rollbackActions = new List<PendingUpdateRollbackAction>();
 
@@ -315,6 +552,17 @@ public static class PendingAppUpdateService
 
             // 成功应用后清掉跨启动保留的失败标记，避免下次启动继续提示修复。
             PendingUpdateFailureState.Clear(baseDirectory);
+            var postApplyIntegrity = InstallationIntegrityChecker.Check(baseDirectory);
+            if (postApplyIntegrity.Passed)
+            {
+                UpdateRepairState.Clear(baseDirectory);
+            }
+            else
+            {
+                UpdateRepairState.Write(
+                    baseDirectory,
+                    $"Installation integrity check still reports {postApplyIntegrity.MissingFiles.Count} missing file(s) after applying the update.");
+            }
 
             return new PendingAppUpdateApplyResult(
                 PendingAppUpdateStatus.Applied,

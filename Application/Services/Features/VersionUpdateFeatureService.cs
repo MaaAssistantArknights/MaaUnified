@@ -413,10 +413,22 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                     "正在检查软件更新。通道={0}，当前版本={1}",
                     normalizedPolicy.VersionType,
                     currentVersion));
+            var runtimeBaseDirectory = ResolveRuntimeBaseDirectory();
+            var forceFullPackage = UpdateRepairState.RequiresFullPackage(runtimeBaseDirectory);
+            if (forceFullPackage)
+            {
+                PublishUpdateLog(
+                    LocalizeUpdateText(
+                        "VersionUpdate.Log.Software.ForceFullPackage",
+                        "安装文件缺失或上次更新失败，已强制使用完整包更新。"),
+                    "WARN");
+            }
+
             var workflowResult = await _appUpdateWorkflowService.CheckForUpdatesAsync(
                 normalizedPolicy,
                 string.IsNullOrWhiteSpace(currentVersion) ? "unknown" : currentVersion.Trim(),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken,
+                forceFullPackage).ConfigureAwait(false);
             if (!workflowResult.CheckSucceeded)
             {
                 var failureMessage = string.IsNullOrWhiteSpace(workflowResult.CheckFailureMessage)
@@ -443,9 +455,9 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
 
             var effectiveResult = workflowResult;
 
-            if (workflowResult.IsNewVersion
+            if ((workflowResult.IsNewVersion || forceFullPackage)
                 && workflowResult.HasPackage
-                && normalizedPolicy.AutoDownloadUpdatePackage)
+                && (normalizedPolicy.AutoDownloadUpdatePackage || forceFullPackage))
             {
                 PublishUpdateLog(
                     workflowResult.PackageName is null
@@ -461,11 +473,12 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
                     VersionUpdateProgressStage.Started));
                 var downloadResult = await _appUpdateWorkflowService.DownloadPackageAsync(
                     workflowResult,
-                    ResolveRuntimeBaseDirectory(),
+                    runtimeBaseDirectory,
                     forceDownload: false,
                     normalizedPolicy,
                     progress,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken,
+                    forceFullPackage).ConfigureAwait(false);
                 if (downloadResult.Success && !string.IsNullOrWhiteSpace(downloadResult.Value))
                 {
                     effectiveResult = workflowResult with

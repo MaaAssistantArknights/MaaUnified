@@ -14,6 +14,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.VersionUpdate;
 using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
@@ -135,7 +136,10 @@ public sealed partial class SettingsPageViewModel
                 cancellationToken);
         }
 
-        if (!VersionUpdateStartupCheck)
+        // 启动提示里用户选择「重试更新」时，即使关闭了启动自动检查也执行一次；
+        // 修复标记存在时 VersionUpdateFeatureService 会把检查强制到完整包通道。
+        var retryRepairRequested = UpdateRepairState.ConsumeRetryRequest(ResolveRuntimeBaseDirectory());
+        if (!VersionUpdateStartupCheck && !retryRepairRequested)
         {
             return;
         }

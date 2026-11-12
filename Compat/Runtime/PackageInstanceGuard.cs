@@ -166,7 +166,7 @@ public sealed class PackageInstanceGuard : IDisposable
         return false;
     }
 
-    internal static string BuildMutexName(string keyMaterial)
+    public static string BuildMutexName(string keyMaterial)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(keyMaterial));
         return $"MAAUnified.Package.{Convert.ToHexString(hash)}";

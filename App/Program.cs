@@ -112,6 +112,13 @@ internal static class Program
             return 0;
         }
 
+        if (pendingUpdateResult.Status == PendingAppUpdateStatus.Delegated)
+        {
+            // 外部更新器已接管安装，它会在本进程退出后继续；不要再启动 UI 或重复应用更新包。
+            RecordStartupStage("Main.PendingUpdate.Delegated", pendingUpdateResult.Message);
+            return 0;
+        }
+
         if (pendingUpdateResult.Status == PendingAppUpdateStatus.Failed)
         {
             RecordStartupStage("Main.PendingUpdate.Failed", pendingUpdateResult.Message);
@@ -612,7 +619,10 @@ internal static class Program
             RecordStartupStage("Main.UpdateApply.Degraded", caps.DegradationReason);
         }
 
-        var report = UpdateStartupHealthInspector.Inspect(runtimeBaseDirectory);
+        // filelist 校验失败时落跨启动保留的修复标记：在完整包应用成功前所有下载入口只接受完整包。
+        var report = UpdateStartupHealthInspector.Inspect(
+            runtimeBaseDirectory,
+            persistInstallationRepairMarker: true);
         if (!report.RequiresRepair)
         {
             return;
@@ -621,11 +631,29 @@ internal static class Program
         var summary = BuildUpdateRepairSummary(report);
         RecordStartupStage(
             "Main.UpdateHealth.RepairRequired",
-            $"updateFailure={report.HasPersistedUpdateFailure}; missingFiles={report.MissingFiles.Count}; reason={DiagnosticDataSanitizer.Sanitize(report.UpdateFailureReason ?? "<none>")}; {summary}");
-        StartupPrompt.Show(
-            LocalizeStartupText(runtimeBaseDirectory, "Startup.UpdateRepair.Title", "Update repair required"),
-            LocalizeStartupText(runtimeBaseDirectory, "Startup.UpdateRepair.Message", summary),
-            StartupPromptSeverity.Warning);
+            $"updateFailure={report.HasPersistedUpdateFailure}; repairMarker={report.HasPersistedRepairRequirement}; missingFiles={report.MissingFiles.Count}; reason={DiagnosticDataSanitizer.Sanitize(report.UpdateFailureReason ?? "<none>")}; {summary}");
+        var title = LocalizeStartupText(runtimeBaseDirectory, "Startup.UpdateRepair.Title", "Update repair required");
+        var message = LocalizeStartupText(runtimeBaseDirectory, "Startup.UpdateRepair.Message", summary);
+        var retryRequested = StartupPrompt.ShowChoice(
+            title,
+            message,
+            acceptText: LocalizeStartupText(runtimeBaseDirectory, "Startup.UpdateRepair.Retry", "Retry update"),
+            rejectText: LocalizeStartupText(runtimeBaseDirectory, "Startup.UpdateRepair.Ignore", "Ignore for now"),
+            severity: StartupPromptSeverity.Warning);
+        if (retryRequested == true)
+        {
+            UpdateRepairState.RequestRetry(runtimeBaseDirectory);
+            RecordStartupStage("Main.UpdateHealth.RetryRequested", "User asked to retry the update repair after startup.");
+        }
+        else if (retryRequested == false)
+        {
+            // 忽略本次只影响当前启动：修复标记不删除，下次启动仍会提示并强制完整包。
+            RecordStartupStage("Main.UpdateHealth.Ignored", "User ignored the update repair prompt for this startup.");
+        }
+        else
+        {
+            RecordStartupStage("Main.UpdateHealth.PromptUnavailable", "Could not show the update repair prompt; repair state remains persisted.");
+        }
     }
 
     /// <summary>
@@ -652,8 +680,12 @@ internal static class Program
 
             lines.Add($"Installation files are missing ({report.MissingFiles.Count}): {preview}");
         }
+        else if (report.HasPersistedRepairRequirement)
+        {
+            lines.Add("A previous installation integrity check failed; a full package update is still required.");
+        }
 
-        lines.Add("Download or drop a full package to repair the installation, then restart MAAUnified.");
+        lines.Add("Select Retry update to download a full package, or Ignore for now and continue. A full package is required until the repair completes.");
         return string.Join(Environment.NewLine, lines);
     }
 

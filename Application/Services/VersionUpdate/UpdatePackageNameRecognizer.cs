@@ -50,11 +50,11 @@ public static class UpdatePackageNameRecognizer
         RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant;
 
     private static readonly Regex MaaUnifiedFullPackageRegex = new(
-        @"^MAAUnified-(?<version>v[0-9A-Za-z.+-]+?)-(?<platform>windows|linux|macos)-(?<arch>x64|arm64)\.(zip|tar\.gz|dmg|AppImage)$",
+        @"^MAAUnified-(?<version>v[0-9A-Za-z.+-]+?)-(?<platform>windows|win|linux|macos)-(?<arch>x64|arm64)\.(zip|tar\.gz|dmg|AppImage)$",
         PackageRegexOptions);
 
     private static readonly Regex MaaUnifiedOtaPackageRegex = new(
-        @"^MAAUnifiedComponent-OTA-(?<from>v[0-9A-Za-z.+-]+?)_(?<to>v[0-9A-Za-z.+-]+?)-(?<platform>windows|linux|macos)-(?<arch>x64|arm64)\.zip$",
+        @"^MAAUnifiedComponent-OTA-(?<from>v[0-9A-Za-z.+-]+?)_(?<to>v[0-9A-Za-z.+-]+?)-(?<platform>windows|win|linux|macos)-(?<arch>x64|arm64)\.zip$",
         PackageRegexOptions);
 
     private static readonly Regex LegacyFullPackageRegex = new(
@@ -89,7 +89,7 @@ public static class UpdatePackageNameRecognizer
                 UpdatePackageKind.FullPackage,
                 SourceVersion: null,
                 TargetVersion: fullMatch.Groups["version"].Value,
-                Platform: fullMatch.Groups["platform"].Value.ToLowerInvariant(),
+                Platform: NormalizePlatform(fullMatch.Groups["platform"].Value),
                 Architecture: fullMatch.Groups["arch"].Value.ToLowerInvariant(),
                 IsLegacyWindowsLayout: false);
             return true;
@@ -102,7 +102,7 @@ public static class UpdatePackageNameRecognizer
                 UpdatePackageKind.OtaPackage,
                 SourceVersion: otaMatch.Groups["from"].Value,
                 TargetVersion: otaMatch.Groups["to"].Value,
-                Platform: otaMatch.Groups["platform"].Value.ToLowerInvariant(),
+                Platform: NormalizePlatform(otaMatch.Groups["platform"].Value),
                 Architecture: otaMatch.Groups["arch"].Value.ToLowerInvariant(),
                 IsLegacyWindowsLayout: false);
             return true;

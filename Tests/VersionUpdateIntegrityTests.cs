@@ -216,6 +216,7 @@ public sealed class VersionUpdateIntegrityTests
 
     [Theory]
     [InlineData("MAAUnified-v1.2.3-windows-x64.zip", UpdatePackageKind.FullPackage, null, "v1.2.3", "windows", "x64")]
+    [InlineData("MAAUnified-v1.2.3-win-x64.zip", UpdatePackageKind.FullPackage, null, "v1.2.3", "windows", "x64")]
     [InlineData("MAAUnified-v1.2.3-linux-arm64.tar.gz", UpdatePackageKind.FullPackage, null, "v1.2.3", "linux", "arm64")]
     [InlineData("MAAUnified-v1.2.3-macos-x64.dmg", UpdatePackageKind.FullPackage, null, "v1.2.3", "macos", "x64")]
     [InlineData("MAAUnifiedComponent-OTA-v1.2.2_v1.2.3-windows-x64.zip", UpdatePackageKind.OtaPackage, "v1.2.2", "v1.2.3", "windows", "x64")]
@@ -396,6 +397,287 @@ public sealed class VersionUpdateIntegrityTests
         }
     }
 
+    // ---------- P0-12: filelist 失败标记 + 用户忽略本次/重试更新 ----------
+
+    [Fact]
+    public void UpdateRepairState_PersistsAcrossStartupsUntilFullPackageRepairCompletes()
+    {
+        using var root = TestRoot.Create();
+
+        Assert.Null(UpdateRepairState.TryRead(root.Path));
+        Assert.False(UpdateRepairState.RequiresFullPackage(root.Path));
+
+        UpdateRepairState.Write(root.Path, "Installation integrity check failed: 2 file(s) missing.");
+
+        // 读取只读不删：第一次启动提示后标记仍在，第二次启动仍会提示并强制完整包。
+        Assert.Equal("Installation integrity check failed: 2 file(s) missing.", UpdateRepairState.TryRead(root.Path));
+        Assert.Equal("Installation integrity check failed: 2 file(s) missing.", UpdateRepairState.TryRead(root.Path));
+        Assert.True(UpdateRepairState.Exists(root.Path));
+        Assert.True(UpdateRepairState.RequiresFullPackage(root.Path));
+
+        UpdateRepairState.Clear(root.Path);
+        Assert.False(UpdateRepairState.Exists(root.Path));
+        Assert.False(UpdateRepairState.RequiresFullPackage(root.Path));
+    }
+
+    [Fact]
+    public void UpdateRepairState_RetryRequestIsConsumedOnce()
+    {
+        using var root = TestRoot.Create();
+
+        Assert.False(UpdateRepairState.ConsumeRetryRequest(root.Path));
+
+        UpdateRepairState.RequestRetry(root.Path);
+        Assert.True(File.Exists(UpdateRepairState.ResolveRetryRequestPath(root.Path)));
+
+        Assert.True(UpdateRepairState.ConsumeRetryRequest(root.Path));
+        Assert.False(UpdateRepairState.ConsumeRetryRequest(root.Path));
+        Assert.False(File.Exists(UpdateRepairState.ResolveRetryRequestPath(root.Path)));
+    }
+
+    [Fact]
+    public void UpdateStartupHealthInspector_WhenIntegrityCheckFails_PersistsRepairMarkerAcrossStartups()
+    {
+        using var root = TestRoot.Create();
+        File.WriteAllText(
+            Path.Combine(root.Path, InstallationIntegrityChecker.FileListName),
+            "app.txt\nresource/missing.json\n");
+
+        var firstStartup = UpdateStartupHealthInspector.Inspect(root.Path, persistInstallationRepairMarker: true);
+
+        Assert.True(firstStartup.HasMissingInstallationFiles);
+        Assert.True(firstStartup.HasPersistedRepairRequirement);
+        Assert.True(UpdateRepairState.Exists(root.Path));
+
+        // 用户忽略提示或缺失文件被手动恢复后，标记仍跨启动保留并继续要求完整包。
+        File.Delete(Path.Combine(root.Path, InstallationIntegrityChecker.FileListName));
+        var secondStartup = UpdateStartupHealthInspector.Inspect(root.Path);
+
+        Assert.False(secondStartup.HasMissingInstallationFiles);
+        Assert.True(secondStartup.HasPersistedRepairRequirement);
+        Assert.True(secondStartup.RequiresRepair);
+        Assert.True(UpdateRepairState.Exists(root.Path));
+
+        UpdateRepairState.Clear(root.Path);
+        Assert.False(UpdateStartupHealthInspector.Inspect(root.Path).RequiresRepair);
+    }
+
+    [Fact]
+    public async Task TryRegisterPendingUpdatePackage_WhenRepairRequired_RejectsOtaAndAcceptsFullPackage()
+    {
+        using var root = TestRoot.Create();
+        await SavePendingUpdateConfigAsync(root.Path);
+        UpdateRepairState.Write(root.Path, "Installation integrity check failed: 1 file(s) missing.");
+
+        var otaPath = Path.Combine(root.Path, $"MAAUnifiedComponent-OTA-v1.0.0_v1.1.0-{CurrentPlatform}-{CurrentArchitecture}.zip");
+        await File.WriteAllBytesAsync(otaPath, [1, 2, 3]);
+
+        var otaResult = PendingAppUpdateService.TryRegisterPendingUpdatePackage(
+            root.Path,
+            otaPath,
+            "v1.0.0",
+            allowSameVersionReinstall: false);
+
+        Assert.False(otaResult.Registered);
+        Assert.Contains("full package", otaResult.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(UpdateRepairState.Exists(root.Path));
+
+        var fullPath = Path.Combine(root.Path, $"MAAUnified-v1.0.0-{CurrentPlatform}-{CurrentArchitecture}.zip");
+        await File.WriteAllBytesAsync(fullPath, [1, 2, 3]);
+
+        var fullResult = PendingAppUpdateService.TryRegisterPendingUpdatePackage(
+            root.Path,
+            fullPath,
+            "v1.0.0",
+            allowSameVersionReinstall: true);
+
+        Assert.True(fullResult.Registered, fullResult.Message);
+        Assert.True(fullResult.SameVersionReinstall);
+        Assert.False(UpdateRepairState.Exists(root.Path));
+    }
+
+    // ---------- P0-13: 外部更新器委托与显式降级 ----------
+
+    [Theory]
+    [InlineData("windows", true, true, true, "")]
+    [InlineData("windows", false, false, false, "not packaged")]
+    [InlineData("macos", true, false, false, "Windows-only")]
+    [InlineData("linux", true, false, false, "Windows-only")]
+    public void UpdateApplyPlatform_DetectForPlatform_ProducesExplicitCapabilityProfile(
+        string platform,
+        bool hasUpdater,
+        bool expectedExternalUpdater,
+        bool expectedMutex,
+        string expectedReasonFragment)
+    {
+        var capabilities = UpdateApplyPlatform.Detect(platform, hasUpdater);
+
+        Assert.Equal(expectedExternalUpdater, capabilities.ExternalUpdaterSupported);
+        Assert.Equal(expectedMutex, capabilities.MutexCoordinationSupported);
+        Assert.True(capabilities.OccupiedFileRetrySupported);
+        if (expectedReasonFragment.Length == 0)
+        {
+            Assert.Empty(capabilities.DegradationReason);
+        }
+        else
+        {
+            Assert.Contains(expectedReasonFragment, capabilities.DegradationReason, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void UpdateApplyPlatform_OnNonWindows_IgnoresUpdaterExecutableAndDegradesExplicitly()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var root = TestRoot.Create();
+        File.WriteAllText(Path.Combine(root.Path, UpdateApplyPlatform.ExternalUpdaterExecutableName), "fake updater");
+
+        var capabilities = UpdateApplyPlatform.Detect(root.Path);
+
+        Assert.False(capabilities.ExternalUpdaterSupported);
+        Assert.False(capabilities.MutexCoordinationSupported);
+        Assert.Contains("Windows-only", capabilities.DegradationReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ExternalUpdaterDelegation_BuildArguments_UsesUpdaterContractOrderAndFlags()
+    {
+        var spec = new ExternalUpdaterLaunchSpec(
+            ParentProcessId: 4321,
+            ExecutablePath: "/tmp/MAA.Updater.exe",
+            BaseDirectory: "/install",
+            ExtractDirectory: "/install/NewVersionExtract",
+            BackupDirectory: "/install/.old",
+            PackagePath: "/install/update.zip",
+            SuccessStatusFilePath: "/install/pending-update-success.txt",
+            FailureStatusFilePath: "/install/pending-update-failure.txt",
+            RelaunchExecutablePath: "/install/MAAUnified.exe",
+            PlanPath: "/install/maa-pending-update-plan.json",
+            MutexName: "MAAUnified.Package.Test",
+            ShowConsole: true,
+            ShowProgress: false);
+
+        var arguments = ExternalUpdaterDelegation.BuildArguments(spec);
+
+        Assert.Equal(
+            [
+                "4321",
+                "/install",
+                "/install/NewVersionExtract",
+                "/install/.old",
+                "/install/update.zip",
+                "/install/pending-update-success.txt",
+                "/install/pending-update-failure.txt",
+                "/install/MAAUnified.exe",
+                "/install/maa-pending-update-plan.json",
+                "--mutex-name",
+                "MAAUnified.Package.Test",
+                "--show-console",
+                "--no-progress-ui",
+            ],
+            arguments);
+    }
+
+    [Fact]
+    public async Task TryApplyPendingUpdatePackage_WhenExternalUpdaterSupported_DelegatesWithoutApplyingInProcess()
+    {
+        using var root = TestRoot.Create();
+        var packageDirectory = Path.Combine(root.Path, "update-packages");
+        Directory.CreateDirectory(packageDirectory);
+        File.WriteAllText(Path.Combine(root.Path, "app.txt"), "old");
+        File.WriteAllText(Path.Combine(root.Path, "old.txt"), "remove me");
+        var packagePath = Path.Combine(packageDirectory, "update.zip");
+        await CreateZipAsync(
+            packagePath,
+            ("app.txt", "new"),
+            ("removelist.txt", "old.txt"));
+        await SavePendingUpdateAsync(root.Path, Path.Combine("update-packages", "update.zip"));
+        File.WriteAllText(Path.Combine(root.Path, UpdateApplyPlatform.ExternalUpdaterExecutableName), "fake updater");
+        var launcher = new RecordingExternalUpdaterLauncher(succeeds: true);
+
+        var result = PendingAppUpdateService.TryApplyPendingUpdatePackage(
+            root.Path,
+            new AvaloniaJsonConfigStore(root.Path),
+            new UpdateApplyCapabilities(
+                ExternalUpdaterSupported: true,
+                ExternalUpdaterExecutableName: UpdateApplyPlatform.ExternalUpdaterExecutableName,
+                MutexCoordinationSupported: true,
+                OccupiedFileRetrySupported: true,
+                DegradationReason: string.Empty),
+            launcher,
+            mutexName: "MAAUnified.Package.Test",
+            relaunchExecutablePath: "/install/MAAUnified.exe");
+
+        Assert.Equal(PendingAppUpdateStatus.Delegated, result.Status);
+        Assert.Equal(1, launcher.CallCount);
+        var spec = Assert.Single(launcher.Specs);
+        Assert.Equal("MAAUnified.Package.Test", spec.MutexName);
+        Assert.Equal("/install/MAAUnified.exe", spec.RelaunchExecutablePath);
+        Assert.True(File.Exists(spec.PlanPath));
+        Assert.True(File.Exists(packagePath));
+        // 未在进程内应用：安装内容保持原样，由外部更新器在退出后处理。
+        Assert.Equal("old", await File.ReadAllTextAsync(Path.Combine(root.Path, "app.txt")));
+        Assert.Equal("remove me", await File.ReadAllTextAsync(Path.Combine(root.Path, "old.txt")));
+
+        var plan = JsonNode.Parse(await File.ReadAllTextAsync(spec.PlanPath))!.AsObject();
+        Assert.Equal("ota", plan["packageType"]!.GetValue<string>());
+        Assert.Contains("old.txt", plan["removeList"]!.AsArray().Select(node => node!.GetValue<string>()));
+        Assert.Contains("app.txt", plan["moveList"]!.AsArray().Select(node => node!.GetValue<string>()));
+        Assert.DoesNotContain("removelist.txt", plan["moveList"]!.AsArray().Select(node => node!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task TryApplyPendingUpdatePackage_WhenExternalUpdaterLaunchFails_FallsBackToInProcessApply()
+    {
+        using var root = TestRoot.Create();
+        var packageDirectory = Path.Combine(root.Path, "update-packages");
+        Directory.CreateDirectory(packageDirectory);
+        File.WriteAllText(Path.Combine(root.Path, "app.txt"), "old");
+        var packagePath = Path.Combine(packageDirectory, "update.zip");
+        await CreateZipAsync(packagePath, ("app.txt", "new"));
+        await SavePendingUpdateAsync(root.Path, Path.Combine("update-packages", "update.zip"));
+        File.WriteAllText(Path.Combine(root.Path, UpdateApplyPlatform.ExternalUpdaterExecutableName), "fake updater");
+        var launcher = new RecordingExternalUpdaterLauncher(succeeds: false);
+
+        var result = PendingAppUpdateService.TryApplyPendingUpdatePackage(
+            root.Path,
+            new AvaloniaJsonConfigStore(root.Path),
+            new UpdateApplyCapabilities(true, UpdateApplyPlatform.ExternalUpdaterExecutableName, true, true, string.Empty),
+            launcher);
+
+        Assert.Equal(PendingAppUpdateStatus.Applied, result.Status);
+        Assert.Equal(1, launcher.CallCount);
+        Assert.Equal("new", await File.ReadAllTextAsync(Path.Combine(root.Path, "app.txt")));
+        Assert.False(File.Exists(packagePath));
+    }
+
+    [Fact]
+    public async Task TryApplyPendingUpdatePackage_WhenExternalUpdaterUnsupported_AppliesInProcessWithoutLaunching()
+    {
+        using var root = TestRoot.Create();
+        var packageDirectory = Path.Combine(root.Path, "update-packages");
+        Directory.CreateDirectory(packageDirectory);
+        File.WriteAllText(Path.Combine(root.Path, "app.txt"), "old");
+        var packagePath = Path.Combine(packageDirectory, "update.zip");
+        await CreateZipAsync(packagePath, ("app.txt", "new"));
+        await SavePendingUpdateAsync(root.Path, Path.Combine("update-packages", "update.zip"));
+        var launcher = new RecordingExternalUpdaterLauncher(succeeds: true);
+
+        var result = PendingAppUpdateService.TryApplyPendingUpdatePackage(
+            root.Path,
+            new AvaloniaJsonConfigStore(root.Path),
+            new UpdateApplyCapabilities(false, UpdateApplyPlatform.ExternalUpdaterExecutableName, false, true, "Windows-only; applying in-process."),
+            launcher);
+
+        Assert.Equal(PendingAppUpdateStatus.Applied, result.Status);
+        Assert.Equal(0, launcher.CallCount);
+        Assert.Equal("new", await File.ReadAllTextAsync(Path.Combine(root.Path, "app.txt")));
+    }
+
     // ---------- P1-13: GitHub Token 只对 api.github.com 附带 ----------
 
     [Theory]
@@ -549,6 +831,21 @@ public sealed class VersionUpdateIntegrityTests
         var config = new UnifiedConfig();
         config.GlobalValues[ConfigurationKeys.VersionName] = JsonValue.Create("v1.0.0");
         await new AvaloniaJsonConfigStore(baseDirectory).SaveAsync(config);
+    }
+
+    private sealed class RecordingExternalUpdaterLauncher(bool succeeds) : IExternalUpdaterProcessLauncher
+    {
+        public int CallCount { get; private set; }
+
+        public List<ExternalUpdaterLaunchSpec> Specs { get; } = [];
+
+        public bool TryStart(ExternalUpdaterLaunchSpec spec, out string message)
+        {
+            CallCount++;
+            Specs.Add(spec);
+            message = succeeds ? "fake launcher" : "fake launcher failure";
+            return succeeds;
+        }
     }
 
     private sealed class TestRoot : IDisposable
