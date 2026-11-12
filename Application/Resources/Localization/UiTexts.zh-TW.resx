@@ -4579,6 +4579,9 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="TaskQueue.Guide.Demo.AddFight" xml:space="preserve">
     <value>新增理智作戰</value>
   </data>
+  <data name="TaskQueue.Guide.Demo.AddNightTheme" xml:space="preserve">
+    <value>加入一個夜間主題</value>
+  </data>
   <data name="TaskQueue.Guide.Demo.AddStartUp" xml:space="preserve">
     <value>新增開始喚醒</value>
   </data>
@@ -4602,6 +4605,9 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   </data>
   <data name="TaskQueue.Guide.Demo.ReorderFight" xml:space="preserve">
     <value>調整任務順序</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.ReorderTheme" xml:space="preserve">
+    <value>把更換主題任務拖到列表最後</value>
   </data>
   <data name="TaskQueue.Guide.Demo.SelectStage" xml:space="preserve">
     <value>選擇剿滅關卡</value>

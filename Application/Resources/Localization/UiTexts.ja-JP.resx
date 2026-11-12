@@ -4576,6 +4576,9 @@ DEBUGディレクトリに保存される画像には数量制限があり、超
   <data name="TaskQueue.Guide.Demo.AddFight" xml:space="preserve">
     <value>理性作戦を追加</value>
   </data>
+  <data name="TaskQueue.Guide.Demo.AddNightTheme" xml:space="preserve">
+    <value>ナイトテーマを追加</value>
+  </data>
   <data name="TaskQueue.Guide.Demo.AddStartUp" xml:space="preserve">
     <value>ウェイクアップを追加</value>
   </data>
@@ -4599,6 +4602,9 @@ DEBUGディレクトリに保存される画像には数量制限があり、超
   </data>
   <data name="TaskQueue.Guide.Demo.ReorderFight" xml:space="preserve">
     <value>タスクの順序を変更</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.ReorderTheme" xml:space="preserve">
+    <value>テーマ変更タスクをリストの最後へ移動</value>
   </data>
   <data name="TaskQueue.Guide.Demo.SelectStage" xml:space="preserve">
     <value>殲滅ステージを選択</value>

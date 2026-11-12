@@ -16,6 +16,8 @@ public enum SettingsGuideDemoAction
     ReorderFight,
     EnableWeekly,
     AddSwitchTheme,
+    ReorderTheme,
+    AddNightTheme,
 }
 
 /// <summary>
@@ -116,6 +118,8 @@ public sealed class SettingsGuideStateMachine
         (SettingsGuideDemoAction.ReorderFight, "TaskQueue.Guide.Demo.ReorderFight"),
         (SettingsGuideDemoAction.EnableWeekly, "TaskQueue.Guide.Demo.EnableWeekly"),
         (SettingsGuideDemoAction.AddSwitchTheme, "TaskQueue.Guide.Demo.AddSwitchTheme"),
+        (SettingsGuideDemoAction.ReorderTheme, "TaskQueue.Guide.Demo.ReorderTheme"),
+        (SettingsGuideDemoAction.AddNightTheme, "TaskQueue.Guide.Demo.AddNightTheme"),
     ];
 
     private readonly Func<string, string> _localize;

@@ -498,6 +498,52 @@ public sealed class NotificationProviderRobustnessTests
         Assert.Contains("server=https://api.day.app", parameterText, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ResolveEnabled_ReadsWpfMultiInstanceConfigsArray()
+    {
+        var config = CreateConfig(profile =>
+        {
+            profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Bark");
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkSendKey] = JsonValue.Create("legacy-key");
+        });
+        config.GlobalValues[ExternalNotificationChannels.ConfigsKey] = JsonNode.Parse(
+            """
+            [
+              { "$type": "Bark", "SendKey": "k1" },
+              { "$type": "Bark", "SendKey": "k2", "Server": "https://bark2.example.com" },
+              { "$type": "CustomWebhook", "Url": "https://example.com/hook", "Body": "{\"content\":\"{content}\"}" }
+            ]
+            """);
+
+        var channels = ExternalNotificationChannels.ResolveEnabled(config);
+
+        Assert.Equal(3, channels.Count);
+        Assert.Equal(["Bark", "Bark", "CustomWebhook"], channels.Select(channel => channel.Provider));
+        Assert.Equal("k1", channels[0].Parameters["sendKey"]);
+        Assert.Equal("https://api.day.app", channels[0].Parameters["server"]);
+        Assert.Equal("k2", channels[1].Parameters["sendKey"]);
+        Assert.Equal("https://bark2.example.com", channels[1].Parameters["server"]);
+        Assert.Equal("https://example.com/hook", channels[2].Parameters["url"]);
+        Assert.Equal("{\"content\":\"{content}\"}", channels[2].Parameters["body"]);
+    }
+
+    [Fact]
+    public void ResolveEnabled_FallsBackToLegacyKeysWhenConfigsArrayHasNoKnownChannel()
+    {
+        var config = CreateConfig(profile =>
+        {
+            profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Bark");
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkSendKey] = JsonValue.Create("legacy-key");
+        });
+        config.GlobalValues[ExternalNotificationChannels.ConfigsKey] = JsonNode.Parse(
+            """[ { "$type": "RemovedChannel", "SendKey": "x" } ]""");
+
+        var channel = Assert.Single(ExternalNotificationChannels.ResolveEnabled(config));
+
+        Assert.Equal("Bark", channel.Provider);
+        Assert.Equal("legacy-key", channel.Parameters["sendKey"]);
+    }
+
     private static (NotificationProviderFeatureService Service, CapturedRequest Captured) CreateHttpProbe(
         string responseBody,
         HttpStatusCode statusCode = HttpStatusCode.OK)

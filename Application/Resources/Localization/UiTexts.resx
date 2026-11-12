@@ -5322,6 +5322,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TaskQueue.Guide.Demo.AddFight" xml:space="preserve">
     <value>添加理智作战</value>
   </data>
+  <data name="TaskQueue.Guide.Demo.AddNightTheme" xml:space="preserve">
+    <value>添加一个夜间主题</value>
+  </data>
   <data name="TaskQueue.Guide.Demo.AddStartUp" xml:space="preserve">
     <value>添加开始唤醒</value>
   </data>
@@ -5345,6 +5348,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="TaskQueue.Guide.Demo.ReorderFight" xml:space="preserve">
     <value>调整任务顺序</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.ReorderTheme" xml:space="preserve">
+    <value>把更换主题任务拖到列表最后</value>
   </data>
   <data name="TaskQueue.Guide.Demo.SelectStage" xml:space="preserve">
     <value>选择剿灭关卡</value>

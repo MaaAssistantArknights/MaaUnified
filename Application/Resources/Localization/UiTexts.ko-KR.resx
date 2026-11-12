@@ -4577,6 +4577,9 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   <data name="TaskQueue.Guide.Demo.AddFight" xml:space="preserve">
     <value>이성 작전 추가</value>
   </data>
+  <data name="TaskQueue.Guide.Demo.AddNightTheme" xml:space="preserve">
+    <value>야간 테마 추가</value>
+  </data>
   <data name="TaskQueue.Guide.Demo.AddStartUp" xml:space="preserve">
     <value>로그인 추가</value>
   </data>
@@ -4600,6 +4603,9 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   </data>
   <data name="TaskQueue.Guide.Demo.ReorderFight" xml:space="preserve">
     <value>작업 순서 변경</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.ReorderTheme" xml:space="preserve">
+    <value>테마 변경 작업을 목록 맨 뒤로 이동</value>
   </data>
   <data name="TaskQueue.Guide.Demo.SelectStage" xml:space="preserve">
     <value>섬멸 스테이지 선택</value>

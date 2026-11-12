@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Security;
 using MAAUnified.Compat.Constants;
@@ -108,12 +110,179 @@ public static class ExternalNotificationChannels
         };
 
     /// <summary>
+    /// WPF dev-v2 Gui.ExternalNotification.Configs 存放位置。MAAUnified 读取该数组以支持
+    /// 同类型渠道多实例；写回仍是扁平键 + Enabled CSV（单实例编辑）。
+    /// </summary>
+    public const string ConfigsKey = "ExternalNotification.Configs";
+
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> WpfPropertyMap =
+        new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Smtp"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["server"] = "Server",
+                ["port"] = "Port",
+                ["user"] = "User",
+                ["password"] = "Password",
+                ["from"] = "From",
+                ["to"] = "To",
+                ["useSsl"] = "UseSsl",
+                ["requiresAuthentication"] = "RequiresAuthentication",
+            },
+            ["ServerChan"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["sendKey"] = "SendKey" },
+            ["Bark"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["sendKey"] = "SendKey",
+                ["server"] = "Server",
+            },
+            ["Discord"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["botToken"] = "BotToken",
+                ["userId"] = "UserId",
+            },
+            ["DingTalk"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["accessToken"] = "AccessToken",
+                ["secret"] = "Secret",
+            },
+            ["Telegram"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["botToken"] = "BotToken",
+                ["chatId"] = "ChatId",
+                ["topicId"] = "TopicId",
+            },
+            ["Qmsg"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["server"] = "Server",
+                ["key"] = "Key",
+                ["user"] = "User",
+                ["bot"] = "Bot",
+            },
+            ["Gotify"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["server"] = "Server",
+                ["token"] = "Token",
+            },
+            ["CustomWebhook"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["url"] = "Url",
+                ["headers"] = "Headers",
+                ["body"] = "Body",
+            },
+        };
+
+    /// <summary>
+    /// 尝试读取 WPF dev-v2 的 Configs 数组（多实例）。数组元素形如
+    /// <c>{"$type":"Bark","SendKey":"...","Server":"..."}</c>；值保持原样（WPF 可能写入加密串，
+    /// 读取端不做解密，交由发送失败暴露）。无法解析或没有已知渠道时返回 false，调用方回退扁平键。
+    /// </summary>
+    /// <param name="config">配置快照。</param>
+    /// <param name="channels">解析出的渠道实例。</param>
+    /// <returns>是否读取到至少一个已知渠道。</returns>
+    public static bool TryReadConfiguredInstances(
+        UnifiedConfig config,
+        out IReadOnlyList<ExternalNotificationChannel> channels)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        channels = [];
+
+        if (!config.GlobalValues.TryGetValue(ConfigsKey, out var node) || node is null)
+        {
+            return false;
+        }
+
+        JsonArray? array = node switch
+        {
+            JsonArray direct => direct,
+            JsonValue value when value.TryGetValue<string>(out var raw) && !string.IsNullOrWhiteSpace(raw) => TryParseArray(raw),
+            _ => null,
+        };
+        if (array is null)
+        {
+            return false;
+        }
+
+        var parsed = new List<ExternalNotificationChannel>();
+        foreach (var item in array)
+        {
+            if (item is not JsonObject configObject)
+            {
+                continue;
+            }
+
+            var type = ReadStringProperty(configObject, "$type") ?? ReadStringProperty(configObject, "Provider");
+            if (string.IsNullOrWhiteSpace(type)
+                || !ProviderAliases.TryGetValue(type, out var provider)
+                || !WpfPropertyMap.TryGetValue(provider, out var propertyMap))
+            {
+                continue;
+            }
+
+            var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (parameterKey, propertyName) in propertyMap)
+            {
+                var value = ReadPropertyValue(configObject, propertyName);
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    parameters[parameterKey] = value;
+                }
+            }
+
+            if (string.Equals(provider, "Bark", StringComparison.OrdinalIgnoreCase)
+                && !parameters.ContainsKey("server"))
+            {
+                parameters["server"] = "https://api.day.app";
+            }
+
+            parsed.Add(new ExternalNotificationChannel(provider, parameters));
+        }
+
+        channels = parsed;
+        return parsed.Count > 0;
+    }
+
+    private static JsonArray? TryParseArray(string raw)
+    {
+        try
+        {
+            return JsonNode.Parse(raw) as JsonArray;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadStringProperty(JsonObject obj, string propertyName)
+        => obj.TryGetPropertyValue(propertyName, out var node) ? node?.GetValue<string>() : null;
+
+    private static string? ReadPropertyValue(JsonObject obj, string propertyName)
+    {
+        if (!obj.TryGetPropertyValue(propertyName, out var node) || node is null)
+        {
+            return null;
+        }
+
+        return node switch
+        {
+            JsonValue value => value.ToString(),
+            _ => node.ToString(),
+        };
+    }
+
+    /// <summary>
     /// Resolves the enabled channel instances in configuration order. Duplicate providers are kept
     /// because the legacy ｢Discord Webhook｣ entry becomes an additional Custom Webhook channel.
     /// </summary>
     public static IReadOnlyList<ExternalNotificationChannel> ResolveEnabled(UnifiedConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
+
+        // WPF dev-v2 多实例配置优先；扁平键作为旧配置回退。
+        if (TryReadConfiguredInstances(config, out var configuredChannels))
+        {
+            return configuredChannels;
+        }
 
         var rawValue = NotificationConfigReader.ReadString(
             config,

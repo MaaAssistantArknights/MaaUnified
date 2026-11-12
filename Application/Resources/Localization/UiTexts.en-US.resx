@@ -5321,6 +5321,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="TaskQueue.Guide.Demo.AddFight" xml:space="preserve">
     <value>Add a Fight task</value>
   </data>
+  <data name="TaskQueue.Guide.Demo.AddNightTheme" xml:space="preserve">
+    <value>Add a night theme</value>
+  </data>
   <data name="TaskQueue.Guide.Demo.AddStartUp" xml:space="preserve">
     <value>Add a StartUp task</value>
   </data>
@@ -5344,6 +5347,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="TaskQueue.Guide.Demo.ReorderFight" xml:space="preserve">
     <value>Reorder tasks</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.ReorderTheme" xml:space="preserve">
+    <value>Drag the theme task to the end of the list</value>
   </data>
   <data name="TaskQueue.Guide.Demo.SelectStage" xml:space="preserve">
     <value>Select an Annihilation stage</value>
