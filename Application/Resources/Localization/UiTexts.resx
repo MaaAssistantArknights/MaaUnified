@@ -418,6 +418,9 @@
   <data name="Copilot.Option.BattleList" xml:space="preserve">
     <value>战斗列表</value>
   </data>
+  <data name="Copilot.Option.EnableOperBoxAssist" xml:space="preserve">
+    <value>使用一图流数据辅助编队</value>
+  </data>
   <data name="Copilot.Option.IgnoreRequirements" xml:space="preserve">
     <value>忽略干员属性要求</value>
   </data>
@@ -635,6 +638,9 @@
   </data>
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
     <value>删除战斗列表中的全部作业。</value>
+  </data>
+  <data name="Copilot.Tip.EnableOperBoxAssist" xml:space="preserve">
+    <value>自动编队前，按一图流干员练度数据（含技能与模组信息）预匹配作业编队。需先在 ｢设置 - 三方服务｣ 启用一图流数据源并获取干员数据。</value>
   </data>
   <data name="Copilot.Tip.File" xml:space="preserve">
     <value>作业文件可以直接用鼠标拖进来哦 (oﾟvﾟ)ノ</value>
@@ -5700,11 +5706,17 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Toolbox.OperBox.Export.Header.Elite" xml:space="preserve">
     <value>精英化等级</value>
   </data>
+  <data name="Toolbox.OperBox.Export.Header.Equips" xml:space="preserve">
+    <value>模组</value>
+  </data>
   <data name="Toolbox.OperBox.Export.Header.Id" xml:space="preserve">
     <value>干员 ID</value>
   </data>
   <data name="Toolbox.OperBox.Export.Header.Level" xml:space="preserve">
     <value>等级</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.MainSkillLevel" xml:space="preserve">
+    <value>技能等级</value>
   </data>
   <data name="Toolbox.OperBox.Export.Header.Name" xml:space="preserve">
     <value>干员</value>
@@ -5717,6 +5729,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Toolbox.OperBox.Export.Header.Rarity" xml:space="preserve">
     <value>星级</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Skills" xml:space="preserve">
+    <value>技能专精</value>
   </data>
   <data name="Toolbox.OperBox.Export.Json" xml:space="preserve">
     <value>导出 JSON</value>

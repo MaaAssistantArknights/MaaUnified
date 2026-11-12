@@ -14,6 +14,9 @@ public sealed class LegacyConfigValueMappingTests
     [InlineData("RuntimeSettings.EnableRunDurationLimit", "RuntimeSettings.EnableRunDurationLimit")]
     [InlineData("RuntimeSettings.RunDurationLimitMinutes", "RuntimeSettings.RunDurationLimitMinutes")]
     [InlineData("RuntimeSettings.RunDurationLimitExecutePostActions", "RuntimeSettings.RunDurationLimitExecutePostActions")]
+    [InlineData("ThirdParty.YituliuOpenApiToken", "ThirdParty.YituliuOpenApiToken")]
+    [InlineData("ThirdParty.OperBoxUseYituliuApi", "ThirdParty.OperBoxUseYituliuApi")]
+    [InlineData("ThirdParty.EnableOperBoxAssist", "ThirdParty.EnableOperBoxAssist")]
     public void DevV2ProfileGuiPaths_ShouldMapToFlatRuntimeKeys(string relativePath, string expected)
     {
         Assert.Equal(expected, LegacyConfigValueMappings.TryMapDevV2ProfileGuiKey(relativePath));

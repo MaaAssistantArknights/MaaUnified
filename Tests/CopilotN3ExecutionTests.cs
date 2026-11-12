@@ -8,9 +8,9 @@ using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
-using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.ThirdParty;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 
@@ -856,6 +856,74 @@ public sealed class CopilotN3ExecutionTests
         var appended = Assert.Single(fixture.Bridge.AppendedTasks);
         var payload = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
         Assert.False(payload.ContainsKey("operbox_data_path"));
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenOperBoxAssistEnabledAndDataFileExists_ShouldInjectAutomaticPath()
+    {
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = fixture.ViewModel;
+        var dataPath = OperBoxDataFile.ResolvePath(fixture.Runtime.ConfigurationService.BaseDirectory);
+        Directory.CreateDirectory(Path.GetDirectoryName(dataPath)!);
+        await File.WriteAllTextAsync(dataPath, """{"done":true,"source":"yituliu","own_opers":[]}""");
+        vm.EnableOperBoxAssist = true;
+
+        await vm.LoadCurrentFromClipboardAsync("""{"stage_name":"1-7","opers":[]}""");
+        await vm.StartAsync();
+
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var payload = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.Equal(dataPath, payload["operbox_data_path"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenOperBoxAssistDisabled_ShouldNotInjectExistingDataFile()
+    {
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = fixture.ViewModel;
+        var dataPath = OperBoxDataFile.ResolvePath(fixture.Runtime.ConfigurationService.BaseDirectory);
+        Directory.CreateDirectory(Path.GetDirectoryName(dataPath)!);
+        await File.WriteAllTextAsync(dataPath, """{"done":true,"source":"yituliu","own_opers":[]}""");
+        vm.EnableOperBoxAssist = false;
+
+        await vm.LoadCurrentFromClipboardAsync("""{"stage_name":"1-7","opers":[]}""");
+        await vm.StartAsync();
+
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var payload = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.False(payload.ContainsKey("operbox_data_path"));
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenOperBoxAssistEnabledButDataFileMissing_ShouldOmitParameter()
+    {
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = fixture.ViewModel;
+        var dataPath = OperBoxDataFile.ResolvePath(fixture.Runtime.ConfigurationService.BaseDirectory);
+        Assert.False(File.Exists(dataPath));
+        vm.EnableOperBoxAssist = true;
+
+        await vm.LoadCurrentFromClipboardAsync("""{"stage_name":"1-7","opers":[]}""");
+        await vm.StartAsync();
+
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var payload = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.False(payload.ContainsKey("operbox_data_path"));
+        Assert.Contains(
+            fixture.Runtime.LogService.Snapshot,
+            entry => entry.Message.Contains("operator-box data file is missing", StringComparison.Ordinal));
     }
 
     public async Task StartAsync_WhenUseCopilotListContainsLegacyItemWithoutTabIndex_ShouldNotReject_WpfParity()

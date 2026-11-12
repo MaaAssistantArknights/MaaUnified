@@ -8,8 +8,9 @@ using System.Text.RegularExpressions;
 using Avalonia.Threading;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
-using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Orchestration;
+using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.ThirdParty;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.CoreBridge;
 using MAAUnified.Compat.Runtime;
@@ -59,6 +60,8 @@ public sealed partial class CopilotPageViewModel
         nameof(AutoSquadText),
         nameof(AutoSquadTip),
         nameof(UseFormationText),
+        nameof(EnableOperBoxAssistText),
+        nameof(EnableOperBoxAssistTip),
         nameof(IgnoreRequirementsText),
         nameof(IgnoreRequirementsTip),
         nameof(UseSupportUnitText),
@@ -114,6 +117,7 @@ public sealed partial class CopilotPageViewModel
     private bool _useFormation;
     private int _formationIndex = 1;
     private string _operBoxDataPath = string.Empty;
+    private bool _enableOperBoxAssist;
     private int _supportUnitUsage = 1;
     private bool _ignoreRequirements;
     private bool _addUserAdditional;
@@ -204,6 +208,12 @@ public sealed partial class CopilotPageViewModel
     public string AutoSquadTip => T("Copilot.Tip.AutoSquad", "自动编队可能无法识别带有「特别关注」标记的干员");
 
     public string UseFormationText => T("Copilot.Option.UseFormation", "使用编队");
+
+    public string EnableOperBoxAssistText => T("Copilot.Option.EnableOperBoxAssist", "使用一图流识别数据辅助编队");
+
+    public string EnableOperBoxAssistTip => T(
+        "Copilot.Tip.EnableOperBoxAssist",
+        "自动编队前按干员识别数据（含技能与模组）预匹配；需先在 ｢设置 - 三方服务｣ 启用一图流数据源并完成识别。");
 
     public string IgnoreRequirementsText => T("Copilot.Option.IgnoreRequirements", "忽略干员属性要求");
 
@@ -354,14 +364,32 @@ public sealed partial class CopilotPageViewModel
     }
 
     /// <summary>
-    /// Gets or sets the operator-box data file handed to Core as <c>operbox_data_path</c>
-    /// (WPF 86e58bda95, AsstCopilotTask.OperBoxDataPath). Empty keeps automatic formation data
-    /// disabled; the assist settings/UI are tracked separately.
+    /// Gets or sets an explicit operator-box data file handed to Core as <c>operbox_data_path</c>
+    /// (WPF 86e58bda95, AsstCopilotTask.OperBoxDataPath). When empty,
+    /// <see cref="EnableOperBoxAssist"/> selects <c>DataDir/OperBoxData.json</c> if it exists.
     /// </summary>
     public string OperBoxDataPath
     {
         get => _operBoxDataPath;
         set => SetProperty(ref _operBoxDataPath, value?.Trim() ?? string.Empty);
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the operator-box data file is handed to Core as
+    /// the automatic <c>operbox_data_path</c> source (WPF dev-v2 86e58bda95, EnableOperBoxAssist).
+    /// The switch is only a gate: a missing file is treated as "no data" and the parameter stays
+    /// absent, so Core keeps its local formation behavior.
+    /// </summary>
+    public bool EnableOperBoxAssist
+    {
+        get => _enableOperBoxAssist;
+        set
+        {
+            if (SetProperty(ref _enableOperBoxAssist, value))
+            {
+                PersistCopilotSetting(ThirdPartySettingKeys.EnableOperBoxAssist, value.ToString());
+            }
+        }
     }
 
     public bool UseSupportUnitUsage
@@ -659,6 +687,7 @@ public sealed partial class CopilotPageViewModel
         LoadPersistedItems();
         LoadPersistedWpfParitySettings();
         OnPropertyChanged(nameof(UseFormation));
+        OnPropertyChanged(nameof(EnableOperBoxAssist));
         OnPropertyChanged(nameof(FormationIndex));
         OnPropertyChanged(nameof(SelectedFormationOption));
         OnPropertyChanged(nameof(SupportUnitUsage));
@@ -881,6 +910,7 @@ public sealed partial class CopilotPageViewModel
         _addUserAdditional = ReadCopilotBool(LegacyConfigurationKeys.CopilotAddUserAdditional, false);
         _userAdditional = ReadCopilotString(LegacyConfigurationKeys.CopilotUserAdditional);
         _useFormation = ReadCopilotBool(CopilotSettingKeys.UseFormation, false);
+        _enableOperBoxAssist = ReadCopilotBool(ThirdPartySettingKeys.EnableOperBoxAssist, false);
     }
 
     private bool TryReadCopilotSetting(string key, out JsonNode? node)
@@ -3080,10 +3110,40 @@ public sealed partial class CopilotPageViewModel
     // forwarded when a path is configured; Core treats an empty path as "disabled".
     private void AppendOperBoxDataPath(JsonObject payload)
     {
+        var path = ResolveOperBoxDataPath();
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            payload["operbox_data_path"] = path;
+        }
+    }
+
+    /// <summary>
+    /// Resolves the file handed to Core. An explicitly configured path wins for backwards
+    /// compatibility; otherwise the assist switch enables <c>DataDir/OperBoxData.json</c> only
+    /// while that file exists (WPF dev-v2 86e58bda95 / 131f2d248d).
+    /// </summary>
+    /// <returns>Path to send, or an empty string to omit the parameter.</returns>
+    private string ResolveOperBoxDataPath()
+    {
         if (!string.IsNullOrWhiteSpace(_operBoxDataPath))
         {
-            payload["operbox_data_path"] = _operBoxDataPath;
+            return _operBoxDataPath;
         }
+
+        if (!_enableOperBoxAssist)
+        {
+            return string.Empty;
+        }
+
+        var baseDirectory = Runtime.ConfigurationService.BaseDirectory;
+        if (OperBoxDataFile.TryResolveExistingPath(baseDirectory, out var path))
+        {
+            return path;
+        }
+
+        Runtime.LogService.Warn(
+            $"OperBox assist is enabled but the operator-box data file is missing: {OperBoxDataFile.ResolvePath(baseDirectory)}");
+        return string.Empty;
     }
 
     private JsonArray BuildUserAdditionalPayload()

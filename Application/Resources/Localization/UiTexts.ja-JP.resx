@@ -217,6 +217,9 @@
   <data name="Copilot.Option.BattleList" xml:space="preserve">
     <value>戦闘リスト</value>
   </data>
+  <data name="Copilot.Option.EnableOperBoxAssist" xml:space="preserve">
+    <value>Yituliu のデータで編隊を支援</value>
+  </data>
   <data name="Copilot.Option.IgnoreRequirements" xml:space="preserve">
     <value>オペレーター条件を無視</value>
   </data>
@@ -4033,11 +4036,17 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="Toolbox.OperBox.Export.Header.Elite" xml:space="preserve">
     <value>昇進段階</value>
   </data>
+  <data name="Toolbox.OperBox.Export.Header.Equips" xml:space="preserve">
+    <value>モジュール</value>
+  </data>
   <data name="Toolbox.OperBox.Export.Header.Id" xml:space="preserve">
     <value>オペレーター ID</value>
   </data>
   <data name="Toolbox.OperBox.Export.Header.Level" xml:space="preserve">
     <value>レベル</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.MainSkillLevel" xml:space="preserve">
+    <value>スキルLv</value>
   </data>
   <data name="Toolbox.OperBox.Export.Header.Name" xml:space="preserve">
     <value>オペレーター</value>
@@ -4050,6 +4059,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="Toolbox.OperBox.Export.Header.Rarity" xml:space="preserve">
     <value>レアリティ</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Skills" xml:space="preserve">
+    <value>スキル特化</value>
   </data>
   <data name="Toolbox.OperBox.Export.Json" xml:space="preserve">
     <value>JSON 出力</value>
@@ -4379,6 +4391,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
     <value>戦闘リストのすべての作業を削除します。</value>
+  </data>
+  <data name="Copilot.Tip.EnableOperBoxAssist" xml:space="preserve">
+    <value>自動編隊の前に、Yituliu のオペレーター育成データ（スキル・モジュール情報を含む）で編隊を事前マッチングします。先に ｢設定 - サードパーティサービス｣ で Yituliu データソースを有効化し、データを取得してください。</value>
   </data>
   <data name="Copilot.Tip.File" xml:space="preserve">
     <value>攻略ファイルはマウスで直接ドラッグして取り込むことがきます(oﾟvﾟ)ノ</value>

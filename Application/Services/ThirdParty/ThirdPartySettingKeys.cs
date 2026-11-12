@@ -10,4 +10,10 @@ public static class ThirdPartySettingKeys
     public const string YituliuOpenApiToken = "ThirdParty.YituliuOpenApiToken";
 
     public const string OperBoxUseYituliuApi = "ThirdParty.OperBoxUseYituliuApi";
+
+    /// <summary>
+    /// dev-v2 <c>Gui.ThirdParty.EnableOperBoxAssist</c>: hand the operator-box data file to
+    /// Core through Copilot's <c>operbox_data_path</c> when it exists.
+    /// </summary>
+    public const string EnableOperBoxAssist = "ThirdParty.EnableOperBoxAssist";
 }

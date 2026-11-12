@@ -128,6 +128,9 @@ internal static class LegacyConfigValueMappings
         ["ThirdParty.ReportToPenguin"] = "Penguin.EnablePenguin",
         ["ThirdParty.PenguinId"] = "Penguin.Id",
         ["ThirdParty.ReportToYituliu"] = "Yituliu.EnableYituliu",
+        ["ThirdParty.YituliuOpenApiToken"] = "ThirdParty.YituliuOpenApiToken",
+        ["ThirdParty.OperBoxUseYituliuApi"] = "ThirdParty.OperBoxUseYituliuApi",
+        ["ThirdParty.EnableOperBoxAssist"] = "ThirdParty.EnableOperBoxAssist",
 
         // Gui.ExternalNotification (structured `Delivery` section only; channel instances are P1-06/P1-07)
         ["ExternalNotification.Delivery.Enable"] = "ExternalNotification.Enabled",

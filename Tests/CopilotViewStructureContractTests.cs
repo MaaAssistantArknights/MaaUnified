@@ -20,6 +20,8 @@ public sealed class CopilotViewStructureContractTests
         Assert.DoesNotContain("Texts[Copilot.", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Content=\"开始\"", xaml, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding ShowStartButton}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsChecked=\"{Binding EnableOperBoxAssist}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"{Binding EnableOperBoxAssistText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding StopButtonText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding ShowStopButton}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding CanStop}\"", xaml, StringComparison.Ordinal);

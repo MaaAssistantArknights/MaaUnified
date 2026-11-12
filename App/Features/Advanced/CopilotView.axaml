@@ -379,6 +379,15 @@
                                           Tip="{Binding AutoSquadTip}" />
                   </StackPanel>
 
+                  <StackPanel Orientation="Horizontal"
+                              IsVisible="{Binding ShowFormationGroup}">
+                    <CheckBox Classes="app-checkbox"
+                              Content="{Binding EnableOperBoxAssistText}"
+                              IsChecked="{Binding EnableOperBoxAssist}" />
+                    <controls:TooltipHint Margin="{DynamicResource MAA.Thickness.MarginLeftTooltip}"
+                                          Tip="{Binding EnableOperBoxAssistTip}" />
+                  </StackPanel>
+
                 <StackPanel Orientation="Horizontal"
                             Margin="24,0,0,0"
                             IsVisible="{Binding ShowUseFormation}">

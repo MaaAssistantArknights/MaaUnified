@@ -3925,11 +3925,17 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="Toolbox.OperBox.Export.Header.Elite" xml:space="preserve">
     <value>精英化等級</value>
   </data>
+  <data name="Toolbox.OperBox.Export.Header.Equips" xml:space="preserve">
+    <value>模組</value>
+  </data>
   <data name="Toolbox.OperBox.Export.Header.Id" xml:space="preserve">
     <value>幹員 ID</value>
   </data>
   <data name="Toolbox.OperBox.Export.Header.Level" xml:space="preserve">
     <value>等級</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.MainSkillLevel" xml:space="preserve">
+    <value>技能等級</value>
   </data>
   <data name="Toolbox.OperBox.Export.Header.Name" xml:space="preserve">
     <value>幹員</value>
@@ -3942,6 +3948,9 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   </data>
   <data name="Toolbox.OperBox.Export.Header.Rarity" xml:space="preserve">
     <value>星級</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Skills" xml:space="preserve">
+    <value>技能專精</value>
   </data>
   <data name="Toolbox.OperBox.Export.Json" xml:space="preserve">
     <value>匯出 JSON</value>
@@ -4328,6 +4337,9 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   </data>
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
     <value>刪除戰鬥列表中的全部作業。</value>
+  </data>
+  <data name="Copilot.Tip.EnableOperBoxAssist" xml:space="preserve">
+    <value>自動編隊前，按一圖流幹員練度資料（含技能與模組資訊）預先匹配作業編隊。需先在 ｢設定 - 第三方服務｣ 啟用一圖流資料來源並取得幹員資料。</value>
   </data>
   <data name="Copilot.Tip.File" xml:space="preserve">
     <value>作業檔可以直接用滑鼠拖進來喔 (oﾟvﾟ)ノ</value>
@@ -5067,6 +5079,9 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   </data>
   <data name="Copilot.Option.AddUserAdditional" xml:space="preserve">
     <value>追加自定義{key=Operator}</value>
+  </data>
+  <data name="Copilot.Option.EnableOperBoxAssist" xml:space="preserve">
+    <value>使用一圖流資料輔助編隊</value>
   </data>
   <data name="Copilot.Option.IgnoreRequirements" xml:space="preserve">
     <value>忽略{key=Operator}屬性要求</value>

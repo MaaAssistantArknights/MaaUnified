@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -4989,10 +4990,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     /// Gets the WPF-compatible operator-box data file path (DataDir/OperBoxData.json), the same
     /// file Core reads through the Copilot <c>operbox_data_path</c> parameter.
     /// </summary>
-    public string OperBoxDataFilePath => Path.Combine(
-        Runtime.ConfigurationService.BaseDirectory,
-        "data",
-        "OperBoxData.json");
+    public string OperBoxDataFilePath => OperBoxDataFile.ResolvePath(
+        Runtime.ConfigurationService.BaseDirectory);
 
     private void WriteOperBoxDataFile(string payloadJson)
     {
@@ -5832,7 +5831,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                     owned.Elite,
                     owned.Level,
                     true,
-                    owned.Potential));
+                    owned.Potential,
+                    owned.MainSkillLevel,
+                    owned.Skills,
+                    owned.Equips));
             }
             else
             {
@@ -5859,7 +5861,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 owned.Elite,
                 owned.Level,
                 true,
-                owned.Potential));
+                owned.Potential,
+                owned.MainSkillLevel,
+                owned.Skills,
+                owned.Equips));
         }
 
         return FormatOperBoxExport(exportItems);
@@ -5875,56 +5880,134 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         };
     }
 
+    // WPF 131f2d248d: the progression columns (main skill level / skill masteries / modules)
+    // only exist for yituliu data, so local recognition keeps the original column set.
+    private bool IncludeOperBoxProgressionColumns()
+        => string.Equals(_operBoxDataSource, "yituliu", StringComparison.OrdinalIgnoreCase);
+
     private string BuildOperBoxMarkdownExport(IReadOnlyList<PersistedOperBoxOperator> items)
     {
+        var headers = new List<string>
+        {
+            T("Toolbox.OperBox.Export.Header.Name", "Operator"),
+            T("Toolbox.OperBox.Export.Header.Id", "Operator ID"),
+            T("Toolbox.OperBox.Export.Header.Rarity", "Rarity"),
+            T("Toolbox.OperBox.Export.Header.Elite", "Elite"),
+            T("Toolbox.OperBox.Export.Header.Level", "Level"),
+            T("Toolbox.OperBox.Export.Header.Own", "Owned"),
+            T("Toolbox.OperBox.Export.Header.Potential", "Potential"),
+        };
+        var includeProgression = IncludeOperBoxProgressionColumns();
+        if (includeProgression)
+        {
+            headers.Add(T("Toolbox.OperBox.Export.Header.MainSkillLevel", "Skill level"));
+            headers.Add(T("Toolbox.OperBox.Export.Header.Skills", "Skill masteries"));
+            headers.Add(T("Toolbox.OperBox.Export.Header.Equips", "Modules"));
+        }
+
         var lines = new List<string>
         {
-            $"| {T("Toolbox.OperBox.Export.Header.Name", "Operator")} "
-            + $"| {T("Toolbox.OperBox.Export.Header.Id", "Operator ID")} "
-            + $"| {T("Toolbox.OperBox.Export.Header.Rarity", "Rarity")} "
-            + $"| {T("Toolbox.OperBox.Export.Header.Elite", "Elite")} "
-            + $"| {T("Toolbox.OperBox.Export.Header.Level", "Level")} "
-            + $"| {T("Toolbox.OperBox.Export.Header.Own", "Owned")} "
-            + $"| {T("Toolbox.OperBox.Export.Header.Potential", "Potential")} |",
-            "| :-- | :-- | :-- | :-- | :-- | :-- | :-- |",
+            $"| {string.Join(" | ", headers)} |",
+            $"| {string.Join(" | ", headers.Select(_ => ":--"))} |",
         };
 
         var yes = T("Toolbox.OperBox.Export.Yes", "Yes");
         var no = T("Toolbox.OperBox.Export.No", "No");
         lines.AddRange(items.Select(item =>
-            $"| {EscapeMarkdownCell(item.Name)} | {item.Id} | {item.Rarity} | {item.Elite} | {item.Level} "
-            + $"| {(item.Own ? yes : no)} | {item.Potential} |"));
+        {
+            var cells = new List<string>
+            {
+                EscapeMarkdownCell(item.Name),
+                item.Id,
+                item.Rarity.ToString(CultureInfo.InvariantCulture),
+                item.Elite.ToString(CultureInfo.InvariantCulture),
+                item.Level.ToString(CultureInfo.InvariantCulture),
+                item.Own ? yes : no,
+                item.Potential.ToString(CultureInfo.InvariantCulture),
+            };
+            if (includeProgression)
+            {
+                cells.Add(FormatOperBoxMainSkillLevel(item));
+                cells.Add(FormatOperBoxSkills(item));
+                cells.Add(FormatOperBoxEquips(item));
+            }
+
+            return $"| {string.Join(" | ", cells)} |";
+        }));
         return string.Join(Environment.NewLine, lines);
     }
 
     private string BuildOperBoxCsvExport(IReadOnlyList<PersistedOperBoxOperator> items)
     {
-        var lines = new List<string>
+        var headers = new List<string>
         {
-            string.Join(
-                ',',
-                T("Toolbox.OperBox.Export.Header.Name", "Operator"),
-                T("Toolbox.OperBox.Export.Header.Id", "Operator ID"),
-                T("Toolbox.OperBox.Export.Header.Rarity", "Rarity"),
-                T("Toolbox.OperBox.Export.Header.Elite", "Elite"),
-                T("Toolbox.OperBox.Export.Header.Level", "Level"),
-                T("Toolbox.OperBox.Export.Header.Own", "Owned"),
-                T("Toolbox.OperBox.Export.Header.Potential", "Potential")),
+            T("Toolbox.OperBox.Export.Header.Name", "Operator"),
+            T("Toolbox.OperBox.Export.Header.Id", "Operator ID"),
+            T("Toolbox.OperBox.Export.Header.Rarity", "Rarity"),
+            T("Toolbox.OperBox.Export.Header.Elite", "Elite"),
+            T("Toolbox.OperBox.Export.Header.Level", "Level"),
+            T("Toolbox.OperBox.Export.Header.Own", "Owned"),
+            T("Toolbox.OperBox.Export.Header.Potential", "Potential"),
         };
+        var includeProgression = IncludeOperBoxProgressionColumns();
+        if (includeProgression)
+        {
+            headers.Add(T("Toolbox.OperBox.Export.Header.MainSkillLevel", "Skill level"));
+            headers.Add(T("Toolbox.OperBox.Export.Header.Skills", "Skill masteries"));
+            headers.Add(T("Toolbox.OperBox.Export.Header.Equips", "Modules"));
+        }
+
+        var lines = new List<string> { string.Join(',', headers) };
 
         var yes = T("Toolbox.OperBox.Export.Yes", "Yes");
         var no = T("Toolbox.OperBox.Export.No", "No");
         lines.AddRange(items.Select(item =>
-            string.Join(
-                ',',
+        {
+            var cells = new List<string>
+            {
                 EscapeCsvCell(item.Name),
                 item.Id,
                 item.Rarity.ToString(CultureInfo.InvariantCulture),
                 item.Elite.ToString(CultureInfo.InvariantCulture),
                 item.Level.ToString(CultureInfo.InvariantCulture),
                 item.Own ? yes : no,
-                item.Potential.ToString(CultureInfo.InvariantCulture))));
+                item.Potential.ToString(CultureInfo.InvariantCulture),
+            };
+            if (includeProgression)
+            {
+                cells.Add(FormatOperBoxMainSkillLevel(item));
+                cells.Add(FormatOperBoxSkills(item));
+                cells.Add(FormatOperBoxEquips(item));
+            }
+
+            return string.Join(',', cells);
+        }));
         return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string FormatOperBoxMainSkillLevel(PersistedOperBoxOperator item)
+    {
+        return item.MainSkillLevel > 0
+            ? item.MainSkillLevel.ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
+    }
+
+    private static string FormatOperBoxSkills(PersistedOperBoxOperator item)
+    {
+        return item.Skills is { Count: > 0 }
+            ? string.Join("/", item.Skills.Select(skill => skill.Level.ToString(CultureInfo.InvariantCulture)))
+            : string.Empty;
+    }
+
+    private static string FormatOperBoxEquips(PersistedOperBoxOperator item)
+    {
+        return item.Equips is { Count: > 0 }
+            ? string.Join(
+                " ",
+                item.Equips
+                    .Where(equip => equip.Level > 0)
+                    .Select(equip => $"{equip.Type}{equip.Level.ToString(CultureInfo.InvariantCulture)}"))
+            : string.Empty;
     }
 
     private static string EscapeMarkdownCell(string? value)
@@ -7164,7 +7247,10 @@ internal sealed record PersistedOperBoxOperator(
     int Elite,
     int Level,
     bool Own,
-    int Potential);
+    int Potential,
+    [property: JsonIgnore] int MainSkillLevel = 0,
+    [property: JsonIgnore] IReadOnlyList<PersistedOperBoxSkill>? Skills = null,
+    [property: JsonIgnore] IReadOnlyList<PersistedOperBoxEquip>? Equips = null);
 
 // Persisted operator-box entry. The last three fields only exist for data pulled from the
 // yituliu OpenAPI (WPF 247db567f3/86e58bda95); core recognition leaves them at their defaults

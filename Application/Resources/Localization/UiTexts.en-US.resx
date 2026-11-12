@@ -418,6 +418,9 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Copilot.Option.BattleList" xml:space="preserve">
     <value>Battle list</value>
   </data>
+  <data name="Copilot.Option.EnableOperBoxAssist" xml:space="preserve">
+    <value>Assist formation with Yituliu data</value>
+  </data>
   <data name="Copilot.Option.IgnoreRequirements" xml:space="preserve">
     <value>Ignore operator requirements</value>
   </data>
@@ -635,6 +638,9 @@ When enabled, selecting one copilot auto-adds it to battle list.</value>
   </data>
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
     <value>Delete all copilot tasks in the battle list.</value>
+  </data>
+  <data name="Copilot.Tip.EnableOperBoxAssist" xml:space="preserve">
+    <value>Pre-matches the operation squad against Yituliu operator data (including skills and modules) before auto-formation. Enable the Yituliu operator source and fetch data in Settings - Third-party services first.</value>
   </data>
   <data name="Copilot.Tip.File" xml:space="preserve">
     <value>You can also drag a copilot file here.</value>
@@ -5711,11 +5717,17 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.OperBox.Export.Header.Elite" xml:space="preserve">
     <value>Elite</value>
   </data>
+  <data name="Toolbox.OperBox.Export.Header.Equips" xml:space="preserve">
+    <value>Modules</value>
+  </data>
   <data name="Toolbox.OperBox.Export.Header.Id" xml:space="preserve">
     <value>Operator ID</value>
   </data>
   <data name="Toolbox.OperBox.Export.Header.Level" xml:space="preserve">
     <value>Level</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.MainSkillLevel" xml:space="preserve">
+    <value>Skill level</value>
   </data>
   <data name="Toolbox.OperBox.Export.Header.Name" xml:space="preserve">
     <value>Operator</value>
@@ -5728,6 +5740,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.OperBox.Export.Header.Rarity" xml:space="preserve">
     <value>Rarity</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Skills" xml:space="preserve">
+    <value>Skill masteries</value>
   </data>
   <data name="Toolbox.OperBox.Export.Json" xml:space="preserve">
     <value>Export JSON</value>

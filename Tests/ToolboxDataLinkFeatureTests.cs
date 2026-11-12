@@ -222,6 +222,68 @@ public sealed class ToolboxDataLinkFeatureTests
     }
 
     [Fact]
+    public async Task OperBoxExport_WithYituliuData_ShouldAddProgressionColumnsToMarkdownAndCsv()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [LegacyConfigurationKeys.OperBoxData] = """
+                    {
+                      "done": true,
+                      "source": "yituliu",
+                      "own_opers": [
+                        {
+                          "id": "char_102_texas",
+                          "name": "德克萨斯",
+                          "rarity": 5,
+                          "elite": 2,
+                          "level": 80,
+                          "own": true,
+                          "potential": 2,
+                          "mainSkillLevel": 7,
+                          "skills": [
+                            { "id": "sk_texas_1", "level": 3 },
+                            { "id": "sk_texas_2", "level": 0 }
+                          ],
+                          "equips": [
+                            { "id": "uniequip_001", "type": "X", "level": 3 },
+                            { "id": "uniequip_002", "type": "Y", "level": 0 }
+                          ]
+                        }
+                      ]
+                    }
+                    """,
+            });
+        using var catalogScope = PushOperBoxCatalog(fixture.Root);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+
+        SelectOperBoxExportFormat(vm, "2");
+        var markdown = vm.OperBoxExportText;
+        Assert.Contains(
+            "| 干员 | 干员 ID | 星级 | 精英化等级 | 等级 | 是否拥有 | 潜能 | 技能等级 | 技能专精 | 模组 |",
+            markdown,
+            StringComparison.Ordinal);
+        Assert.Contains("| 德克萨斯 | char_102_texas | 5 | 2 | 80 | 是 | 2 | 7 | 3/0 | X3 |", markdown, StringComparison.Ordinal);
+        // Level-0 module placeholders stay out of the module column.
+        Assert.DoesNotContain("Y0", markdown, StringComparison.Ordinal);
+
+        SelectOperBoxExportFormat(vm, "3");
+        var csv = vm.OperBoxExportText;
+        Assert.StartsWith("干员,干员 ID,星级,精英化等级,等级,是否拥有,潜能,技能等级,技能专精,模组", csv, StringComparison.Ordinal);
+        Assert.Contains("德克萨斯,char_102_texas,5,2,80,是,2,7,3/0,X3", csv, StringComparison.Ordinal);
+
+        // The JSON export keeps its existing record shape; progression columns are
+        // Markdown/CSV-only (WPF 131f2d248d).
+        SelectOperBoxExportFormat(vm, "1");
+        var json = vm.OperBoxExportText;
+        Assert.Contains("\"Id\": \"char_102_texas\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("MainSkillLevel", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("Skills", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("Equips", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task OperBoxExportFormat_ShouldPersistAndReloadFromWpfConfigurationKey()
     {
         await using var fixture = await ToolboxTestFixture.CreateAsync(

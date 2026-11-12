@@ -217,6 +217,9 @@
   <data name="Copilot.Option.BattleList" xml:space="preserve">
     <value>전투 목록</value>
   </data>
+  <data name="Copilot.Option.EnableOperBoxAssist" xml:space="preserve">
+    <value>Yituliu 데이터로 편성 지원</value>
+  </data>
   <data name="Copilot.Option.IgnoreRequirements" xml:space="preserve">
     <value>오퍼레이터 조건 무시</value>
   </data>
@@ -4034,11 +4037,17 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   <data name="Toolbox.OperBox.Export.Header.Elite" xml:space="preserve">
     <value>정예화 단계</value>
   </data>
+  <data name="Toolbox.OperBox.Export.Header.Equips" xml:space="preserve">
+    <value>모듈</value>
+  </data>
   <data name="Toolbox.OperBox.Export.Header.Id" xml:space="preserve">
     <value>오퍼레이터 ID</value>
   </data>
   <data name="Toolbox.OperBox.Export.Header.Level" xml:space="preserve">
     <value>레벨</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.MainSkillLevel" xml:space="preserve">
+    <value>스킬 레벨</value>
   </data>
   <data name="Toolbox.OperBox.Export.Header.Name" xml:space="preserve">
     <value>오퍼레이터</value>
@@ -4051,6 +4060,9 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   </data>
   <data name="Toolbox.OperBox.Export.Header.Rarity" xml:space="preserve">
     <value>레어도</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Skills" xml:space="preserve">
+    <value>스킬 전문화</value>
   </data>
   <data name="Toolbox.OperBox.Export.Json" xml:space="preserve">
     <value>JSON 내보내기</value>
@@ -4380,6 +4392,9 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   </data>
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
     <value>전투 목록의 모든 작업을 삭제합니다.</value>
+  </data>
+  <data name="Copilot.Tip.EnableOperBoxAssist" xml:space="preserve">
+    <value>자동 편성 전 Yituliu 오퍼레이터 육성 데이터(스킬 및 모듈 정보 포함)로 편성을 사전 매칭합니다. 먼저 ｢설정 - 서드파티 서비스｣에서 Yituliu 데이터 소스를 활성화하고 데이터를 가져오세요.</value>
   </data>
   <data name="Copilot.Tip.File" xml:space="preserve">
     <value>마우스로 작업 파일을 드래그해 선택할 수 있어요 (oﾟvﾟ)ノ</value>
