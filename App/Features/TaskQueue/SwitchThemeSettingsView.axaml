@@ -1,0 +1,40 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             x:Class="MAAUnified.App.Features.TaskQueue.SwitchThemeSettingsView">
+  <UserControl.Styles>
+    <Style Selector="StackPanel.switch-theme-section,
+                     controls|AdaptiveSpacingStackPanel.switch-theme-section">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageCompactFlowSpacing}" />
+    </Style>
+    <Style Selector="StackPanel.switch-theme-card,
+                     controls|AdaptiveSpacingStackPanel.switch-theme-card">
+      <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.PageToggleStackSpacing}" />
+    </Style>
+    <Style Selector="TextBlock.switch-theme-note">
+      <Setter Property="Opacity" Value="0.78" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="Auto" Margin="2">
+    <controls:AdaptiveSpacingStackPanel Classes="task-settings-section switch-theme-section">
+      <Border Classes="app-surface app-card">
+        <controls:AdaptiveSpacingStackPanel Classes="switch-theme-card">
+          <TextBlock Classes="app-caption" Text="{Binding Texts[SwitchTheme.Themes]}" />
+          <controls:AppTextInput AcceptsReturn="True"
+                                 Classes="settings-input-block"
+                                 DismissFocusOnEnter="False"
+                                 MinHeight="96"
+                                 Text="{Binding ThemesText, UpdateSourceTrigger=LostFocus}"
+                                 Watermark="{Binding Texts[SwitchTheme.Placeholder]}" />
+          <TextBlock Classes="subtle switch-theme-note"
+                     Text="{Binding Texts[SwitchTheme.ThemesTip]}" />
+          <TextBlock Classes="subtle switch-theme-note state-warning"
+                     IsVisible="{Binding ShowEmptyHint}"
+                     Text="{Binding EmptyHintText}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+    </controls:AdaptiveSpacingStackPanel>
+  </Grid>
+</UserControl>

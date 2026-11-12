@@ -29,6 +29,9 @@
     <CheckBox Classes="app-checkbox"
               Content="{Binding Texts[Award.Special]}"
               IsChecked="{Binding SpecialAccess}" />
+    <controls:AppHintedCheckBox Text="{Binding Texts[Award.SignInEvent]}"
+                                 Tip="{Binding Texts[Award.SignInEventTip]}"
+                                 IsChecked="{Binding SignInEvent}" />
 
     <Border Classes="app-surface app-card"
             IsVisible="{Binding PendingFreeGachaConfirmation}">

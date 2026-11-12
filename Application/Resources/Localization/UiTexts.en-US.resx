@@ -68,6 +68,12 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Award.RecruitTip" xml:space="preserve">
     <value>This is a high-risk option and may cause mis-pulls.</value>
   </data>
+  <data name="Award.SignInEvent" xml:space="preserve">
+    <value>Collect Sign-In Event rewards</value>
+  </data>
+  <data name="Award.SignInEventTip" xml:space="preserve">
+    <value>Only standard horizontal layouts are supported; other layouts are unsupported and may not work correctly</value>
+  </data>
   <data name="Award.Special" xml:space="preserve">
     <value>Collect Special Access rewards</value>
   </data>
@@ -1006,6 +1012,30 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   <data name="FurnitureDrop" xml:space="preserve">
     <value>Furniture</value>
   </data>
+  <data name="Game.Role.Caster" xml:space="preserve">
+    <value>Caster</value>
+  </data>
+  <data name="Game.Role.Medic" xml:space="preserve">
+    <value>Medic</value>
+  </data>
+  <data name="Game.Role.Pioneer" xml:space="preserve">
+    <value>Vanguard</value>
+  </data>
+  <data name="Game.Role.Sniper" xml:space="preserve">
+    <value>Sniper</value>
+  </data>
+  <data name="Game.Role.Special" xml:space="preserve">
+    <value>Specialist</value>
+  </data>
+  <data name="Game.Role.Support" xml:space="preserve">
+    <value>Supporter</value>
+  </data>
+  <data name="Game.Role.Tank" xml:space="preserve">
+    <value>Defender</value>
+  </data>
+  <data name="Game.Role.Warrior" xml:space="preserve">
+    <value>Guard</value>
+  </data>
   <data name="GameDrop" xml:space="preserve">
     <value>Game disconnected, stopping tasks</value>
   </data>
@@ -1162,11 +1192,125 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   <data name="Dorm" xml:space="preserve">
     <value>Dormitory</value>
   </data>
+  <data name="Infrast.Fiammetta.Recovery" xml:space="preserve">
+    <value>Enable Fiammetta morale recovery</value>
+  </data>
+  <data name="Infrast.Fiammetta.Recovery.Tip" xml:space="preserve">
+    <value>When enabled, the recovery target and a full-mood Fiammetta swap moods in a dormitory at the start of each shift, after which Fiammetta stays in the dormitory to recover.</value>
+  </data>
+  <data name="Infrast.Fiammetta.Target.None" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="Infrast.Fiammetta.Targets" xml:space="preserve">
+    <value>Fiammetta recovery targets</value>
+  </data>
+  <data name="Infrast.Fiammetta.Targets.Tip" xml:space="preserve">
+    <value>Recovering Shamare and Tequila can theoretically enable 007, but automatic shift changes rarely achieve it, so selecting them is not recommended.</value>
+  </data>
+  <data name="Infrast.UseAbyssalHunter" xml:space="preserve">
+    <value>Use Abyssal Hunter cross-facility team</value>
+  </data>
+  <data name="Infrast.UseAbyssalHunter.Tip" xml:space="preserve">
+    <value>Required operators: Gladiia (E2), Ulpianus, Skadi, Specter, and Andreana. Due to algorithm limitations, when Pinus Sylvestris is also selected, the two teams will not participate in scheduling together.</value>
+  </data>
+  <data name="Infrast.UsePerceptionInformation" xml:space="preserve">
+    <value>Use Perception Information cross-facility team</value>
+  </data>
+  <data name="Infrast.UsePerceptionInformation.Tip" xml:space="preserve">
+    <value>Required operators: Whisperain (E2), Rosmontis (E2), and Ebenholz (E2). Operators included in calculation: Dusk, Virtuosa, Iris, and Czerny. Higher priority than Worldly Plight.</value>
+  </data>
+  <data name="Infrast.UsePinusSylvestris" xml:space="preserve">
+    <value>Use Pinus Sylvestris cross-facility team</value>
+  </data>
+  <data name="Infrast.UsePinusSylvestris.Tip" xml:space="preserve">
+    <value>Required operators: Flametail (E2), Viviana (E2), and at least one of Wild Mane (E2), Ashlock (E2), or Fartooth (E2). Operators included in calculation: Gravel.</value>
+  </data>
+  <data name="Infrast.UseWeeklySchedule" xml:space="preserve">
+    <value>Enable weekly schedule</value>
+  </data>
+  <data name="Infrast.UseWeeklySchedule.Tip" xml:space="preserve">
+    <value>Weekdays follow the in-game time, not real time. For example, if the game resets at 4:00, 3:59 still counts as the previous day.</value>
+  </data>
+  <data name="Infrast.UseWorldlyPlight" xml:space="preserve">
+    <value>Use Worldly Plight cross-facility team</value>
+  </data>
+  <data name="Infrast.UseWorldlyPlight.Tip" xml:space="preserve">
+    <value>Required operators: Mulberry (E2) and Mr. Nothing (E2). Operators included in calculation: Chongyue, Ling, and Dusk.</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Friday" xml:space="preserve">
+    <value>Fri</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Monday" xml:space="preserve">
+    <value>Mon</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>Sat</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Sunday" xml:space="preserve">
+    <value>Sun</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>Thu</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Tuesday" xml:space="preserve">
+    <value>Tue</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Wednesday" xml:space="preserve">
+    <value>Wed</value>
+  </data>
   <data name="Mfg" xml:space="preserve">
     <value>Factory</value>
   </data>
   <data name="Office" xml:space="preserve">
     <value>Office</value>
+  </data>
+  <data name="OperProgress.AddPlan" xml:space="preserve">
+    <value>Add operator</value>
+  </data>
+  <data name="OperProgress.EmptyHint" xml:space="preserve">
+    <value>No operator plan yet; this task is skipped at run time.</value>
+  </data>
+  <data name="OperProgress.Mastery1" xml:space="preserve">
+    <value>Mastery 1</value>
+  </data>
+  <data name="OperProgress.Mastery2" xml:space="preserve">
+    <value>Mastery 2</value>
+  </data>
+  <data name="OperProgress.Mastery3" xml:space="preserve">
+    <value>Mastery 3</value>
+  </data>
+  <data name="OperProgress.MoveDown" xml:space="preserve">
+    <value>Move down</value>
+  </data>
+  <data name="OperProgress.MoveUp" xml:space="preserve">
+    <value>Move up</value>
+  </data>
+  <data name="OperProgress.NameRequired" xml:space="preserve">
+    <value>Enter an operator name first.</value>
+  </data>
+  <data name="OperProgress.NotSet" xml:space="preserve">
+    <value>---</value>
+  </data>
+  <data name="OperProgress.OperatorName" xml:space="preserve">
+    <value>Operator</value>
+  </data>
+  <data name="OperProgress.OperatorNameTip" xml:space="preserve">
+    <value>Any language variant is accepted and normalized on save to the name Core recognizes.</value>
+  </data>
+  <data name="OperProgress.OperatorNameWatermark" xml:space="preserve">
+    <value>Operator name</value>
+  </data>
+  <data name="OperProgress.Plans" xml:space="preserve">
+    <value>Progression plans</value>
+  </data>
+  <data name="OperProgress.Remove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="OperProgress.Title" xml:space="preserve">
+    <value>Operator Progression</value>
+  </data>
+  <data name="OperProgress.UnknownOperator" xml:space="preserve">
+    <value>Unknown operator name; MaaCore will reject this plan.</value>
   </data>
   <data name="Power" xml:space="preserve">
     <value>Power Plant</value>
@@ -1182,6 +1326,27 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   </data>
   <data name="RecruitmentOfStar" xml:space="preserve">
     <value>{0}★ has been recruited!</value>
+  </data>
+  <data name="SwitchTheme.EmptyHint" xml:space="preserve">
+    <value>No theme name entered; this task is skipped at run time.</value>
+  </data>
+  <data name="SwitchTheme.Placeholder" xml:space="preserve">
+    <value>Theme name</value>
+  </data>
+  <data name="SwitchTheme.Themes" xml:space="preserve">
+    <value>Candidate themes</value>
+  </data>
+  <data name="SwitchTheme.ThemesTip" xml:space="preserve">
+    <value>Enter theme names as shown in the in-game theme list. Multiple entries pick one at random each run; a single entry always switches to it.</value>
+  </data>
+  <data name="SwitchTheme.Title" xml:space="preserve">
+    <value>Switch Theme</value>
+  </data>
+  <data name="TaskQueue.Module.OperProgress" xml:space="preserve">
+    <value>Operator Progression</value>
+  </data>
+  <data name="TaskQueue.Module.SwitchTheme" xml:space="preserve">
+    <value>Switch Theme</value>
   </data>
   <data name="TaskStallWarning" xml:space="preserve">
     <value>Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running.</value>

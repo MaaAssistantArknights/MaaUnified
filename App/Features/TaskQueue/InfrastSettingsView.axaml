@@ -217,6 +217,95 @@
                       IsChecked="{Binding ContinueTraining}" />
           </controls:AdaptiveSpacingStackPanel>
         </Border>
+
+        <Border Classes="app-surface app-card"
+                IsVisible="{Binding ShowCrossFacilitySettings}">
+          <controls:AdaptiveSpacingStackPanel Classes="infrast-section-body">
+            <controls:AppHintedCheckBox Text="{Binding Texts[Infrast.Fiammetta.Recovery]}"
+                                         Tip="{Binding Texts[Infrast.Fiammetta.Recovery.Tip]}"
+                                         IsChecked="{Binding FiammettaRecoveryEnabled}" />
+            <controls:AdaptiveSpacingStackPanel Classes="infrast-field-group"
+                                                IsVisible="{Binding ShowFiammettaTargets}">
+              <TextBlock Classes="subtle infrast-note"
+                         Text="{Binding Texts[Infrast.Fiammetta.Targets]}" />
+              <Grid ColumnDefinitions="*,4,*,4,*">
+                <controls:AppSelect Grid.Column="0"
+                                    ItemsSource="{Binding FiammettaTargetOptions}"
+                                    SelectedValueBinding="{Binding Value}"
+                                    SelectedValue="{Binding FiammettaTarget1}">
+                  <controls:AppSelect.ItemTemplate>
+                    <DataTemplate x:DataType="vm:InfrastModuleViewModel+StringOption">
+                      <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                    </DataTemplate>
+                  </controls:AppSelect.ItemTemplate>
+                </controls:AppSelect>
+                <controls:AppSelect Grid.Column="2"
+                                    ItemsSource="{Binding OptionalFiammettaTargetOptions}"
+                                    SelectedValueBinding="{Binding Value}"
+                                    SelectedValue="{Binding FiammettaTarget2}">
+                  <controls:AppSelect.ItemTemplate>
+                    <DataTemplate x:DataType="vm:InfrastModuleViewModel+StringOption">
+                      <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                    </DataTemplate>
+                  </controls:AppSelect.ItemTemplate>
+                </controls:AppSelect>
+                <controls:AppSelect Grid.Column="4"
+                                    ItemsSource="{Binding OptionalFiammettaTargetOptions}"
+                                    SelectedValueBinding="{Binding Value}"
+                                    SelectedValue="{Binding FiammettaTarget3}">
+                  <controls:AppSelect.ItemTemplate>
+                    <DataTemplate x:DataType="vm:InfrastModuleViewModel+StringOption">
+                      <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                    </DataTemplate>
+                  </controls:AppSelect.ItemTemplate>
+                </controls:AppSelect>
+              </Grid>
+              <TextBlock Classes="subtle infrast-note"
+                         Text="{Binding Texts[Infrast.Fiammetta.Targets.Tip]}" />
+            </controls:AdaptiveSpacingStackPanel>
+
+            <controls:AppHintedCheckBox Text="{Binding Texts[Infrast.UsePinusSylvestris]}"
+                                         Tip="{Binding Texts[Infrast.UsePinusSylvestris.Tip]}"
+                                         IsChecked="{Binding UsePinusSylvestris}" />
+            <controls:AppHintedCheckBox Text="{Binding Texts[Infrast.UsePerceptionInformation]}"
+                                         Tip="{Binding Texts[Infrast.UsePerceptionInformation.Tip]}"
+                                         IsChecked="{Binding UsePerceptionInformation}" />
+            <controls:AppHintedCheckBox Text="{Binding Texts[Infrast.UseWorldlyPlight]}"
+                                         Tip="{Binding Texts[Infrast.UseWorldlyPlight.Tip]}"
+                                         IsChecked="{Binding UseWorldlyPlight}" />
+            <controls:AppHintedCheckBox Text="{Binding Texts[Infrast.UseAbyssalHunter]}"
+                                         Tip="{Binding Texts[Infrast.UseAbyssalHunter.Tip]}"
+                                         IsChecked="{Binding UseAbyssalHunter}" />
+
+            <controls:AppHintedCheckBox Text="{Binding Texts[Infrast.UseWeeklySchedule]}"
+                                         Tip="{Binding Texts[Infrast.UseWeeklySchedule.Tip]}"
+                                         IsChecked="{Binding UseWeeklySchedule}" />
+            <controls:AdaptiveSpacingStackPanel Classes="infrast-field-group"
+                                                IsVisible="{Binding ShowWeeklyScheduleDays}">
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Infrast.WeeklySchedule.Monday]}"
+                        IsChecked="{Binding WeeklyScheduleMonday}" />
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Infrast.WeeklySchedule.Tuesday]}"
+                        IsChecked="{Binding WeeklyScheduleTuesday}" />
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Infrast.WeeklySchedule.Wednesday]}"
+                        IsChecked="{Binding WeeklyScheduleWednesday}" />
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Infrast.WeeklySchedule.Thursday]}"
+                        IsChecked="{Binding WeeklyScheduleThursday}" />
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Infrast.WeeklySchedule.Friday]}"
+                        IsChecked="{Binding WeeklyScheduleFriday}" />
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Infrast.WeeklySchedule.Saturday]}"
+                        IsChecked="{Binding WeeklyScheduleSaturday}" />
+              <CheckBox Classes="app-checkbox"
+                        Content="{Binding Texts[Infrast.WeeklySchedule.Sunday]}"
+                        IsChecked="{Binding WeeklyScheduleSunday}" />
+            </controls:AdaptiveSpacingStackPanel>
+          </controls:AdaptiveSpacingStackPanel>
+        </Border>
     </controls:AdaptiveSpacingStackPanel>
   </controls:AdaptiveSpacingStackPanel>
 </UserControl>

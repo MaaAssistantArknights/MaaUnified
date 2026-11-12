@@ -668,6 +668,8 @@ public partial class TaskQueueView : UserControl
             new(VM.AddTaskMenuAwardText, TaskQueuePopupAction.AddTask, TaskType: "Award"),
             new(VM.AddTaskMenuRoguelikeText, TaskQueuePopupAction.AddTask, TaskType: "Roguelike"),
             new(VM.AddTaskMenuReclamationText, TaskQueuePopupAction.AddTask, TaskType: "Reclamation"),
+            new(VM.AddTaskMenuSwitchThemeText, TaskQueuePopupAction.AddTask, TaskType: "SwitchTheme"),
+            new(VM.AddTaskMenuOperProgressText, TaskQueuePopupAction.AddTask, TaskType: "OperProgress"),
             new(VM.AddTaskMenuUserDataUpdateText, TaskQueuePopupAction.AddTask, TaskType: "UserDataUpdate"),
             new(VM.AddTaskMenuCustomText, TaskQueuePopupAction.AddTask, TaskType: "Custom", IsVisible: VM.ShowDebugTask),
         ];

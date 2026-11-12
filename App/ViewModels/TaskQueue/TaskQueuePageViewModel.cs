@@ -114,6 +114,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         TaskModuleTypes.Award,
         TaskModuleTypes.Roguelike,
         TaskModuleTypes.Reclamation,
+        TaskModuleTypes.SwitchTheme,
+        TaskModuleTypes.OperProgress,
         TaskModuleTypes.SingleStep,
         TaskModuleTypes.UserDataUpdate,
         TaskModuleTypes.Custom,
@@ -197,6 +199,24 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 "生息演算",
                 "生息演算",
                 "생식연산",
+            ],
+            [TaskModuleTypes.SwitchTheme] =
+            [
+                "SwitchTheme",
+                "Switch Theme",
+                "更换主题",
+                "更換主題",
+                "テーマ変更",
+                "테마 변경",
+            ],
+            [TaskModuleTypes.OperProgress] =
+            [
+                "OperProgress",
+                "Operator Progression",
+                "干员培养",
+                "幹員培養",
+                "オペレーター育成",
+                "오퍼레이터 육성",
             ],
             [TaskModuleTypes.UserDataUpdate] =
             [
@@ -288,6 +308,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private readonly AwardModuleViewModel _fallbackAwardModule;
     private readonly RoguelikeModuleViewModel _fallbackRoguelikeModule;
     private readonly ReclamationModuleViewModel _fallbackReclamationModule;
+    private readonly SwitchThemeModuleViewModel _fallbackSwitchThemeModule;
+    private readonly OperProgressModuleViewModel _fallbackOperProgressModule;
     private readonly UserDataUpdateModuleViewModel _fallbackUserDataUpdateModule;
     private readonly SingleStepModuleViewModel _fallbackSingleStepModule;
     private readonly CustomModuleViewModel _fallbackCustomModule;
@@ -494,6 +516,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _fallbackAwardModule = new AwardModuleViewModel(runtime, Texts);
         _fallbackRoguelikeModule = new RoguelikeModuleViewModel(runtime, Texts);
         _fallbackReclamationModule = new ReclamationModuleViewModel(runtime, Texts);
+        _fallbackSwitchThemeModule = new SwitchThemeModuleViewModel(runtime, Texts);
+        _fallbackOperProgressModule = new OperProgressModuleViewModel(runtime, Texts);
         _fallbackUserDataUpdateModule = new UserDataUpdateModuleViewModel(runtime, Texts);
         _fallbackSingleStepModule = new SingleStepModuleViewModel(runtime, Texts);
         _fallbackCustomModule = new CustomModuleViewModel(runtime, Texts);
@@ -586,6 +610,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public ReclamationModuleViewModel ReclamationModule => ResolveModuleForProjection<ReclamationModuleViewModel>() ?? _fallbackReclamationModule;
 
+    public SwitchThemeModuleViewModel SwitchThemeModule => ResolveModuleForProjection<SwitchThemeModuleViewModel>() ?? _fallbackSwitchThemeModule;
+
+    public OperProgressModuleViewModel OperProgressModule => ResolveModuleForProjection<OperProgressModuleViewModel>() ?? _fallbackOperProgressModule;
+
     public UserDataUpdateModuleViewModel UserDataUpdateModule => ResolveModuleForProjection<UserDataUpdateModuleViewModel>() ?? _fallbackUserDataUpdateModule;
 
     public SingleStepModuleViewModel SingleStepModule => ResolveModuleForProjection<SingleStepModuleViewModel>() ?? _fallbackSingleStepModule;
@@ -671,6 +699,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public bool IsRoguelikeTaskSelected => IsSelectedTaskType(TaskModuleTypes.Roguelike);
 
     public bool IsReclamationTaskSelected => IsSelectedTaskType(TaskModuleTypes.Reclamation);
+
+    public bool IsSwitchThemeTaskSelected => IsSelectedTaskType(TaskModuleTypes.SwitchTheme);
+
+    public bool IsOperProgressTaskSelected => IsSelectedTaskType(TaskModuleTypes.OperProgress);
 
     public bool IsUserDataUpdateTaskSelected => IsSelectedTaskType(TaskModuleTypes.UserDataUpdate);
 
@@ -1114,6 +1146,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public string AddTaskMenuReclamationText => ResolveModuleDisplayName(TaskModuleTypes.Reclamation);
 
+    public string AddTaskMenuSwitchThemeText => ResolveModuleDisplayName(TaskModuleTypes.SwitchTheme);
+
+    public string AddTaskMenuOperProgressText => ResolveModuleDisplayName(TaskModuleTypes.OperProgress);
+
     public string AddTaskMenuUserDataUpdateText => ResolveModuleDisplayName(TaskModuleTypes.UserDataUpdate);
 
     public string AddTaskMenuSingleStepText => ResolveModuleDisplayName(TaskModuleTypes.SingleStep);
@@ -1179,6 +1215,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         && SelectedTask is not null
         && !IsStartUpTaskSelected
         && !IsAwardTaskSelected
+        && !IsSwitchThemeTaskSelected
+        && !IsOperProgressTaskSelected
         && !IsUserDataUpdateTaskSelected
         && !IsSingleStepTaskSelected;
 
@@ -2232,6 +2270,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             TaskModuleTypes.Award => new AwardModuleViewModel(Runtime, Texts),
             TaskModuleTypes.Roguelike => new RoguelikeModuleViewModel(Runtime, Texts),
             TaskModuleTypes.Reclamation => new ReclamationModuleViewModel(Runtime, Texts),
+            TaskModuleTypes.SwitchTheme => new SwitchThemeModuleViewModel(Runtime, Texts),
+            TaskModuleTypes.OperProgress => new OperProgressModuleViewModel(Runtime, Texts),
             TaskModuleTypes.UserDataUpdate => new UserDataUpdateModuleViewModel(Runtime, Texts),
             TaskModuleTypes.SingleStep => new SingleStepModuleViewModel(Runtime, Texts),
             TaskModuleTypes.Custom => new CustomModuleViewModel(Runtime, Texts),
@@ -2893,6 +2933,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(AwardModule));
         OnPropertyChanged(nameof(RoguelikeModule));
         OnPropertyChanged(nameof(ReclamationModule));
+        OnPropertyChanged(nameof(SwitchThemeModule));
+        OnPropertyChanged(nameof(OperProgressModule));
         OnPropertyChanged(nameof(UserDataUpdateModule));
         OnPropertyChanged(nameof(SingleStepModule));
         OnPropertyChanged(nameof(CustomModule));
@@ -2911,6 +2953,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(IsAwardTaskSelected));
         OnPropertyChanged(nameof(IsRoguelikeTaskSelected));
         OnPropertyChanged(nameof(IsReclamationTaskSelected));
+        OnPropertyChanged(nameof(IsSwitchThemeTaskSelected));
+        OnPropertyChanged(nameof(IsOperProgressTaskSelected));
         OnPropertyChanged(nameof(IsUserDataUpdateTaskSelected));
         OnPropertyChanged(nameof(IsSingleStepTaskSelected));
         OnPropertyChanged(nameof(IsCustomTaskSelected));
@@ -2965,6 +3009,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _fallbackAwardModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         _fallbackRoguelikeModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         _fallbackReclamationModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackSwitchThemeModule.IsAdvancedMode = _isAdvancedSettingsSelected;
+        _fallbackOperProgressModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         _fallbackUserDataUpdateModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         _fallbackSingleStepModule.IsAdvancedMode = _isAdvancedSettingsSelected;
         _fallbackCustomModule.IsAdvancedMode = _isAdvancedSettingsSelected;
@@ -5928,6 +5974,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _fallbackAwardModule.ClearBinding();
         _fallbackRoguelikeModule.ClearBinding();
         _fallbackReclamationModule.ClearBinding();
+        _fallbackSwitchThemeModule.ClearBinding();
+        _fallbackOperProgressModule.ClearBinding();
         _fallbackUserDataUpdateModule.ClearBinding();
         _fallbackSingleStepModule.ClearBinding();
         _fallbackCustomModule.ClearBinding();

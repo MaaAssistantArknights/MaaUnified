@@ -17,6 +17,8 @@ public static class TaskModuleTypes
     public const string SingleStep = "SingleStep";
     public const string Custom = "Custom";
     public const string PostAction = "PostAction";
+    public const string SwitchTheme = "SwitchTheme";
+    public const string OperProgress = "OperProgress";
 
     public static string Normalize(string? type)
     {
@@ -52,6 +54,8 @@ public static class TaskModuleParameterDefaults
             TaskModuleTypes.Mall => CreateMallDefaults(language),
             TaskModuleTypes.Award => CreateAwardDefaults(),
             TaskModuleTypes.UserDataUpdate => CreateUserDataUpdateDefaults(),
+            TaskModuleTypes.SwitchTheme => CreateSwitchThemeDefaults(),
+            TaskModuleTypes.OperProgress => CreateOperProgressDefaults(),
             _ => new JsonObject(),
         };
     }
@@ -74,6 +78,20 @@ public static class TaskModuleParameterDefaults
             ["reception_send_clue"] = true,
             ["filename"] = string.Empty,
             ["plan_index"] = -1,
+            ["fiammetta_targets"] = new JsonArray("清流", "可露希尔", "但书"),
+            ["fiammetta_recovery_enabled"] = false,
+            ["use_pinus_sylvestris"] = false,
+            ["use_perception_information"] = false,
+            ["use_worldly_plight"] = false,
+            ["use_abyssal_hunter"] = false,
+            ["_ui_use_weekly_schedule"] = false,
+            ["_ui_weekly_schedule_sunday"] = true,
+            ["_ui_weekly_schedule_monday"] = true,
+            ["_ui_weekly_schedule_tuesday"] = true,
+            ["_ui_weekly_schedule_wednesday"] = true,
+            ["_ui_weekly_schedule_thursday"] = true,
+            ["_ui_weekly_schedule_friday"] = true,
+            ["_ui_weekly_schedule_saturday"] = true,
         };
     }
 
@@ -117,6 +135,23 @@ public static class TaskModuleParameterDefaults
             ["orundum"] = false,
             ["mining"] = false,
             ["specialaccess"] = false,
+            ["signinevent"] = false,
+        };
+    }
+
+    public static JsonObject CreateSwitchThemeDefaults()
+    {
+        return new JsonObject
+        {
+            ["themes"] = new JsonArray(),
+        };
+    }
+
+    public static JsonObject CreateOperProgressDefaults()
+    {
+        return new JsonObject
+        {
+            ["plans"] = new JsonArray(),
         };
     }
 
@@ -161,6 +196,41 @@ public sealed class InfrastParams
 
     public int PlanIndex { get; set; } = -1;
 
+    // WPF dev-v2 (c281b7aaca / 59963a90cb / 97d5e8ac38): the Fiammetta recovery
+    // target list keeps the first three distinct non-blank names, and the four
+    // cross-facility team switches are plain booleans.
+    public List<string> FiammettaTargets { get; set; } = DefaultFiammettaTargets.ToList();
+
+    public bool FiammettaRecoveryEnabled { get; set; }
+
+    public bool UsePinusSylvestris { get; set; }
+
+    public bool UsePerceptionInformation { get; set; }
+
+    public bool UseWorldlyPlight { get; set; }
+
+    public bool UseAbyssalHunter { get; set; }
+
+    // WPF dev-v2 (3e570d1c23): weekly schedule gates the whole Infrast task; the
+    // day flags mirror the Fight task's _ui_weekly_schedule_* storage.
+    public bool UseWeeklySchedule { get; set; }
+
+    public bool WeeklyScheduleSunday { get; set; } = true;
+
+    public bool WeeklyScheduleMonday { get; set; } = true;
+
+    public bool WeeklyScheduleTuesday { get; set; } = true;
+
+    public bool WeeklyScheduleWednesday { get; set; } = true;
+
+    public bool WeeklyScheduleThursday { get; set; } = true;
+
+    public bool WeeklyScheduleFriday { get; set; } = true;
+
+    public bool WeeklyScheduleSaturday { get; set; } = true;
+
+    public static IReadOnlyList<string> DefaultFiammettaTargets { get; } = ["清流", "可露希尔", "但书"];
+
     public static InfrastParams FromJson(JsonObject? obj)
     {
         obj ??= TaskModuleParameterDefaults.CreateInfrastDefaults();
@@ -178,7 +248,36 @@ public sealed class InfrastParams
             ReceptionSendClue = ReadBool(obj, "reception_send_clue", true),
             Filename = ReadString(obj, "filename", string.Empty),
             PlanIndex = ReadInt(obj, "plan_index", -1),
+            FiammettaRecoveryEnabled = ReadBool(obj, "fiammetta_recovery_enabled", false),
+            UsePinusSylvestris = ReadBool(obj, "use_pinus_sylvestris", false),
+            UsePerceptionInformation = ReadBool(obj, "use_perception_information", false),
+            UseWorldlyPlight = ReadBool(obj, "use_worldly_plight", false),
+            UseAbyssalHunter = ReadBool(obj, "use_abyssal_hunter", false),
+            UseWeeklySchedule = ReadBool(obj, "_ui_use_weekly_schedule", false),
+            WeeklyScheduleSunday = ReadBool(obj, "_ui_weekly_schedule_sunday", true),
+            WeeklyScheduleMonday = ReadBool(obj, "_ui_weekly_schedule_monday", true),
+            WeeklyScheduleTuesday = ReadBool(obj, "_ui_weekly_schedule_tuesday", true),
+            WeeklyScheduleWednesday = ReadBool(obj, "_ui_weekly_schedule_wednesday", true),
+            WeeklyScheduleThursday = ReadBool(obj, "_ui_weekly_schedule_thursday", true),
+            WeeklyScheduleFriday = ReadBool(obj, "_ui_weekly_schedule_friday", true),
+            WeeklyScheduleSaturday = ReadBool(obj, "_ui_weekly_schedule_saturday", true),
         };
+
+        if (TaskParamJsonReader.FindNode(obj, "fiammetta_targets") is JsonArray targetsArray)
+        {
+            // Replace (not append to) the WPF defaults: an explicit list wins.
+            result.FiammettaTargets.Clear();
+            foreach (var node in targetsArray)
+            {
+                var value = node?.GetValue<string?>();
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    result.FiammettaTargets.Add(value.Trim());
+                }
+            }
+
+            result.FiammettaTargets = NormalizeFiammettaTargets(result.FiammettaTargets);
+        }
 
         if (obj["facility"] is JsonArray facilityArray)
         {
@@ -249,7 +348,35 @@ public sealed class InfrastParams
             ["reception_send_clue"] = ReceptionSendClue,
             ["filename"] = Filename,
             ["plan_index"] = PlanIndex,
+            ["fiammetta_targets"] = TaskParamJsonReader.ToJsonArray(NormalizeFiammettaTargets(FiammettaTargets)),
+            ["fiammetta_recovery_enabled"] = FiammettaRecoveryEnabled,
+            ["use_pinus_sylvestris"] = UsePinusSylvestris,
+            ["use_perception_information"] = UsePerceptionInformation,
+            ["use_worldly_plight"] = UseWorldlyPlight,
+            ["use_abyssal_hunter"] = UseAbyssalHunter,
+            ["_ui_use_weekly_schedule"] = UseWeeklySchedule,
+            ["_ui_weekly_schedule_sunday"] = WeeklyScheduleSunday,
+            ["_ui_weekly_schedule_monday"] = WeeklyScheduleMonday,
+            ["_ui_weekly_schedule_tuesday"] = WeeklyScheduleTuesday,
+            ["_ui_weekly_schedule_wednesday"] = WeeklyScheduleWednesday,
+            ["_ui_weekly_schedule_thursday"] = WeeklyScheduleThursday,
+            ["_ui_weekly_schedule_friday"] = WeeklyScheduleFriday,
+            ["_ui_weekly_schedule_saturday"] = WeeklyScheduleSaturday,
         };
+    }
+
+    /// <summary>
+    /// WPF AsstInfrastTask serialization: trim, drop blanks, de-duplicate and keep
+    /// at most three Fiammetta recovery targets.
+    /// </summary>
+    public static List<string> NormalizeFiammettaTargets(IEnumerable<string?> values)
+    {
+        return values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .Take(3)
+            .ToList();
     }
 
     private static bool ReadBool(JsonObject obj, string key, bool fallback)
@@ -551,6 +678,8 @@ public sealed class AwardParams
 
     public bool SpecialAccess { get; set; }
 
+    public bool SignInEvent { get; set; }
+
     public static AwardParams FromJson(JsonObject? obj)
     {
         obj ??= TaskModuleParameterDefaults.CreateAwardDefaults();
@@ -562,6 +691,7 @@ public sealed class AwardParams
             Orundum = ReadBool(obj, "orundum", false),
             Mining = ReadBool(obj, "mining", false),
             SpecialAccess = ReadBool(obj, "specialaccess", false),
+            SignInEvent = ReadBool(obj, "signinevent", false),
         };
     }
 
@@ -575,6 +705,7 @@ public sealed class AwardParams
             ["orundum"] = Orundum,
             ["mining"] = Mining,
             ["specialaccess"] = SpecialAccess,
+            ["signinevent"] = SignInEvent,
         };
     }
 
@@ -589,6 +720,196 @@ public sealed class AwardParams
             : value.TryGetValue(out int number) ? number != 0
             : value.TryGetValue(out string? text) && bool.TryParse(text, out var parsed) ? parsed
             : fallback;
+    }
+}
+
+// WPF dev-v2 (9c86aae937): AsstSwitchThemeTask serializes the candidate theme
+// name list; Core picks one at random per run and skips the task when the list
+// is empty.
+public sealed class SwitchThemeParams
+{
+    public List<string> Themes { get; set; } = [];
+
+    public static SwitchThemeParams FromJson(JsonObject? obj)
+    {
+        obj ??= TaskModuleParameterDefaults.CreateSwitchThemeDefaults();
+        var result = new SwitchThemeParams();
+        result.Themes.AddRange(TaskParamJsonReader.ReadStringList(obj, "themes"));
+        return result;
+    }
+
+    public JsonObject ToJson()
+    {
+        return new JsonObject
+        {
+            ["themes"] = TaskParamJsonReader.ToJsonArray(TaskParamJsonReader.NormalizeNames(Themes)),
+        };
+    }
+}
+
+/// <summary>
+/// Core <c>battle::Role</c> names usable as an OperProgress plan target, in the
+/// in-game class order. <c>Drone</c>/<c>Trap</c> are excluded because Core
+/// rejects non-operator progression targets.
+/// </summary>
+public static class OperProgressRoles
+{
+    public const string Unknown = "Unknown";
+
+    public static IReadOnlyList<string> Selectable { get; } =
+    [
+        "Pioneer",
+        "Warrior",
+        "Tank",
+        "Sniper",
+        "Caster",
+        "Medic",
+        "Support",
+        "Special",
+    ];
+
+    public static string Normalize(string? role)
+    {
+        var trimmed = role?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0)
+        {
+            return Unknown;
+        }
+
+        if (string.Equals(trimmed, Unknown, StringComparison.OrdinalIgnoreCase))
+        {
+            return Unknown;
+        }
+
+        foreach (var candidate in Selectable)
+        {
+            if (string.Equals(candidate, trimmed, StringComparison.OrdinalIgnoreCase))
+            {
+                return candidate;
+            }
+        }
+
+        return Unknown;
+    }
+}
+
+/// <summary>
+/// WPF dev-v2 (a412e6a294): one ordered operator development plan. Zero targets
+/// are omitted from the serialized payload because Core treats a present value
+/// as a hard requirement.
+/// </summary>
+public sealed class OperProgressPlan
+{
+    public string Role { get; set; } = OperProgressRoles.Unknown;
+
+    public string Name { get; set; } = string.Empty;
+
+    public int Elite { get; set; }
+
+    public int SkillLevel { get; set; }
+
+    public int[] SkillMastery { get; set; } = new int[3];
+
+    public static OperProgressPlan FromJson(JsonObject plan)
+    {
+        var result = new OperProgressPlan
+        {
+            Role = OperProgressRoles.Normalize(TaskParamJsonReader.ReadString(plan, "role")),
+            Name = TaskParamJsonReader.ReadString(plan, "name").Trim(),
+            Elite = TaskParamJsonReader.ReadInt(plan, "elite"),
+            SkillLevel = TaskParamJsonReader.ReadInt(plan, "skill_level"),
+        };
+
+        if (TaskParamJsonReader.FindNode(plan, "skill_mastery") is JsonArray masteryArray)
+        {
+            for (var index = 0; index < result.SkillMastery.Length && index < masteryArray.Count; index++)
+            {
+                if (masteryArray[index] is JsonValue value && value.TryGetValue(out int level))
+                {
+                    result.SkillMastery[index] = level;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    public JsonObject ToJson()
+    {
+        var plan = new JsonObject
+        {
+            ["role"] = OperProgressRoles.Normalize(Role),
+            ["name"] = Name.Trim(),
+        };
+
+        if (Elite is >= 1 and <= 2)
+        {
+            plan["elite"] = Elite;
+        }
+
+        if (SkillLevel is >= 2 and <= 7)
+        {
+            plan["skill_level"] = SkillLevel;
+        }
+
+        var mastery = SkillMastery.Select(level => Math.Clamp(level, 0, 3)).ToArray();
+        if (mastery.Any(level => level > 0))
+        {
+            plan["skill_mastery"] = TaskParamJsonReader.ToJsonIntArray(mastery);
+        }
+
+        return plan;
+    }
+
+    public OperProgressPlan Clone()
+    {
+        return new OperProgressPlan
+        {
+            Role = Role,
+            Name = Name,
+            Elite = Elite,
+            SkillLevel = SkillLevel,
+            SkillMastery = [.. SkillMastery],
+        };
+    }
+}
+
+public sealed class OperProgressParams
+{
+    public List<OperProgressPlan> Plans { get; set; } = [];
+
+    public static OperProgressParams FromJson(JsonObject? obj)
+    {
+        obj ??= TaskModuleParameterDefaults.CreateOperProgressDefaults();
+        var result = new OperProgressParams();
+        if (TaskParamJsonReader.FindNode(obj, "plans") is not JsonArray plans)
+        {
+            return result;
+        }
+
+        foreach (var node in plans)
+        {
+            if (node is JsonObject plan)
+            {
+                result.Plans.Add(OperProgressPlan.FromJson(plan));
+            }
+        }
+
+        return result;
+    }
+
+    public JsonObject ToJson()
+    {
+        var plans = new JsonArray();
+        foreach (var plan in Plans)
+        {
+            plans.Add(plan.ToJson());
+        }
+
+        return new JsonObject
+        {
+            ["plans"] = plans,
+        };
     }
 }
 
@@ -838,3 +1159,105 @@ public sealed record TaskRuntimeStatusSnapshot(
     string Status,
     string Message,
     DateTimeOffset Timestamp);
+
+internal static class TaskParamJsonReader
+{
+    public static JsonNode? FindNode(JsonObject obj, string key)
+    {
+        if (obj.TryGetPropertyValue(key, out var node) && node is not null)
+        {
+            return node;
+        }
+
+        foreach (var (existingKey, value) in obj)
+        {
+            if (value is not null && string.Equals(existingKey, key, StringComparison.OrdinalIgnoreCase))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    public static string ReadString(JsonObject obj, string key)
+    {
+        return FindNode(obj, key) is JsonValue value && value.TryGetValue(out string? text)
+            ? text ?? string.Empty
+            : string.Empty;
+    }
+
+    public static int ReadInt(JsonObject obj, string key)
+    {
+        return FindNode(obj, key) is JsonValue value
+            ? value.TryGetValue(out int number) ? number
+                : value.TryGetValue(out string? text) && int.TryParse(text, out var parsed) ? parsed
+                : 0
+            : 0;
+    }
+
+    public static bool ReadBool(JsonObject obj, string key)
+    {
+        return ReadBool(obj, key, false);
+    }
+
+    public static bool ReadBool(JsonObject obj, string key, bool fallback)
+    {
+        return FindNode(obj, key) is JsonValue value
+            ? value.TryGetValue(out bool flag) ? flag
+                : value.TryGetValue(out int number) ? number != 0
+                : value.TryGetValue(out string? text) && bool.TryParse(text, out var parsed) ? parsed
+                : fallback
+            : fallback;
+    }
+
+    public static List<string> ReadStringList(JsonObject obj, string key)
+    {
+        var result = new List<string>();
+        if (FindNode(obj, key) is not JsonArray array)
+        {
+            return result;
+        }
+
+        foreach (var item in array)
+        {
+            if (item is JsonValue value && value.TryGetValue(out string? text) && !string.IsNullOrWhiteSpace(text))
+            {
+                result.Add(text.Trim());
+            }
+        }
+
+        return result;
+    }
+
+    public static List<string> NormalizeNames(IEnumerable<string?> values)
+    {
+        return values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Where(value => value.Length > 0)
+            .ToList();
+    }
+
+    public static JsonArray ToJsonArray(IEnumerable<string> values)
+    {
+        var array = new JsonArray();
+        foreach (var value in values)
+        {
+            array.Add(value);
+        }
+
+        return array;
+    }
+
+    public static JsonArray ToJsonIntArray(IEnumerable<int> values)
+    {
+        var array = new JsonArray();
+        foreach (var value in values)
+        {
+            array.Add(value);
+        }
+
+        return array;
+    }
+}

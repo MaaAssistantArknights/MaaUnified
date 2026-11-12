@@ -90,6 +90,8 @@ public static class TaskParamCompiler
         "SingleStep",
         "Custom",
         "PostAction",
+        "SwitchTheme",
+        "OperProgress",
     };
 
     // Frozen WPF parity: Mall serialization unconditionally unions this
@@ -152,6 +154,8 @@ public static class TaskParamCompiler
             "SingleStep" => "SingleStep",
             "Custom" => "Custom",
             "PostAction" => "PostAction",
+            "SwitchTheme" => "SwitchTheme",
+            "OperProgress" => "OperProgress",
             _ => normalized,
         };
     }
@@ -173,6 +177,8 @@ public static class TaskParamCompiler
             "UserDataUpdate" => (normalizedType, CompileUserDataUpdate(new UserDataUpdateTaskParamsDto()).Params),
             "SingleStep" => (normalizedType, CompileSingleStep(new SingleStepTaskParamsDto()).Params),
             "Custom" => (normalizedType, CompileCustom(new CustomTaskParamsDto(), profile, config).Params),
+            "SwitchTheme" => (normalizedType, TaskModuleParameterDefaults.CreateSwitchThemeDefaults()),
+            "OperProgress" => (normalizedType, TaskModuleParameterDefaults.CreateOperProgressDefaults()),
             _ => (normalizedType, new JsonObject()),
         };
     }
@@ -2063,6 +2069,8 @@ public static class TaskParamCompiler
             "UserDataUpdate" => CompileUserDataUpdateFromTask(task, strict),
             "SingleStep" => CompileSingleStepFromTask(task, strict),
             "Custom" => CompileCustomFromTask(task, profile, config, strict),
+            "SwitchTheme" => CompileSwitchThemeFromTask(task),
+            "OperProgress" => CompileOperProgressFromTask(task),
             _ => new TaskCompileOutput
             {
                 NormalizedType = normalized,
@@ -2171,7 +2179,9 @@ public static class TaskParamCompiler
         }
         else if (string.Equals(normalizedType, TaskModuleTypes.Award, StringComparison.OrdinalIgnoreCase))
         {
-            var allowed = new[] { "award", "mail", "recruit", "orundum", "mining", "specialaccess" };
+            // WPF dev-v2 (19699d8483) adds signinevent to AsstAwardTask; the
+            // frozen v6.3.7 payload had no such field.
+            var allowed = new[] { "award", "mail", "recruit", "orundum", "mining", "specialaccess", "signinevent" };
             foreach (var key in runtimeParams.Select(pair => pair.Key).Where(key => !allowed.Contains(key, StringComparer.Ordinal)).ToList())
             {
                 runtimeParams.Remove(key);
@@ -2180,7 +2190,16 @@ public static class TaskParamCompiler
 
         if (isInfrast)
         {
+            // UI-only Infrast state (facility order, weekly schedule) must never
+            // reach Core; the same prefix rule already applies to Fight.
             runtimeParams.Remove(UiInfrastFacilityOrder);
+            foreach (var key in runtimeParams.Select(static pair => pair.Key)
+                         .Where(key => key.StartsWith("_ui_", StringComparison.Ordinal))
+                         .ToArray())
+            {
+                runtimeParams.Remove(key);
+            }
+
             if ((runtimeParams["mode"]?.GetValue<int?>() ?? 0) != 10000)
             {
                 runtimeParams.Remove("filename");
@@ -2494,6 +2513,97 @@ public static class TaskParamCompiler
             NormalizedType = compiled.NormalizedType,
             Params = compiled.Params,
             Issues = allIssues,
+        };
+    }
+
+    // WPF dev-v2 (9c86aae937): AsstSwitchThemeTask sends only the candidate theme
+    // names; an empty list makes WPF skip the task instead of appending it.
+    private static TaskCompileOutput CompileSwitchThemeFromTask(UnifiedTaskItem task)
+    {
+        var model = SwitchThemeParams.FromJson(task.Params);
+        var themes = TaskParamJsonReader.NormalizeNames(model.Themes);
+        var issues = new List<TaskValidationIssue>();
+        if (themes.Count == 0)
+        {
+            issues.Add(new TaskValidationIssue(
+                SkipAppendIssueCode,
+                "switch_theme.themes",
+                "SwitchTheme has no theme names; skipping append to match WPF task behavior.",
+                Blocking: false));
+        }
+
+        return new TaskCompileOutput
+        {
+            NormalizedType = TaskModuleTypes.SwitchTheme,
+            Params = new JsonObject
+            {
+                ["themes"] = TaskParamJsonReader.ToJsonArray(themes),
+            },
+            Issues = issues,
+        };
+    }
+
+    // WPF dev-v2 (a412e6a294): AsstOperProgressTask serializes plans with role/name
+    // and omits zero elite/skill_level/skill_mastery targets because Core treats a
+    // present value as a hard requirement. Names are normalized through the same
+    // battle_data alias index used for Roguelike CoreChar so localized input still
+    // reaches Core as the canonical operator name.
+    private static TaskCompileOutput CompileOperProgressFromTask(UnifiedTaskItem task)
+    {
+        var model = OperProgressParams.FromJson(task.Params);
+        var names = OperNameIndex.Shared;
+        var issues = new List<TaskValidationIssue>();
+        var plans = new JsonArray();
+        foreach (var plan in model.Plans)
+        {
+            var normalized = plan.Clone();
+            normalized.Name = names.NormalizeName(plan.Name);
+            if (string.IsNullOrWhiteSpace(normalized.Name))
+            {
+                issues.Add(new TaskValidationIssue(
+                    "OperProgressPlanSkipped",
+                    "oper_progress.plans",
+                    "OperProgress plan without an operator name is skipped.",
+                    Blocking: false));
+                continue;
+            }
+
+            normalized.Role = OperProgressRoles.Normalize(plan.Role);
+            // Core only accepts elite 1-2 / skill_level 2-7 / mastery 0-3; values
+            // outside those ranges are dropped instead of failing the whole chain.
+            var eliteDropped = plan.Elite != 0 && plan.Elite is < 1 or > 2;
+            var skillLevelDropped = plan.SkillLevel != 0 && plan.SkillLevel is < 2 or > 7;
+            if (eliteDropped || skillLevelDropped)
+            {
+                issues.Add(new TaskValidationIssue(
+                    "OperProgressTargetNormalized",
+                    "oper_progress.plans",
+                    $"OperProgress plan `{normalized.Name}` has an out-of-range target; it is omitted.",
+                    Blocking: false));
+            }
+
+            normalized.SkillMastery = plan.SkillMastery.Select(level => Math.Clamp(level, 0, 3)).ToArray();
+
+            plans.Add(normalized.ToJson());
+        }
+
+        if (plans.Count == 0)
+        {
+            issues.Add(new TaskValidationIssue(
+                SkipAppendIssueCode,
+                "oper_progress.plans",
+                "OperProgress has no runnable plans; skipping append to match WPF task behavior.",
+                Blocking: false));
+        }
+
+        return new TaskCompileOutput
+        {
+            NormalizedType = TaskModuleTypes.OperProgress,
+            Params = new JsonObject
+            {
+                ["plans"] = plans,
+            },
+            Issues = issues,
         };
     }
 

@@ -700,11 +700,44 @@ public sealed class TaskModuleBFeatureTests
         var appended = Assert.Single(fixture.Bridge.AppendedTasks);
         var parameters = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
         Assert.Equal(
-            ["award", "mail", "mining", "orundum", "recruit", "specialaccess"],
+            ["award", "mail", "mining", "orundum", "recruit", "signinevent", "specialaccess"],
             parameters.Select(pair => pair.Key).Order(StringComparer.Ordinal).ToArray());
         Assert.True(parameters["award"]?.GetValue<bool>());
         Assert.True(parameters["mail"]?.GetValue<bool>());
         Assert.True(parameters["recruit"]?.GetValue<bool>());
+        Assert.False(parameters["signinevent"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Award_SignInEvent_DefaultOffThenPersistsAndReachesCore()
+    {
+        // WPF dev-v2 (19699d8483) adds AsstAwardTask.SignInEvent; the checkbox lives in
+        // AwardSettingsUserControl and the Core parameter is `signinevent`.
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Award", "award")).Success);
+
+        var added = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.False(added["signinevent"]!.GetValue<bool>());
+
+        var module = new AwardModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        await module.BindAsync(0, added);
+        Assert.False(module.SignInEvent);
+
+        module.SignInEvent = true;
+        Assert.True(await module.FlushPendingChangesAsync());
+
+        var persisted = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.True(persisted["signinevent"]!.GetValue<bool>());
+
+        var result = await fixture.TaskQueue.QueueEnabledTasksAsync();
+        Assert.True(result.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var parameters = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.True(parameters["signinevent"]!.GetValue<bool>());
+
+        var rebound = new AwardModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
+        await rebound.BindAsync(0, persisted);
+        Assert.True(rebound.SignInEvent);
     }
 
     [Fact]

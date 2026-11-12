@@ -49,6 +49,12 @@
   <data name="Award.RecruitTip" xml:space="preserve">
     <value>この機能は危険で、誤ったスカウトにつながる可能性があります。</value>
   </data>
+  <data name="Award.SignInEvent" xml:space="preserve">
+    <value>期間限定スタンプラリー報酬を受け取る</value>
+  </data>
+  <data name="Award.SignInEventTip" xml:space="preserve">
+    <value>横型レイアウトのみ対応。それ以外のレイアウトは非対応で、正常に動作しない可能性があります</value>
+  </data>
   <data name="Award.Special" xml:space="preserve">
     <value>スペシャルアクセス特典を集める</value>
   </data>
@@ -460,6 +466,30 @@
   <data name="FlexibleDeployment" xml:space="preserve">
     <value>柔軟配置（先鋒、補助、特殊）</value>
   </data>
+  <data name="Game.Role.Caster" xml:space="preserve">
+    <value>術師</value>
+  </data>
+  <data name="Game.Role.Medic" xml:space="preserve">
+    <value>医療</value>
+  </data>
+  <data name="Game.Role.Pioneer" xml:space="preserve">
+    <value>先鋒</value>
+  </data>
+  <data name="Game.Role.Sniper" xml:space="preserve">
+    <value>狙撃</value>
+  </data>
+  <data name="Game.Role.Special" xml:space="preserve">
+    <value>特殊</value>
+  </data>
+  <data name="Game.Role.Support" xml:space="preserve">
+    <value>補助</value>
+  </data>
+  <data name="Game.Role.Tank" xml:space="preserve">
+    <value>重装</value>
+  </data>
+  <data name="Game.Role.Warrior" xml:space="preserve">
+    <value>前衛</value>
+  </data>
   <data name="IdentifyTheMistakes" xml:space="preserve">
     <value>認識エラー</value>
   </data>
@@ -517,11 +547,125 @@
   <data name="Dorm" xml:space="preserve">
     <value>宿舎</value>
   </data>
+  <data name="Infrast.Fiammetta.Recovery" xml:space="preserve">
+    <value>フィアメッタの体力回復を有効化</value>
+  </data>
+  <data name="Infrast.Fiammetta.Recovery.Tip" xml:space="preserve">
+    <value>有効にすると、交代開始時に回復対象と体力が全快のフィアメッタを宿舎に入れて体力を交換し、その後フィアメッタは宿舎で回復します。</value>
+  </data>
+  <data name="Infrast.Fiammetta.Target.None" xml:space="preserve">
+    <value>なし</value>
+  </data>
+  <data name="Infrast.Fiammetta.Targets" xml:space="preserve">
+    <value>フィアメッタの回復対象</value>
+  </data>
+  <data name="Infrast.Fiammetta.Targets.Tip" xml:space="preserve">
+    <value>理論上はシャマレとテキーラを回復対象にすると 007 が可能ですが、自動交代では実現が難しいため、選択は推奨しません。</value>
+  </data>
+  <data name="Infrast.UseAbyssalHunter" xml:space="preserve">
+    <value>アビサルハンター連携を使用</value>
+  </data>
+  <data name="Infrast.UseAbyssalHunter.Tip" xml:space="preserve">
+    <value>必須オペレーター：グレイディーア（昇進2）、ウルピアヌス、スカジ、スペクター、アンドレアナ。アルゴリズム上の理由により、ピヌス・シルベストリスも選択した場合は両方を同時に交代対象にはできません。</value>
+  </data>
+  <data name="Infrast.UsePerceptionInformation" xml:space="preserve">
+    <value>知覚情報連携を使用</value>
+  </data>
+  <data name="Infrast.UsePerceptionInformation.Tip" xml:space="preserve">
+    <value>必須オペレーター：ウィスパーレイン（昇進2）、ロスモンティス（昇進2）、エーベンホルツ（昇進2）。計算対象オペレーター：シー、ヴィルトゥオーサ、アイリス、チェルニー。俗世の憂いより優先度が高い。</value>
+  </data>
+  <data name="Infrast.UsePinusSylvestris" xml:space="preserve">
+    <value>ピヌス・シルベストリス連携を使用</value>
+  </data>
+  <data name="Infrast.UsePinusSylvestris.Tip" xml:space="preserve">
+    <value>必須オペレーター：フレイムテイル（昇進2）、ヴィヴィアナ（昇進2）、ワイルドメイン（昇進2）/アッシュロック（昇進2）/ファートゥース（昇進2）のうち1名以上。計算対象オペレーター：グラベル。</value>
+  </data>
+  <data name="Infrast.UseWeeklySchedule" xml:space="preserve">
+    <value>週間スケジュールを有効化</value>
+  </data>
+  <data name="Infrast.UseWeeklySchedule.Tip" xml:space="preserve">
+    <value>ここでの曜日はゲーム内時間に基づいており、現実時間ではありません。例えば、ゲームが 4:00 にリセットされる場合、3:59 は前日としてカウントされます。</value>
+  </data>
+  <data name="Infrast.UseWorldlyPlight" xml:space="preserve">
+    <value>俗世の憂い連携を使用</value>
+  </data>
+  <data name="Infrast.UseWorldlyPlight.Tip" xml:space="preserve">
+    <value>必須オペレーター：マルベリー（昇進2）、ステンレス（昇進2）。計算対象オペレーター：チョンユエ、リィン、シー。</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Friday" xml:space="preserve">
+    <value>金</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Monday" xml:space="preserve">
+    <value>月</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>土</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Sunday" xml:space="preserve">
+    <value>日</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>木</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Tuesday" xml:space="preserve">
+    <value>火</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Wednesday" xml:space="preserve">
+    <value>水</value>
+  </data>
   <data name="Mfg" xml:space="preserve">
     <value>製造所</value>
   </data>
   <data name="Office" xml:space="preserve">
     <value>事務室</value>
+  </data>
+  <data name="OperProgress.AddPlan" xml:space="preserve">
+    <value>オペレーター追加</value>
+  </data>
+  <data name="OperProgress.EmptyHint" xml:space="preserve">
+    <value>育成計画が未登録のため、実行時にこのタスクをスキップします。</value>
+  </data>
+  <data name="OperProgress.Mastery1" xml:space="preserve">
+    <value>特化 1</value>
+  </data>
+  <data name="OperProgress.Mastery2" xml:space="preserve">
+    <value>特化 2</value>
+  </data>
+  <data name="OperProgress.Mastery3" xml:space="preserve">
+    <value>特化 3</value>
+  </data>
+  <data name="OperProgress.MoveDown" xml:space="preserve">
+    <value>下へ</value>
+  </data>
+  <data name="OperProgress.MoveUp" xml:space="preserve">
+    <value>上へ</value>
+  </data>
+  <data name="OperProgress.NameRequired" xml:space="preserve">
+    <value>先にオペレーター名を入力してください。</value>
+  </data>
+  <data name="OperProgress.NotSet" xml:space="preserve">
+    <value>---</value>
+  </data>
+  <data name="OperProgress.OperatorName" xml:space="preserve">
+    <value>オペレーター</value>
+  </data>
+  <data name="OperProgress.OperatorNameTip" xml:space="preserve">
+    <value>どの言語の表記でも入力できます。保存時に Core が認識できる名前へ正規化されます。</value>
+  </data>
+  <data name="OperProgress.OperatorNameWatermark" xml:space="preserve">
+    <value>オペレーター名</value>
+  </data>
+  <data name="OperProgress.Plans" xml:space="preserve">
+    <value>育成計画</value>
+  </data>
+  <data name="OperProgress.Remove" xml:space="preserve">
+    <value>削除</value>
+  </data>
+  <data name="OperProgress.Title" xml:space="preserve">
+    <value>オペレーター育成</value>
+  </data>
+  <data name="OperProgress.UnknownOperator" xml:space="preserve">
+    <value>オペレーター名を認識できません。MaaCore はこの計画を拒否します。</value>
   </data>
   <data name="Power" xml:space="preserve">
     <value>発電所</value>
@@ -537,6 +681,27 @@
   </data>
   <data name="RecruitmentOfStar" xml:space="preserve">
     <value>公開求人で星{0}が出ました！</value>
+  </data>
+  <data name="SwitchTheme.EmptyHint" xml:space="preserve">
+    <value>テーマ名が未入力のため、実行時にこのタスクをスキップします。</value>
+  </data>
+  <data name="SwitchTheme.Placeholder" xml:space="preserve">
+    <value>テーマ名</value>
+  </data>
+  <data name="SwitchTheme.Themes" xml:space="preserve">
+    <value>候補テーマ</value>
+  </data>
+  <data name="SwitchTheme.ThemesTip" xml:space="preserve">
+    <value>ゲーム内のテーマ一覧に表示されるテーマ名を入力してください。複数入力した場合は実行ごとにランダムに選択され、1 つのみの場合は常にそれに切り替わります。</value>
+  </data>
+  <data name="SwitchTheme.Title" xml:space="preserve">
+    <value>テーマ変更</value>
+  </data>
+  <data name="TaskQueue.Module.OperProgress" xml:space="preserve">
+    <value>オペレーター育成</value>
+  </data>
+  <data name="TaskQueue.Module.SwitchTheme" xml:space="preserve">
+    <value>テーマ変更</value>
   </data>
   <data name="TaskStallWarning" xml:space="preserve">
     <value>タスクのログ出力が {0} 分間更新されていません（現在 {1} 分間停止しています）。タスクが正常に実行されているか確認してください。</value>

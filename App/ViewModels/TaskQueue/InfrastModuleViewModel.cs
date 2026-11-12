@@ -45,6 +45,24 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
     private bool _receptionMessageBoard = true;
     private bool _receptionClueExchange = true;
     private bool _receptionSendClue = true;
+    private bool _fiammettaRecoveryEnabled;
+    private string _fiammettaTarget1 = InfrastParams.DefaultFiammettaTargets[0];
+    private string _fiammettaTarget2 = InfrastParams.DefaultFiammettaTargets[1];
+    private string _fiammettaTarget3 = InfrastParams.DefaultFiammettaTargets[2];
+    private bool _usePinusSylvestris;
+    private bool _usePerceptionInformation;
+    private bool _useWorldlyPlight;
+    private bool _useAbyssalHunter;
+    private bool _useWeeklySchedule;
+    private bool _weeklyScheduleSunday = true;
+    private bool _weeklyScheduleMonday = true;
+    private bool _weeklyScheduleTuesday = true;
+    private bool _weeklyScheduleWednesday = true;
+    private bool _weeklyScheduleThursday = true;
+    private bool _weeklyScheduleFriday = true;
+    private bool _weeklyScheduleSaturday = true;
+    private IReadOnlyList<StringOption>? _fiammettaTargetOptions;
+    private IReadOnlyList<StringOption>? _optionalFiammettaTargetOptions;
     private IReadOnlyList<IntOption> _modeOptions = [];
     private IReadOnlyList<StringOption> _droneOptions = [];
     private IReadOnlyList<StringOption> _defaultInfrastOptions = [];
@@ -122,6 +140,7 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             OnPropertyChanged(nameof(ShowThresholdSettings));
             OnPropertyChanged(nameof(ShowDormFilterSettings));
             OnPropertyChanged(nameof(CanEditDrones));
+            OnPropertyChanged(nameof(ShowCrossFacilitySettings));
 
             QueuePersist();
             if (IsCustomMode)
@@ -282,6 +301,207 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
     public bool ShowDormFilterSettings => !IsRotationMode;
 
     public bool CanEditDrones => !IsCustomMode;
+
+    // WPF dev-v2 (c281b7aaca / 59963a90cb / 97d5e8ac38): the Fiammetta recovery and
+    // the four cross-facility teams only apply to the default (Normal) mode.
+    public bool ShowCrossFacilitySettings => Mode == InfrastModeNormal;
+
+    // Deferred: building these options touches resource/battle_data.json for the
+    // localized operator names, so only pay that cost once the panel is shown.
+    public IReadOnlyList<StringOption> FiammettaTargetOptions
+        => _fiammettaTargetOptions ??= BuildFiammettaTargetOptions();
+
+    public IReadOnlyList<StringOption> OptionalFiammettaTargetOptions
+        => _optionalFiammettaTargetOptions ??=
+        [
+            new StringOption(string.Empty, Texts.GetOrDefault("Infrast.Fiammetta.Target.None", "None")),
+            .. FiammettaTargetOptions,
+        ];
+
+    private static readonly string[] FiammettaTargetNames =
+    [
+        "清流", "可露希尔", "但书", "巫恋", "龙舌兰", "歌蕾蒂娅",
+        "琴柳", "承曦格雷伊", "温蒂", "槐琥", "至简", "旅骨",
+    ];
+
+    private IReadOnlyList<StringOption> BuildFiammettaTargetOptions()
+    {
+        var operNames = OperNameIndex.Shared;
+        return FiammettaTargetNames
+            .Select(name => new StringOption(name, operNames.GetLocalizedDisplayName(name, Texts.Language)))
+            .ToArray();
+    }
+
+    public bool ShowFiammettaTargets => FiammettaRecoveryEnabled;
+
+    public bool FiammettaRecoveryEnabled
+    {
+        get => _fiammettaRecoveryEnabled;
+        set
+        {
+            if (!SetProperty(ref _fiammettaRecoveryEnabled, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(ShowFiammettaTargets));
+            QueuePersist();
+        }
+    }
+
+    public string FiammettaTarget1
+    {
+        get => _fiammettaTarget1;
+        set => SetFiammettaTarget(ref _fiammettaTarget1, value, nameof(FiammettaTarget1));
+    }
+
+    public string FiammettaTarget2
+    {
+        get => _fiammettaTarget2;
+        set => SetFiammettaTarget(ref _fiammettaTarget2, value, nameof(FiammettaTarget2));
+    }
+
+    public string FiammettaTarget3
+    {
+        get => _fiammettaTarget3;
+        set => SetFiammettaTarget(ref _fiammettaTarget3, value, nameof(FiammettaTarget3));
+    }
+
+    public bool UsePinusSylvestris
+    {
+        get => _usePinusSylvestris;
+        set
+        {
+            if (!SetProperty(ref _usePinusSylvestris, value))
+            {
+                return;
+            }
+
+            QueuePersist();
+        }
+    }
+
+    public bool UsePerceptionInformation
+    {
+        get => _usePerceptionInformation;
+        set
+        {
+            if (!SetProperty(ref _usePerceptionInformation, value))
+            {
+                return;
+            }
+
+            QueuePersist();
+        }
+    }
+
+    public bool UseWorldlyPlight
+    {
+        get => _useWorldlyPlight;
+        set
+        {
+            if (!SetProperty(ref _useWorldlyPlight, value))
+            {
+                return;
+            }
+
+            QueuePersist();
+        }
+    }
+
+    public bool UseAbyssalHunter
+    {
+        get => _useAbyssalHunter;
+        set
+        {
+            if (!SetProperty(ref _useAbyssalHunter, value))
+            {
+                return;
+            }
+
+            QueuePersist();
+        }
+    }
+
+    public bool UseWeeklySchedule
+    {
+        get => _useWeeklySchedule;
+        set
+        {
+            if (!SetProperty(ref _useWeeklySchedule, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(ShowWeeklyScheduleDays));
+            QueuePersist();
+        }
+    }
+
+    public bool ShowWeeklyScheduleDays => UseWeeklySchedule;
+
+    public bool WeeklyScheduleSunday
+    {
+        get => _weeklyScheduleSunday;
+        set => SetWeeklyScheduleDay(ref _weeklyScheduleSunday, value, nameof(WeeklyScheduleSunday));
+    }
+
+    public bool WeeklyScheduleMonday
+    {
+        get => _weeklyScheduleMonday;
+        set => SetWeeklyScheduleDay(ref _weeklyScheduleMonday, value, nameof(WeeklyScheduleMonday));
+    }
+
+    public bool WeeklyScheduleTuesday
+    {
+        get => _weeklyScheduleTuesday;
+        set => SetWeeklyScheduleDay(ref _weeklyScheduleTuesday, value, nameof(WeeklyScheduleTuesday));
+    }
+
+    public bool WeeklyScheduleWednesday
+    {
+        get => _weeklyScheduleWednesday;
+        set => SetWeeklyScheduleDay(ref _weeklyScheduleWednesday, value, nameof(WeeklyScheduleWednesday));
+    }
+
+    public bool WeeklyScheduleThursday
+    {
+        get => _weeklyScheduleThursday;
+        set => SetWeeklyScheduleDay(ref _weeklyScheduleThursday, value, nameof(WeeklyScheduleThursday));
+    }
+
+    public bool WeeklyScheduleFriday
+    {
+        get => _weeklyScheduleFriday;
+        set => SetWeeklyScheduleDay(ref _weeklyScheduleFriday, value, nameof(WeeklyScheduleFriday));
+    }
+
+    public bool WeeklyScheduleSaturday
+    {
+        get => _weeklyScheduleSaturday;
+        set => SetWeeklyScheduleDay(ref _weeklyScheduleSaturday, value, nameof(WeeklyScheduleSaturday));
+    }
+
+    private void SetFiammettaTarget(ref string field, string? value, string propertyName)
+    {
+        var normalized = value?.Trim() ?? string.Empty;
+        if (!SetProperty(ref field, normalized, propertyName))
+        {
+            return;
+        }
+
+        QueuePersist();
+    }
+
+    private void SetWeeklyScheduleDay(ref bool field, bool value, string propertyName)
+    {
+        if (!SetProperty(ref field, value, propertyName))
+        {
+            return;
+        }
+
+        QueuePersist();
+    }
 
     public bool ContinueTraining
     {
@@ -620,6 +840,22 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             ReceptionMessageBoard = model.ReceptionMessageBoard;
             ReceptionClueExchange = model.ReceptionClueExchange;
             ReceptionSendClue = model.ReceptionSendClue;
+            FiammettaRecoveryEnabled = model.FiammettaRecoveryEnabled;
+            FiammettaTarget1 = model.FiammettaTargets.ElementAtOrDefault(0) ?? string.Empty;
+            FiammettaTarget2 = model.FiammettaTargets.ElementAtOrDefault(1) ?? string.Empty;
+            FiammettaTarget3 = model.FiammettaTargets.ElementAtOrDefault(2) ?? string.Empty;
+            UsePinusSylvestris = model.UsePinusSylvestris;
+            UsePerceptionInformation = model.UsePerceptionInformation;
+            UseWorldlyPlight = model.UseWorldlyPlight;
+            UseAbyssalHunter = model.UseAbyssalHunter;
+            UseWeeklySchedule = model.UseWeeklySchedule;
+            WeeklyScheduleSunday = model.WeeklyScheduleSunday;
+            WeeklyScheduleMonday = model.WeeklyScheduleMonday;
+            WeeklyScheduleTuesday = model.WeeklyScheduleTuesday;
+            WeeklyScheduleWednesday = model.WeeklyScheduleWednesday;
+            WeeklyScheduleThursday = model.WeeklyScheduleThursday;
+            WeeklyScheduleFriday = model.WeeklyScheduleFriday;
+            WeeklyScheduleSaturday = model.WeeklyScheduleSaturday;
             ConfigureFacilityOptions(model.Facility, model.FacilityOrder);
         }
         finally
@@ -653,6 +889,20 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             ReceptionSendClue = ReceptionSendClue,
             Filename = CustomFilePath,
             PlanIndex = SelectedPlanIndex,
+            FiammettaTargets = [FiammettaTarget1, FiammettaTarget2, FiammettaTarget3],
+            FiammettaRecoveryEnabled = FiammettaRecoveryEnabled,
+            UsePinusSylvestris = UsePinusSylvestris,
+            UsePerceptionInformation = UsePerceptionInformation,
+            UseWorldlyPlight = UseWorldlyPlight,
+            UseAbyssalHunter = UseAbyssalHunter,
+            UseWeeklySchedule = UseWeeklySchedule,
+            WeeklyScheduleSunday = WeeklyScheduleSunday,
+            WeeklyScheduleMonday = WeeklyScheduleMonday,
+            WeeklyScheduleTuesday = WeeklyScheduleTuesday,
+            WeeklyScheduleWednesday = WeeklyScheduleWednesday,
+            WeeklyScheduleThursday = WeeklyScheduleThursday,
+            WeeklyScheduleFriday = WeeklyScheduleFriday,
+            WeeklyScheduleSaturday = WeeklyScheduleSaturday,
         };
 
         return model.ToJson();
@@ -709,9 +959,14 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
             new StringOption("333_layout_for_Orundum_3_times_a_day.json", Texts.GetOrDefault("Infrast.Default.333Time3", "333 (orundum, 3 shifts/day)")),
         ];
 
+        _fiammettaTargetOptions = null;
+        _optionalFiammettaTargetOptions = null;
+
         OnPropertyChanged(nameof(ModeOptions));
         OnPropertyChanged(nameof(DroneOptions));
         OnPropertyChanged(nameof(DefaultInfrastOptions));
+        OnPropertyChanged(nameof(FiammettaTargetOptions));
+        OnPropertyChanged(nameof(OptionalFiammettaTargetOptions));
         OnPropertyChanged(nameof(SelectedModeOption));
         OnPropertyChanged(nameof(SelectedDroneOption));
         OnPropertyChanged(nameof(SelectedDefaultInfrastOption));

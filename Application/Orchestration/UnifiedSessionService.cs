@@ -1335,20 +1335,41 @@ public sealed class UnifiedSessionService
 
     private bool ShouldSkipTaskForToday(UnifiedTaskItem task, UnifiedProfile profile, UnifiedConfig config)
     {
-        if (!string.Equals(TaskParamCompiler.NormalizeTaskType(task.Type), TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var (dto, _) = TaskParamCompiler.ReadFight(task, strict: false);
-        if (!dto.UseWeeklySchedule)
+        var normalizedType = TaskParamCompiler.NormalizeTaskType(task.Type);
+        var isFight = string.Equals(normalizedType, TaskModuleTypes.Fight, StringComparison.OrdinalIgnoreCase);
+        // WPF dev-v2 (3e570d1c23) gates the whole Infrast task on the same weekly
+        // schedule shape the Fight task already used (5a55fc8ac1 era).
+        var isInfrast = string.Equals(normalizedType, TaskModuleTypes.Infrast, StringComparison.OrdinalIgnoreCase);
+        if (!isFight && !isInfrast)
         {
             return false;
         }
 
         var clientType = ResolveStringSetting(profile, config, LegacyConfigurationKeys.ClientType) ?? "Official";
         var currentDay = MallDailyResetHelper.GetYjDate(DateTime.UtcNow, clientType).DayOfWeek;
-        return !IsFightEnabledForDay(dto, currentDay);
+        if (isFight)
+        {
+            var (dto, _) = TaskParamCompiler.ReadFight(task, strict: false);
+            return dto.UseWeeklySchedule && !IsFightEnabledForDay(dto, currentDay);
+        }
+
+        var infrast = InfrastParams.FromJson(task.Params);
+        return infrast.UseWeeklySchedule && !IsInfrastEnabledForDay(infrast, currentDay);
+    }
+
+    private static bool IsInfrastEnabledForDay(InfrastParams parameters, DayOfWeek dayOfWeek)
+    {
+        return dayOfWeek switch
+        {
+            DayOfWeek.Sunday => parameters.WeeklyScheduleSunday,
+            DayOfWeek.Monday => parameters.WeeklyScheduleMonday,
+            DayOfWeek.Tuesday => parameters.WeeklyScheduleTuesday,
+            DayOfWeek.Wednesday => parameters.WeeklyScheduleWednesday,
+            DayOfWeek.Thursday => parameters.WeeklyScheduleThursday,
+            DayOfWeek.Friday => parameters.WeeklyScheduleFriday,
+            DayOfWeek.Saturday => parameters.WeeklyScheduleSaturday,
+            _ => true,
+        };
     }
 
     private IReadOnlyList<CoreTaskRequest> BuildUserDataUpdateCoreTasks(UnifiedTaskItem task, UnifiedProfile profile, UnifiedConfig config)

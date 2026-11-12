@@ -68,6 +68,12 @@
   <data name="Award.RecruitTip" xml:space="preserve">
     <value>该功能属于危险功能，可能会造成误抽。</value>
   </data>
+  <data name="Award.SignInEvent" xml:space="preserve">
+    <value>领取限时签到活动奖励</value>
+  </data>
+  <data name="Award.SignInEventTip" xml:space="preserve">
+    <value>仅支持常见横向版型；其他版型不支持，可能无法正常运作</value>
+  </data>
   <data name="Award.Special" xml:space="preserve">
     <value>领取周年赠送月卡奖励</value>
   </data>
@@ -1006,6 +1012,30 @@
   <data name="FurnitureDrop" xml:space="preserve">
     <value>家具</value>
   </data>
+  <data name="Game.Role.Caster" xml:space="preserve">
+    <value>术师</value>
+  </data>
+  <data name="Game.Role.Medic" xml:space="preserve">
+    <value>医疗</value>
+  </data>
+  <data name="Game.Role.Pioneer" xml:space="preserve">
+    <value>先锋</value>
+  </data>
+  <data name="Game.Role.Sniper" xml:space="preserve">
+    <value>狙击</value>
+  </data>
+  <data name="Game.Role.Special" xml:space="preserve">
+    <value>特种</value>
+  </data>
+  <data name="Game.Role.Support" xml:space="preserve">
+    <value>辅助</value>
+  </data>
+  <data name="Game.Role.Tank" xml:space="preserve">
+    <value>重装</value>
+  </data>
+  <data name="Game.Role.Warrior" xml:space="preserve">
+    <value>近卫</value>
+  </data>
   <data name="GameDrop" xml:space="preserve">
     <value>游戏掉线，停止任务</value>
   </data>
@@ -1162,11 +1192,125 @@
   <data name="Dorm" xml:space="preserve">
     <value>宿舍</value>
   </data>
+  <data name="Infrast.Fiammetta.Recovery" xml:space="preserve">
+    <value>启用菲亚梅塔心情恢复</value>
+  </data>
+  <data name="Infrast.Fiammetta.Recovery.Tip" xml:space="preserve">
+    <value>开启后，换班开始时会将恢复目标与满心情的菲亚梅塔放入宿舍互换心情，菲亚梅塔随后留在宿舍恢复心情。</value>
+  </data>
+  <data name="Infrast.Fiammetta.Target.None" xml:space="preserve">
+    <value>无</value>
+  </data>
+  <data name="Infrast.Fiammetta.Targets" xml:space="preserve">
+    <value>菲亚梅塔恢复目标</value>
+  </data>
+  <data name="Infrast.Fiammetta.Targets.Tip" xml:space="preserve">
+    <value>理论上恢复巫恋和龙舌兰可以实现 007，但自动换班下难以做到，因此不推荐选择。</value>
+  </data>
+  <data name="Infrast.UseAbyssalHunter" xml:space="preserve">
+    <value>使用深海猎人跨设施组合</value>
+  </data>
+  <data name="Infrast.UseAbyssalHunter.Tip" xml:space="preserve">
+    <value>必要干员：歌蕾蒂娅（精二）、乌尔比安、斯卡蒂、幽灵鲨、安哲拉。因算法原因，与红松骑士团同时勾选时不会同时参与排班。</value>
+  </data>
+  <data name="Infrast.UsePerceptionInformation" xml:space="preserve">
+    <value>使用感知信息跨设施组合</value>
+  </data>
+  <data name="Infrast.UsePerceptionInformation.Tip" xml:space="preserve">
+    <value>必要干员：絮雨（精二）、迷迭香（精二）、黑键（精二）。参与计算干员：夕、塑心、爱丽丝、车尔尼。优先度高于人间烟火。</value>
+  </data>
+  <data name="Infrast.UsePinusSylvestris" xml:space="preserve">
+    <value>使用红松骑士团跨设施组合</value>
+  </data>
+  <data name="Infrast.UsePinusSylvestris.Tip" xml:space="preserve">
+    <value>必要干员：焰尾（精二）、薇薇安娜（精二），以及野鬃（精二）、灰毫（精二）、远牙（精二）至少一个。参与计算干员：砾。</value>
+  </data>
+  <data name="Infrast.UseWeeklySchedule" xml:space="preserve">
+    <value>启用周计划</value>
+  </data>
+  <data name="Infrast.UseWeeklySchedule.Tip" xml:space="preserve">
+    <value>此处星期按游戏时间计算，并非现实时间。例如游戏在 4:00 刷新，则 3:59 仍算作前一天。</value>
+  </data>
+  <data name="Infrast.UseWorldlyPlight" xml:space="preserve">
+    <value>使用人间烟火跨设施组合</value>
+  </data>
+  <data name="Infrast.UseWorldlyPlight.Tip" xml:space="preserve">
+    <value>必要干员：桑葚（精二）、乌有（精二）。参与计算干员：重岳、令、夕。</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Friday" xml:space="preserve">
+    <value>周五</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Monday" xml:space="preserve">
+    <value>周一</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>周六</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Sunday" xml:space="preserve">
+    <value>周日</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>周四</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Tuesday" xml:space="preserve">
+    <value>周二</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Wednesday" xml:space="preserve">
+    <value>周三</value>
+  </data>
   <data name="Mfg" xml:space="preserve">
     <value>制造站</value>
   </data>
   <data name="Office" xml:space="preserve">
     <value>办公室</value>
+  </data>
+  <data name="OperProgress.AddPlan" xml:space="preserve">
+    <value>添加干员</value>
+  </data>
+  <data name="OperProgress.EmptyHint" xml:space="preserve">
+    <value>尚未添加培养计划，运行时将跳过该任务。</value>
+  </data>
+  <data name="OperProgress.Mastery1" xml:space="preserve">
+    <value>专精 1</value>
+  </data>
+  <data name="OperProgress.Mastery2" xml:space="preserve">
+    <value>专精 2</value>
+  </data>
+  <data name="OperProgress.Mastery3" xml:space="preserve">
+    <value>专精 3</value>
+  </data>
+  <data name="OperProgress.MoveDown" xml:space="preserve">
+    <value>下移</value>
+  </data>
+  <data name="OperProgress.MoveUp" xml:space="preserve">
+    <value>上移</value>
+  </data>
+  <data name="OperProgress.NameRequired" xml:space="preserve">
+    <value>请先填写干员名。</value>
+  </data>
+  <data name="OperProgress.NotSet" xml:space="preserve">
+    <value>---</value>
+  </data>
+  <data name="OperProgress.OperatorName" xml:space="preserve">
+    <value>干员</value>
+  </data>
+  <data name="OperProgress.OperatorNameTip" xml:space="preserve">
+    <value>支持任意语言的写法，保存时会归一为 Core 可识别的干员名。</value>
+  </data>
+  <data name="OperProgress.OperatorNameWatermark" xml:space="preserve">
+    <value>干员名</value>
+  </data>
+  <data name="OperProgress.Plans" xml:space="preserve">
+    <value>培养计划</value>
+  </data>
+  <data name="OperProgress.Remove" xml:space="preserve">
+    <value>移除</value>
+  </data>
+  <data name="OperProgress.Title" xml:space="preserve">
+    <value>干员培养</value>
+  </data>
+  <data name="OperProgress.UnknownOperator" xml:space="preserve">
+    <value>未识别的干员名，MaaCore 将拒绝该条计划。</value>
   </data>
   <data name="Power" xml:space="preserve">
     <value>发电站</value>
@@ -1182,6 +1326,27 @@
   </data>
   <data name="RecruitmentOfStar" xml:space="preserve">
     <value>公招出 {0} 星了哦！</value>
+  </data>
+  <data name="SwitchTheme.EmptyHint" xml:space="preserve">
+    <value>未填写主题名称，运行时将跳过该任务。</value>
+  </data>
+  <data name="SwitchTheme.Placeholder" xml:space="preserve">
+    <value>主题名称</value>
+  </data>
+  <data name="SwitchTheme.Themes" xml:space="preserve">
+    <value>候选主题</value>
+  </data>
+  <data name="SwitchTheme.ThemesTip" xml:space="preserve">
+    <value>填写游戏内主题列表中显示的名称；多个时每次运行随机选择一个，仅填一个时固定切换。</value>
+  </data>
+  <data name="SwitchTheme.Title" xml:space="preserve">
+    <value>更换主题</value>
+  </data>
+  <data name="TaskQueue.Module.OperProgress" xml:space="preserve">
+    <value>干员培养</value>
+  </data>
+  <data name="TaskQueue.Module.SwitchTheme" xml:space="preserve">
+    <value>更换主题</value>
   </data>
   <data name="TaskStallWarning" xml:space="preserve">
     <value>任务日志已超过 {0} 分钟没有更新（当前已停滞 {1} 分钟），请检查任务是否仍在正常运行。</value>

@@ -12,6 +12,7 @@ public sealed class AwardModuleViewModel : TaskModuleSettingsViewModelBase
     private bool _orundum;
     private bool _mining;
     private bool _specialAccess;
+    private bool _signInEvent;
     private bool _pendingFreeGachaConfirmation;
     private bool _allowFreeGachaEnable;
 
@@ -121,6 +122,21 @@ public sealed class AwardModuleViewModel : TaskModuleSettingsViewModelBase
         }
     }
 
+    // WPF dev-v2 (19699d8483): 限时签到活动奖励（仅通用横版版式，不含新春）。
+    public bool SignInEvent
+    {
+        get => _signInEvent;
+        set
+        {
+            if (!SetProperty(ref _signInEvent, value))
+            {
+                return;
+            }
+
+            QueuePersist();
+        }
+    }
+
     public bool PendingFreeGachaConfirmation
     {
         get => _pendingFreeGachaConfirmation;
@@ -158,6 +174,7 @@ public sealed class AwardModuleViewModel : TaskModuleSettingsViewModelBase
         Orundum = model.Orundum;
         Mining = model.Mining;
         SpecialAccess = model.SpecialAccess;
+        SignInEvent = model.SignInEvent;
         PendingFreeGachaConfirmation = false;
         _allowFreeGachaEnable = false;
         return Task.CompletedTask;
@@ -173,6 +190,7 @@ public sealed class AwardModuleViewModel : TaskModuleSettingsViewModelBase
             Orundum = Orundum,
             Mining = Mining,
             SpecialAccess = SpecialAccess,
+            SignInEvent = SignInEvent,
         }.ToJson();
     }
 }

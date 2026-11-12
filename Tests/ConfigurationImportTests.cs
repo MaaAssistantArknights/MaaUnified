@@ -1175,6 +1175,222 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task GuiNewImport_AwardSignInEvent_MapsToCoreSignInEvent()
+    {
+        // WPF dev-v2 (19699d8483) adds AwardTask.SignInEvent; v6.3.7 payloads have
+        // no such property and must keep defaulting to off.
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "AwardTask",
+                      "Name": "AwardDevV2",
+                      "IsEnable": true,
+                      "Mail": true,
+                      "SignInEvent": true
+                    },
+                    {
+                      "$type": "AwardTask",
+                      "Name": "AwardFrozen",
+                      "IsEnable": true
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        var devV2 = tasks.Single(task => task.Name == "AwardDevV2");
+        Assert.True(devV2.Params["signinevent"]?.GetValue<bool>());
+        Assert.True(devV2.Params["mail"]?.GetValue<bool>());
+
+        var frozen = tasks.Single(task => task.Name == "AwardFrozen");
+        Assert.False(frozen.Params["signinevent"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_SwitchThemeAndOperProgressTasks_AreSupportedManagedTypes()
+    {
+        // WPF dev-v2 adds both task types (9c86aae937 / a412e6a294); imported rows must
+        // stay enabled with their managed parameter shape instead of degrading to an
+        // unsupported disabled row.
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "SwitchThemeTask",
+                      "Name": "Theme",
+                      "IsEnable": true,
+                      "Themes": ["罗德岛", "彩六"]
+                    },
+                    {
+                      "$type": "OperProgressTask",
+                      "Name": "Oper",
+                      "IsEnable": true,
+                      "Plans": [
+                        {
+                          "Role": "Warrior",
+                          "Name": "陈",
+                          "Elite": 2,
+                          "SkillLevel": 7,
+                          "SkillMastery": [0, 0, 3],
+                          "ShowRole": false
+                        },
+                        {
+                          "Role": "Special",
+                          "Name": "罗宾",
+                          "Elite": 0,
+                          "SkillLevel": 0,
+                          "SkillMastery": [0, 0, 0]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        Assert.Equal(2, tasks.Count);
+        Assert.DoesNotContain(
+            report.Warnings,
+            warning => warning.Contains("Unsupported legacy task type", StringComparison.Ordinal));
+
+        var theme = tasks.Single(task => task.Name == "Theme");
+        Assert.Equal(TaskModuleTypes.SwitchTheme, theme.Type);
+        Assert.True(theme.IsEnabled);
+        Assert.Equal(
+            ["罗德岛", "彩六"],
+            ReadStringArray((JsonArray)theme.Params["themes"]!));
+
+        var oper = tasks.Single(task => task.Name == "Oper");
+        Assert.Equal(TaskModuleTypes.OperProgress, oper.Type);
+        Assert.True(oper.IsEnabled);
+        var plans = Assert.IsType<JsonArray>(oper.Params["plans"]);
+        Assert.Equal(2, plans.Count);
+        Assert.Equal("陈", plans[0]!["name"]!.GetValue<string>());
+        Assert.Equal("Warrior", plans[0]!["role"]!.GetValue<string>());
+        Assert.Equal(2, plans[0]!["elite"]!.GetValue<int>());
+        Assert.Equal(7, plans[0]!["skill_level"]!.GetValue<int>());
+        Assert.Equal([0, 0, 3], plans[0]!["skill_mastery"]!.AsArray().Select(node => node!.GetValue<int>()));
+        // Zero targets are omitted so Core treats them as "no requirement".
+        Assert.Null(plans[1]!["elite"]);
+        Assert.Null(plans[1]!["skill_level"]);
+        Assert.Null(plans[1]!["skill_mastery"]);
+    }
+
+    [Fact]
+    public async Task GuiNewImport_InfrastDevV2Params_MapToManagedShape()
+    {
+        // WPF dev-v2 c281b7aaca / 59963a90cb / 97d5e8ac38 / 3e570d1c23: the three
+        // Fiammetta target fields collapse into the deduped target list, and the
+        // weekly schedule stays UI-only state.
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "InfrastTask",
+                      "Name": "Infrast",
+                      "IsEnable": true,
+                      "Mode": "Normal",
+                      "FiammettaTarget1": "清流",
+                      "FiammettaTarget2": "清流",
+                      "FiammettaTarget3": " ",
+                      "FiammettaRecoveryEnabled": true,
+                      "UsePinusSylvestris": true,
+                      "UsePerceptionInformation": false,
+                      "UseWorldlyPlight": true,
+                      "UseAbyssalHunter": false,
+                      "UseWeeklySchedule": true,
+                      "WeeklySchedule": {
+                        "Monday": false,
+                        "Tuesday": true
+                      }
+                    },
+                    {
+                      "$type": "InfrastTask",
+                      "Name": "InfrastFrozen",
+                      "IsEnable": true,
+                      "Mode": "Normal"
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        var infrast = tasks.Single(task => task.Name == "Infrast");
+        Assert.Equal(TaskModuleTypes.Infrast, infrast.Type);
+        Assert.Equal(["清流"], ReadStringArray((JsonArray)infrast.Params["fiammetta_targets"]!));
+        Assert.True(infrast.Params["fiammetta_recovery_enabled"]?.GetValue<bool>());
+        Assert.True(infrast.Params["use_pinus_sylvestris"]?.GetValue<bool>());
+        Assert.False(infrast.Params["use_perception_information"]?.GetValue<bool>());
+        Assert.True(infrast.Params["use_worldly_plight"]?.GetValue<bool>());
+        Assert.False(infrast.Params["use_abyssal_hunter"]?.GetValue<bool>());
+        Assert.True(infrast.Params["_ui_use_weekly_schedule"]?.GetValue<bool>());
+        Assert.False(infrast.Params["_ui_weekly_schedule_monday"]?.GetValue<bool>());
+        Assert.True(infrast.Params["_ui_weekly_schedule_tuesday"]?.GetValue<bool>());
+        // Missing day entries default to enabled, matching WPF JsonPredict behavior.
+        Assert.True(infrast.Params["_ui_weekly_schedule_sunday"]?.GetValue<bool>());
+        Assert.True(infrast.Params["_ui_weekly_schedule_saturday"]?.GetValue<bool>());
+
+        var runtime = TaskParamCompiler.BuildCoreParams(TaskModuleTypes.Infrast, infrast.Params);
+        Assert.Equal(["清流"], ReadStringArray((JsonArray)runtime["fiammetta_targets"]!));
+        Assert.True(runtime["fiammetta_recovery_enabled"]?.GetValue<bool>());
+        Assert.DoesNotContain(
+            runtime.Select(pair => pair.Key),
+            key => key.StartsWith("_ui_", StringComparison.Ordinal));
+
+        // v6.3.7 rows carry no Fiammetta fields: keep the WPF task defaults.
+        var frozen = tasks.Single(task => task.Name == "InfrastFrozen");
+        Assert.Equal(
+            ["清流", "可露希尔", "但书"],
+            ReadStringArray((JsonArray)frozen.Params["fiammetta_targets"]!));
+        Assert.False(frozen.Params["fiammetta_recovery_enabled"]?.GetValue<bool>());
+        Assert.False(frozen.Params["_ui_use_weekly_schedule"]?.GetValue<bool>());
+        Assert.True(frozen.Params["_ui_weekly_schedule_monday"]?.GetValue<bool>());
+    }
+
+    [Fact]
     public async Task GuiNewImport_RoguelikeModeRepairsAndEmptyParadigms_MatchFrozenWpf()
     {
         var root = CreateTempRoot();

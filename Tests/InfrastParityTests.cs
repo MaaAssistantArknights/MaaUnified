@@ -47,6 +47,94 @@ public sealed class InfrastParityTests
     }
 
     [Fact]
+    public void CompileTask_EmitsDevV2FiammettaAndCrossFacilityParams()
+    {
+        // WPF dev-v2 c281b7aaca / 59963a90cb / 97d5e8ac38: AsstInfrastTask sends the
+        // deduped <=3 Fiammetta target list, the recovery flag and four team flags.
+        var task = new UnifiedTaskItem
+        {
+            Type = TaskModuleTypes.Infrast,
+            Params = new JsonObject
+            {
+                ["mode"] = 0,
+                ["fiammetta_targets"] = new JsonArray(" 清流 ", "清流", "可露希尔", string.Empty, "但书", "巫恋"),
+                ["fiammetta_recovery_enabled"] = true,
+                ["use_pinus_sylvestris"] = true,
+                ["use_perception_information"] = true,
+                ["use_worldly_plight"] = true,
+                ["use_abyssal_hunter"] = true,
+            },
+        };
+
+        var compiled = TaskParamCompiler.CompileTask(task, new UnifiedProfile(), new UnifiedConfig(), strict: true);
+        Assert.False(compiled.HasBlockingIssues);
+        Assert.Equal(["清流", "可露希尔", "但书"], ReadStrings(compiled.Params, "fiammetta_targets"));
+
+        var runtime = TaskParamCompiler.BuildCoreParams(TaskModuleTypes.Infrast, compiled.Params);
+        Assert.Equal(["清流", "可露希尔", "但书"], ReadStrings(runtime, "fiammetta_targets"));
+        Assert.True(runtime["fiammetta_recovery_enabled"]?.GetValue<bool>());
+        Assert.True(runtime["use_pinus_sylvestris"]?.GetValue<bool>());
+        Assert.True(runtime["use_perception_information"]?.GetValue<bool>());
+        Assert.True(runtime["use_worldly_plight"]?.GetValue<bool>());
+        Assert.True(runtime["use_abyssal_hunter"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public void BuildCoreParams_Infrast_StripsWeeklyScheduleUiKeys()
+    {
+        // WPF dev-v2 3e570d1c23 keeps UseWeeklySchedule/WeeklySchedule UI-only; Core
+        // never receives them (the whole task is skipped on a disabled day instead).
+        var runtime = TaskParamCompiler.BuildCoreParams(
+            TaskModuleTypes.Infrast,
+            new JsonObject
+            {
+                ["mode"] = 0,
+                ["_ui_use_weekly_schedule"] = true,
+                ["_ui_weekly_schedule_sunday"] = true,
+                ["_ui_weekly_schedule_monday"] = false,
+            });
+
+        Assert.Null(runtime["_ui_use_weekly_schedule"]);
+        Assert.Null(runtime["_ui_weekly_schedule_sunday"]);
+        Assert.Null(runtime["_ui_weekly_schedule_monday"]);
+        Assert.Null(runtime["_ui_facility_order"]);
+        Assert.Equal("Money", runtime["drones"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void InfrastParams_DefaultsMatchWpfDevV2()
+    {
+        var model = InfrastParams.FromJson(new JsonObject());
+
+        Assert.Equal(["清流", "可露希尔", "但书"], model.FiammettaTargets);
+        Assert.False(model.FiammettaRecoveryEnabled);
+        Assert.False(model.UsePinusSylvestris);
+        Assert.False(model.UsePerceptionInformation);
+        Assert.False(model.UseWorldlyPlight);
+        Assert.False(model.UseAbyssalHunter);
+        Assert.False(model.UseWeeklySchedule);
+        Assert.True(model.WeeklyScheduleSunday);
+        Assert.True(model.WeeklyScheduleMonday);
+        Assert.True(model.WeeklyScheduleTuesday);
+        Assert.True(model.WeeklyScheduleWednesday);
+        Assert.True(model.WeeklyScheduleThursday);
+        Assert.True(model.WeeklyScheduleFriday);
+        Assert.True(model.WeeklyScheduleSaturday);
+
+        // Explicit values, including an explicitly empty target list, survive.
+        var explicitParams = InfrastParams.FromJson(new JsonObject
+        {
+            ["fiammetta_targets"] = new JsonArray(),
+            ["_ui_use_weekly_schedule"] = true,
+            ["_ui_weekly_schedule_friday"] = false,
+        });
+        Assert.Empty(explicitParams.FiammettaTargets);
+        Assert.True(explicitParams.UseWeeklySchedule);
+        Assert.False(explicitParams.WeeklyScheduleFriday);
+        Assert.True(explicitParams.WeeklyScheduleThursday);
+    }
+
+    [Fact]
     public void BuildCoreParams_PartialFacility_FillsMissingDefaultsAndPreservesExplicitValues()
     {
         var runtime = TaskParamCompiler.BuildCoreParams(

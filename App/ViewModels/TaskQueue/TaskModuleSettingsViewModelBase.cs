@@ -238,6 +238,8 @@ public abstract class TaskModuleSettingsViewModelBase : ObservableObject, ITaskM
             "Infrast" => Texts.GetOrDefault("Infrast.Title", "基建换班"),
             "Mall" => Texts.GetOrDefault("Mall.Title", "信用收取"),
             "Award" => Texts.GetOrDefault("Award.Title", "领取奖励"),
+            "SwitchTheme" => Texts.GetOrDefault("SwitchTheme.Title", "更换主题"),
+            "OperProgress" => Texts.GetOrDefault("OperProgress.Title", "干员培养"),
             "TaskQueue.UserDataUpdate" => Texts.GetOrDefault("TaskQueue.Module.UserDataUpdate", "Update Data"),
             _ => ModuleType.StartsWith("TaskQueue.", StringComparison.Ordinal)
                 ? ModuleType["TaskQueue.".Length..]

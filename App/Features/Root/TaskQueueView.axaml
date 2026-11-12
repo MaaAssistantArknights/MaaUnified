@@ -31,6 +31,12 @@
     <DataTemplate DataType="taskVm:ReclamationModuleViewModel">
       <taskViews:ReclamationSettingsView />
     </DataTemplate>
+    <DataTemplate DataType="taskVm:SwitchThemeModuleViewModel">
+      <taskViews:SwitchThemeSettingsView />
+    </DataTemplate>
+    <DataTemplate DataType="taskVm:OperProgressModuleViewModel">
+      <taskViews:OperProgressSettingsView />
+    </DataTemplate>
     <DataTemplate DataType="taskVm:UserDataUpdateModuleViewModel">
       <taskViews:UserDataUpdateSettingsView />
     </DataTemplate>

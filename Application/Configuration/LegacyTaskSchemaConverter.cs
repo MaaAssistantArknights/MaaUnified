@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
+using MAAUnified.Application.Services.TaskParams;
 
 namespace MAAUnified.Application.Configuration;
 
@@ -42,6 +43,8 @@ internal static class LegacyTaskSchemaConverter
         ["UserDataUpdateTask"] = "UserDataUpdate",
         ["SingleStepTask"] = "SingleStep",
         ["CustomTask"] = "Custom",
+        ["SwitchThemeTask"] = "SwitchTheme",
+        ["OperProgressTask"] = "OperProgress",
         // Accept already migrated type names.
         ["StartUp"] = "StartUp",
         ["CloseDown"] = "CloseDown",
@@ -55,6 +58,8 @@ internal static class LegacyTaskSchemaConverter
         ["UserDataUpdate"] = "UserDataUpdate",
         ["SingleStep"] = "SingleStep",
         ["Custom"] = "Custom",
+        ["SwitchTheme"] = "SwitchTheme",
+        ["OperProgress"] = "OperProgress",
     };
 
     public static bool TryConvertLegacyTask(
@@ -64,7 +69,8 @@ internal static class LegacyTaskSchemaConverter
         out UnifiedTaskItem taskItem,
         out string? error,
         LegacyTaskSchemaConversionOptions? options = null,
-        string? uiLanguage = null)
+        string? uiLanguage = null,
+        OperNameIndex? operNames = null)
     {
         options ??= LegacyTaskSchemaConversionOptions.GuiJsonFlat;
 
@@ -109,6 +115,8 @@ internal static class LegacyTaskSchemaConverter
                 "UserDataUpdate" => ConvertUserDataUpdate(legacyTask),
                 "SingleStep" => ConvertSingleStep(legacyTask),
                 "Custom" => ConvertCustom(legacyTask),
+                "SwitchTheme" => ConvertSwitchTheme(legacyTask),
+                "OperProgress" => ConvertOperProgress(legacyTask, operNames ?? OperNameIndex.Shared),
                 _ => [],
             };
         }
@@ -547,6 +555,40 @@ internal static class LegacyTaskSchemaConverter
         result["filename"] = GetString(task, "Filename") ?? string.Empty;
         result["plan_index"] = Math.Max(-1, GetInt(task, "PlanSelect", -1));
 
+        // WPF dev-v2 (c281b7aaca / 59963a90cb / 97d5e8ac38): three Fiammetta target
+        // fields migrate into the Core `fiammetta_targets` list (trim/dedupe/<=3),
+        // and the four cross-facility team switches are plain flags.
+        // v6.3.7 configs have no Fiammetta fields; WPF InfrastTask defaults must
+        // survive instead of collapsing to an empty target list.
+        var hasFiammettaTargets = task.ContainsKey("FiammettaTarget1")
+            || task.ContainsKey("FiammettaTarget2")
+            || task.ContainsKey("FiammettaTarget3");
+        var fiammettaTargets = hasFiammettaTargets
+            ? InfrastParams.NormalizeFiammettaTargets(
+            [
+                GetString(task, "FiammettaTarget1") ?? string.Empty,
+                GetString(task, "FiammettaTarget2") ?? string.Empty,
+                GetString(task, "FiammettaTarget3") ?? string.Empty,
+            ])
+            : InfrastParams.DefaultFiammettaTargets.ToList();
+        result["fiammetta_targets"] = TaskParamJsonReader.ToJsonArray(fiammettaTargets);
+        result["fiammetta_recovery_enabled"] = GetBool(task, "FiammettaRecoveryEnabled", false);
+        result["use_pinus_sylvestris"] = GetBool(task, "UsePinusSylvestris", false);
+        result["use_perception_information"] = GetBool(task, "UsePerceptionInformation", false);
+        result["use_worldly_plight"] = GetBool(task, "UseWorldlyPlight", false);
+        result["use_abyssal_hunter"] = GetBool(task, "UseAbyssalHunter", false);
+
+        // WPF dev-v2 (3e570d1c23): weekly schedule gates the whole task. The stored
+        // day map defaults to all-enabled when the WPF JsonPredict skipped it.
+        result["_ui_use_weekly_schedule"] = GetBool(task, "UseWeeklySchedule", false);
+        result["_ui_weekly_schedule_sunday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Sunday);
+        result["_ui_weekly_schedule_monday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Monday);
+        result["_ui_weekly_schedule_tuesday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Tuesday);
+        result["_ui_weekly_schedule_wednesday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Wednesday);
+        result["_ui_weekly_schedule_thursday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Thursday);
+        result["_ui_weekly_schedule_friday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Friday);
+        result["_ui_weekly_schedule_saturday"] = ResolveLegacyWeeklySchedule(task, DayOfWeek.Saturday);
+
         if (task["RoomList"] is JsonArray || options.MissingInfrastRoomListDefault)
         {
             result["facility"] = facilities;
@@ -612,7 +654,104 @@ internal static class LegacyTaskSchemaConverter
             ["orundum"] = GetBool(task, "Orundum", false),
             ["mining"] = GetBool(task, "Mining", false),
             ["specialaccess"] = GetBool(task, "SpecialAccess", false),
+            // WPF dev-v2 (19699d8483) adds AsstAwardTask.SignInEvent; v6.3.7
+            // configs have no such property and default to false.
+            ["signinevent"] = GetBool(task, "SignInEvent", false),
         };
+    }
+
+    // WPF dev-v2 (9c86aae937): SwitchThemeTask.Themes is a flat candidate name list.
+    private static JsonObject ConvertSwitchTheme(JsonObject task)
+    {
+        return new JsonObject
+        {
+            ["themes"] = ToJsonArray(ReadStringArray(task, "Themes")),
+        };
+    }
+
+    // WPF dev-v2 (a412e6a294): OperProgressTask.Plans is an ordered list of
+    // records holding role/name plus zero-able elite/skill targets. WPF stores
+    // every field including zeros and omits zeros only when serializing to Core,
+    // so import keeps the same zero semantics (absent == no target).
+    private static JsonObject ConvertOperProgress(JsonObject task, OperNameIndex operNames)
+    {
+        var plans = new JsonArray();
+        if (task["Plans"] is JsonArray legacyPlans)
+        {
+            foreach (var planNode in legacyPlans)
+            {
+                if (planNode is not JsonObject legacyPlan)
+                {
+                    continue;
+                }
+
+                var name = operNames.NormalizeName(
+                    GetString(legacyPlan, "Name") ?? GetString(legacyPlan, "name") ?? string.Empty);
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    continue;
+                }
+
+                var plan = new OperProgressPlan
+                {
+                    Role = NormalizeLegacyOperProgressRole(legacyPlan["Role"] ?? legacyPlan["role"]),
+                    Name = name.Trim(),
+                    Elite = GetInt(legacyPlan, "Elite", GetInt(legacyPlan, "elite", 0)),
+                    SkillLevel = GetInt(legacyPlan, "SkillLevel", GetInt(legacyPlan, "skill_level", 0)),
+                };
+
+                var masteryNode = legacyPlan["SkillMastery"] ?? legacyPlan["skill_mastery"];
+                if (masteryNode is JsonArray masteryArray)
+                {
+                    for (var index = 0; index < plan.SkillMastery.Length && index < masteryArray.Count; index++)
+                    {
+                        if (masteryArray[index] is JsonValue masteryValue
+                            && masteryValue.TryGetValue(out int level))
+                        {
+                            plan.SkillMastery[index] = level;
+                        }
+                    }
+                }
+
+                plans.Add(plan.ToJson());
+            }
+        }
+
+        return new JsonObject
+        {
+            ["plans"] = plans,
+        };
+    }
+
+    private static string NormalizeLegacyOperProgressRole(JsonNode? roleNode)
+    {
+        if (roleNode is JsonValue value)
+        {
+            if (value.TryGetValue(out string? roleText))
+            {
+                return OperProgressRoles.Normalize(roleText);
+            }
+
+            if (value.TryGetValue(out int roleNumber))
+            {
+                // WPF OperatorRole enum order: Unknown, Warrior, Pioneer, Medic,
+                // Tank, Sniper, Caster, Support, Special, Drone, Trap.
+                return roleNumber switch
+                {
+                    1 => "Warrior",
+                    2 => "Pioneer",
+                    3 => "Medic",
+                    4 => "Tank",
+                    5 => "Sniper",
+                    6 => "Caster",
+                    7 => "Support",
+                    8 => "Special",
+                    _ => OperProgressRoles.Unknown,
+                };
+            }
+        }
+
+        return OperProgressRoles.Unknown;
     }
 
     private static JsonObject ConvertSingleStep(JsonObject task)
