@@ -18,6 +18,7 @@ using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.Notifications;
 using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
@@ -34,90 +35,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private const string WebApiRunOwnerId = "WebApi";
     private const string TaskSelectedIndexConfigKey = "TaskSelectedIndex";
     private const string TaskQueueSaveKey = "TaskQueue.Queue";
-    private const string ExternalNotificationCustomWebhookHeadersKey = "ExternalNotification.CustomWebhook.Headers";
     private static readonly TimeSpan LinkStartCancelStopTimeout = TimeSpan.FromSeconds(12);
     private static readonly TimeSpan ConnectRetryTotalBudget = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ConnectCandidateTotalBudget = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan AdbRecoveryCommandTimeout = TimeSpan.FromSeconds(8);
-    private static readonly IReadOnlyDictionary<string, string> NotificationProviderCanonicalNameMap =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["SMTP"] = "Smtp",
-            ["Smtp"] = "Smtp",
-            ["ServerChan"] = "ServerChan",
-            ["Bark"] = "Bark",
-            ["Discord"] = "Discord",
-            ["Discord Webhook"] = "DiscordWebhook",
-            ["DiscordWebhook"] = "DiscordWebhook",
-            ["DingTalk"] = "DingTalk",
-            ["Telegram"] = "Telegram",
-            ["Qmsg"] = "Qmsg",
-            ["Gotify"] = "Gotify",
-            ["Custom Webhook"] = "CustomWebhook",
-            ["CustomWebhook"] = "CustomWebhook",
-        };
-    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> ExternalNotificationProviderConfigKeyMap =
-        new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Smtp"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["server"] = ConfigurationKeys.ExternalNotificationSmtpServer,
-                ["port"] = ConfigurationKeys.ExternalNotificationSmtpPort,
-                ["user"] = ConfigurationKeys.ExternalNotificationSmtpUser,
-                ["password"] = ConfigurationKeys.ExternalNotificationSmtpPassword,
-                ["useSsl"] = ConfigurationKeys.ExternalNotificationSmtpUseSsl,
-                ["requiresAuthentication"] = ConfigurationKeys.ExternalNotificationSmtpRequiresAuthentication,
-                ["from"] = ConfigurationKeys.ExternalNotificationSmtpFrom,
-                ["to"] = ConfigurationKeys.ExternalNotificationSmtpTo,
-            },
-            ["ServerChan"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["sendKey"] = ConfigurationKeys.ExternalNotificationServerChanSendKey,
-            },
-            ["Bark"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["sendKey"] = ConfigurationKeys.ExternalNotificationBarkSendKey,
-                ["server"] = ConfigurationKeys.ExternalNotificationBarkServer,
-            },
-            ["Discord"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["botToken"] = ConfigurationKeys.ExternalNotificationDiscordBotToken,
-                ["userId"] = ConfigurationKeys.ExternalNotificationDiscordUserId,
-            },
-            ["DiscordWebhook"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["webhookUrl"] = ConfigurationKeys.ExternalNotificationDiscordWebhookUrl,
-            },
-            ["DingTalk"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["accessToken"] = ConfigurationKeys.ExternalNotificationDingTalkAccessToken,
-                ["secret"] = ConfigurationKeys.ExternalNotificationDingTalkSecret,
-            },
-            ["Telegram"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["botToken"] = ConfigurationKeys.ExternalNotificationTelegramBotToken,
-                ["chatId"] = ConfigurationKeys.ExternalNotificationTelegramChatId,
-                ["topicId"] = ConfigurationKeys.ExternalNotificationTelegramTopicId,
-            },
-            ["Qmsg"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["server"] = ConfigurationKeys.ExternalNotificationQmsgServer,
-                ["key"] = ConfigurationKeys.ExternalNotificationQmsgKey,
-                ["user"] = ConfigurationKeys.ExternalNotificationQmsgUser,
-                ["bot"] = ConfigurationKeys.ExternalNotificationQmsgBot,
-            },
-            ["Gotify"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["server"] = ConfigurationKeys.ExternalNotificationGotifyServer,
-                ["token"] = ConfigurationKeys.ExternalNotificationGotifyToken,
-            },
-            ["CustomWebhook"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["url"] = ConfigurationKeys.ExternalNotificationCustomWebhookUrl,
-                ["headers"] = ExternalNotificationCustomWebhookHeadersKey,
-                ["body"] = ConfigurationKeys.ExternalNotificationCustomWebhookBody,
-            },
-        };
     private static readonly string[] WpfDefaultTaskOrder =
     [
         TaskModuleTypes.StartUp,
@@ -340,6 +261,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private static readonly TimeSpan TaskQueueAutoSaveDelay = TimeSpan.FromMilliseconds(200);
     private const string UiMallCreditFightLastTime = "_ui_mall_credit_fight_last_time";
     private const string UiMallVisitFriendsLastTime = "_ui_mall_visit_friends_last_time";
+    private readonly NotificationLogHistory _notificationHistory = new();
+    private readonly ExternalNotificationTrigger _externalNotificationTrigger = new();
     private readonly SemaphoreSlim _logThumbnailSemaphore = new(1, 1);
     private readonly SemaphoreSlim _queueMutationLock = new(1, 1);
     private readonly SemaphoreSlim _runTransitionLock = new(1, 1);
@@ -6291,6 +6214,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         LogCards.Clear();
         OverlayLogs.Clear();
+        _notificationHistory.Clear();
         DownloadLogEntry = new TaskQueueLogEntryViewModel(string.Empty, string.Empty, "INFO");
         LastRuntimeStatus = null;
     }
@@ -6378,6 +6302,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             card = CreateLogCardIfNeeded();
             card.Append(entry);
             OverlayLogs.Add(entry);
+            _notificationHistory.Add(new NotificationLogRecord(
+                timestamp,
+                entry.Color ?? MapExternalLogColor(level),
+                content));
+            TryQueueLogTriggeredExternalNotification(content);
         }
 
         if (updateThumbnail)
@@ -6893,23 +6822,19 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             .Replace("{Preset}", Runtime.ConfigurationService.CurrentConfig.CurrentProfile, StringComparison.Ordinal)
             .Replace("{TimeDiff}", duration.ToString(@"h\h\ m\m\ s\s"), StringComparison.Ordinal);
 
-        var details = TryReadProfileBool(
-            Runtime.ConfigurationService.CurrentConfig,
-            ConfigurationKeys.ExternalNotificationEnableDetails,
-            false)
-            ? BuildExternalLogDetails(OverlayLogs)
-            : string.Empty;
+        // WPF f9c14e0be1: the delivery section decides how many earlier log lines travel with
+        // the notification; the legacy ｢include details｣ flag maps to IncludePreviousLogs with
+        // a 100-line cap (ExternalNotificationDeliveryPolicy.FromConfig).
+        var policy = ExternalNotificationDeliveryPolicy.FromConfig(Runtime.ConfigurationService.CurrentConfig);
         var sanityReport = BuildSanityRecoveryReport(timestamp);
-
-        var builder = new StringBuilder(details);
-        builder.Append(message);
+        var body = new StringBuilder(message);
         if (!string.IsNullOrWhiteSpace(sanityReport))
         {
-            builder.AppendLine();
-            builder.Append(sanityReport);
+            body.AppendLine();
+            body.Append(sanityReport);
         }
 
-        return builder.ToString();
+        return _notificationHistory.Bundle(body.ToString(), policy, timestamp);
     }
 
     private TaskQueueCallbackUserLog? BuildSubTaskErrorLog(CallbackPayload payload, int? taskIndex)
@@ -7123,7 +7048,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                         string.Empty,
                         "TaskQueue.Notification.Stalled",
                         "task output stalled",
-                        BuildExternalLogDetails(OverlayLogs.TakeLast(5)));
+                        _notificationHistory.Bundle(
+                            string.Empty,
+                            ExternalNotificationDeliveryPolicy.FromConfig(Runtime.ConfigurationService.CurrentConfig),
+                            DateTimeOffset.Now));
                     QueueAutomaticSystemNotification(systemNotification, _useSystemNotifications);
                     QueueAutomaticExternalNotification("TaskStalled", systemNotification);
                 });
@@ -7387,6 +7315,44 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             callbackName,
             notification,
             Runtime.ConfigurationService.CurrentConfig);
+        DispatchAutomaticExternalNotifications(requests, notification.Scope);
+    }
+
+    // WPF f9c14e0be1 NotificationTrigger: Delivery.SendAfterLogCount / SendWhenContentMatches can
+    // make any log line a delivery trigger. Dispatch reuses the callback notification path; the
+    // line itself is the title and body, matching NotificationService.ProcessLog.
+    private void TryQueueLogTriggeredExternalNotification(string content)
+    {
+        var config = Runtime.ConfigurationService.CurrentConfig;
+        var policy = ExternalNotificationDeliveryPolicy.FromConfig(config);
+        if (!policy.SendAfterLogCount && !policy.SendWhenContentMatches)
+        {
+            _externalNotificationTrigger.Reset();
+            return;
+        }
+
+        var channels = ExternalNotificationChannels.ResolveEnabled(config);
+        if (!_externalNotificationTrigger.ShouldSend(policy, content, null, channels.Count > 0))
+        {
+            return;
+        }
+
+        _externalNotificationTrigger.Reset();
+        var body = _notificationHistory.Bundle(content, policy, DateTimeOffset.Now, skipNewest: 1);
+        var requests = channels
+            .Select(channel => new NotificationProviderTestRequest(
+                channel.Provider,
+                ExternalNotificationChannels.BuildParameterText(channel),
+                content,
+                body))
+            .ToList();
+        DispatchAutomaticExternalNotifications(requests, "TaskQueue.Notification.LogTrigger");
+    }
+
+    private void DispatchAutomaticExternalNotifications(
+        IReadOnlyList<NotificationProviderTestRequest> requests,
+        string scope)
+    {
         if (requests.Count == 0)
         {
             return;
@@ -7402,10 +7368,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     if (!result.Success)
                     {
                         await RecordErrorAsync(
-                            notification.Scope,
+                            scope,
                             $"Failed to dispatch automatic external notification via {request.Provider}: {result.Message}");
                         await Runtime.DialogFeatureService.ReportErrorAsync(
-                            notification.Scope,
+                            scope,
                             UiOperationResult.Fail(
                                 result.Error?.Code ?? UiErrorCode.NotificationProviderFailed,
                                 $"External notification via {request.Provider} failed: {result.Message}",
@@ -7415,11 +7381,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 catch (Exception ex)
                 {
                     await RecordErrorAsync(
-                        notification.Scope,
+                        scope,
                         $"Failed to dispatch automatic external notification via {request.Provider}.",
                         ex);
                     await Runtime.DialogFeatureService.ReportErrorAsync(
-                        notification.Scope,
+                        scope,
                         UiOperationResult.Fail(
                             UiErrorCode.NotificationProviderFailed,
                             $"External notification via {request.Provider} failed."));
@@ -7433,8 +7399,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         TaskQueueSystemNotification notification,
         UnifiedConfig config)
     {
-        var enabledProviders = ResolveExternalNotificationProviders(config);
-        if (enabledProviders.Count == 0)
+        // WPF f9c14e0be1 migration: the removed ｢Discord Webhook｣ channel becomes a Custom
+        // Webhook channel with the saved URL and a {"content": "{content}"} body.
+        var channels = ExternalNotificationChannels.ResolveEnabled(config);
+        if (channels.Count == 0)
         {
             return [];
         }
@@ -7458,12 +7426,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
 
         var requests = new List<NotificationProviderTestRequest>();
-        foreach (var provider in enabledProviders)
+        foreach (var channel in channels)
         {
-            var parametersText = BuildExternalNotificationProviderParameterText(config, provider);
             requests.Add(new NotificationProviderTestRequest(
-                provider,
-                parametersText,
+                channel.Provider,
+                ExternalNotificationChannels.BuildParameterText(channel),
                 notification.Title,
                 NormalizeExternalNotificationMessage(notification)));
         }
@@ -7481,23 +7448,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return string.IsNullOrWhiteSpace(notification.Message)
             ? notification.Title
             : notification.Message;
-    }
-
-    private static string BuildExternalLogDetails(IEnumerable<TaskQueueLogEntryViewModel> entries)
-    {
-        var builder = new StringBuilder();
-        foreach (var entry in entries)
-        {
-            builder.Append('[')
-                .Append(entry.Time)
-                .Append("][")
-                .Append(entry.Color ?? MapExternalLogColor(entry.Level))
-                .Append(']')
-                .Append(entry.Content)
-                .Append('\n');
-        }
-
-        return builder.ToString();
     }
 
     private static string MapExternalLogColor(string level)
@@ -7526,53 +7476,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
 
         return TryReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true);
-    }
-
-    private static List<string> ResolveExternalNotificationProviders(UnifiedConfig config)
-    {
-        var rawValue = TryReadProfileString(config, ConfigurationKeys.ExternalNotificationEnabled, string.Empty);
-        if (string.IsNullOrWhiteSpace(rawValue))
-        {
-            return [];
-        }
-
-        var providers = new List<string>();
-        foreach (var segment in rawValue.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (NotificationProviderCanonicalNameMap.TryGetValue(segment, out var canonical)
-                && !providers.Contains(canonical, StringComparer.OrdinalIgnoreCase))
-            {
-                providers.Add(canonical);
-            }
-        }
-
-        return providers;
-    }
-
-    private static string BuildExternalNotificationProviderParameterText(UnifiedConfig config, string provider)
-    {
-        if (!ExternalNotificationProviderConfigKeyMap.TryGetValue(provider, out var keyMap))
-        {
-            return string.Empty;
-        }
-
-        var lines = new List<string>();
-        foreach (var (parameterKey, configKey) in keyMap)
-        {
-            var value = TryReadProfileString(config, configKey, string.Empty);
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                lines.Add($"{parameterKey}={value}");
-            }
-        }
-
-        if (string.Equals(provider, "Bark", StringComparison.OrdinalIgnoreCase)
-            && !lines.Any(line => line.StartsWith("server=", StringComparison.OrdinalIgnoreCase)))
-        {
-            lines.Add("server=https://api.day.app");
-        }
-
-        return string.Join(Environment.NewLine, lines);
     }
 
     private TaskQueueSystemNotification? TryBuildAutomaticSystemNotification(

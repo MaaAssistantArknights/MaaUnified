@@ -189,6 +189,81 @@ public sealed class TaskQueueNotificationTests
     }
 
     [Fact]
+    public async Task ContentMatchTrigger_SendsOnlyForWhitelistedLines()
+    {
+        var notificationProvider = new ScriptedNotificationProviderFeatureService();
+        await using var fixture = await NotificationFixture.CreateAsync(
+            useNotify: false,
+            notificationProviderFeatureService: notificationProvider);
+        if (fixture.Config.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Bark");
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenComplete] = JsonValue.Create(false);
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenError] = JsonValue.Create(false);
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenStalled] = JsonValue.Create(false);
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenContentMatches] = JsonValue.Create(true);
+            profile.Values[ConfigurationKeys.ExternalNotificationWhitelist] = JsonValue.Create("MATCH-ME");
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkSendKey] = JsonValue.Create("bark-key");
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkServer] = JsonValue.Create("https://api.day.app");
+        }
+
+        await fixture.ViewModel.InitializeAsync();
+
+        fixture.ViewModel.AppendSystemLog("unrelated-line");
+        await Task.Delay(150);
+        Assert.DoesNotContain(
+            notificationProvider.SendCalls,
+            static item => item.Title.Contains("unrelated-line", StringComparison.Ordinal));
+
+        fixture.ViewModel.AppendSystemLog("MATCH-ME");
+        var call = await WaitForExternalNotificationAsync(
+            notificationProvider,
+            static item => item.Title.Contains("MATCH-ME", StringComparison.Ordinal));
+        Assert.Equal("Bark", call.Provider);
+        Assert.Contains("MATCH-ME", call.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LogCountTrigger_SendsExternalNotificationForTheTriggeringLine()
+    {
+        var notificationProvider = new ScriptedNotificationProviderFeatureService();
+        await using var fixture = await NotificationFixture.CreateAsync(
+            useNotify: false,
+            notificationProviderFeatureService: notificationProvider);
+        if (fixture.Config.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Bark");
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenComplete] = JsonValue.Create(false);
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenError] = JsonValue.Create(false);
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenStalled] = JsonValue.Create(false);
+            // WPF f9c14e0be1 Delivery section: every third line may trigger a delivery.
+            profile.Values[ConfigurationKeys.ExternalNotificationSendAfterLogCount] = JsonValue.Create(true);
+            profile.Values[ConfigurationKeys.ExternalNotificationNewLogCount] = JsonValue.Create(3);
+            profile.Values[ConfigurationKeys.ExternalNotificationIncludePreviousLogs] = JsonValue.Create(true);
+            profile.Values[ConfigurationKeys.ExternalNotificationMaxEntries] = JsonValue.Create(5);
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkSendKey] = JsonValue.Create("bark-key");
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkServer] = JsonValue.Create("https://api.day.app");
+        }
+
+        await fixture.ViewModel.InitializeAsync();
+
+        for (var index = 0; index < 6; index++)
+        {
+            fixture.ViewModel.AppendSystemLog($"trigger-line-{index}");
+        }
+
+        var call = await WaitForExternalNotificationAsync(
+            notificationProvider,
+            static item => item.Title.StartsWith("trigger-line-", StringComparison.Ordinal));
+        Assert.Equal("Bark", call.Provider);
+        Assert.Contains("sendKey=bark-key", call.ParametersText, StringComparison.Ordinal);
+        // The triggering line is both title and body; it must not be duplicated as a previous log.
+        Assert.EndsWith(call.Title, call.Message, StringComparison.Ordinal);
+        var occurrences = call.Message.Split(call.Title, StringSplitOptions.None).Length - 1;
+        Assert.Equal(1, occurrences);
+    }
+
+    [Fact]
     public void StalledExternalNotification_PrefersWpfSetting_AndDefaultsToEnabled()
     {
         // WPF frozen 23ddd271 defaults ExternalNotificationSendWhenTimeout to true.
@@ -464,6 +539,26 @@ public sealed class TaskQueueNotificationTests
             throw new TimeoutException(
                 $"Expected notification count {expectedCount}, but saw {service.NotificationCallCount}.");
         }
+    }
+
+    private static async Task<NotificationProviderTestRequest> WaitForExternalNotificationAsync(
+        ScriptedNotificationProviderFeatureService service,
+        Func<NotificationProviderTestRequest, bool> predicate,
+        int timeoutMs = 2000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            var match = service.SendCalls.FirstOrDefault(predicate);
+            if (match is not null)
+            {
+                return match;
+            }
+
+            await Task.Delay(20);
+        }
+
+        throw new TimeoutException("Expected a matching external notification, but none was sent.");
     }
 
     private static async Task WaitForExternalNotificationCountAsync(

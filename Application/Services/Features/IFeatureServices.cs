@@ -630,7 +630,8 @@ public interface IDialogFeatureService
         DialogType dialogType,
         string sourceScope,
         string title,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        DialogLogDescriptor? logDescriptor = null);
 
     Task<UiOperationResult> RecordDialogActionAsync(
         DialogTraceToken token,
@@ -642,7 +643,8 @@ public interface IDialogFeatureService
         DialogTraceToken token,
         DialogReturnSemantic semantic,
         string summary,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? selection = null);
 
     Task<UiOperationResult> ReportErrorAsync(
         string context,

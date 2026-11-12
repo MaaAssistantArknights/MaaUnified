@@ -327,6 +327,16 @@ public static class ConfigurationKeys
     public const string ExternalNotificationSendWhenError = "ExternalNotification.SendWhenError";
     public const string ExternalNotificationSendWhenTimeout = "ExternalNotification.SendWhenTimeout";
     public const string ExternalNotificationSendWhenStalled = "ExternalNotification.SendWhenStalled";
+    public const string ExternalNotificationIncludePreviousLogs = "ExternalNotification.IncludePreviousLogs";
+    public const string ExternalNotificationMaxEntries = "ExternalNotification.MaxEntries";
+    public const string ExternalNotificationTimeMinutes = "ExternalNotification.TimeMinutes";
+    public const string ExternalNotificationFilterPreviousLogs = "ExternalNotification.FilterPreviousLogs";
+    public const string ExternalNotificationWhitelist = "ExternalNotification.Whitelist";
+    public const string ExternalNotificationBlacklist = "ExternalNotification.Blacklist";
+    public const string ExternalNotificationSendAfterLogCount = "ExternalNotification.SendAfterLogCount";
+    public const string ExternalNotificationNewLogCount = "ExternalNotification.NewLogCount";
+    public const string ExternalNotificationSendWhenContentMatches = "ExternalNotification.SendWhenContentMatches";
+    public const string ExternalNotificationSendBeforeScheduledStart = "ExternalNotification.SendBeforeScheduledStart";
     public const string ExternalNotificationSmtpServer = "ExternalNotification.Smtp.Server";
     public const string ExternalNotificationSmtpPort = "ExternalNotification.Smtp.Port";
     public const string ExternalNotificationSmtpUser = "ExternalNotification.Smtp.User";

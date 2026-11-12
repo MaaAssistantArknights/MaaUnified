@@ -29,7 +29,6 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         "ServerChan",
         "Bark",
         "Discord",
-        "DiscordWebhook",
         "DingTalk",
         "Telegram",
         "Qmsg",
@@ -45,6 +44,9 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             ["ServerChan"] = "ServerChan",
             ["Bark"] = "Bark",
             ["Discord"] = "Discord",
+            // WPF f9c14e0be1 removed this channel; the alias is kept so parameter texts saved by
+            // v6.3.7 still send, while configs are migrated to Custom Webhook
+            // (ExternalNotificationChannels.ResolveEnabled).
             ["Discord Webhook"] = "DiscordWebhook",
             ["DiscordWebhook"] = "DiscordWebhook",
             ["DingTalk"] = "DingTalk",
@@ -59,6 +61,11 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
     {
         Timeout = TimeSpan.FromSeconds(5),
     };
+
+    // WPF 571356b47b: sendMessage caps text at 4096 characters and answers 400 message is too long.
+    private const int TelegramMaxTextLength = 4096;
+    private const string TelegramTruncatedMark = "[...]\n";
+    private const int FailureBodyExcerptLength = 512;
 
     private readonly bool _supported;
     private readonly UnifiedConfigurationService? _configService;
@@ -164,12 +171,13 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
 
         try
         {
-            return await _sendAsync(
+            var result = await _sendAsync(
                 provider!,
                 parameters!,
                 PrefixTitle(request.Title),
                 request.Message.Trim(),
                 cancellationToken);
+            return RedactProviderSecrets(result, parameters!);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -626,11 +634,13 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         var apiBase = parameters.TryGetValue("apiUrl", out var apiUrl) && !string.IsNullOrWhiteSpace(apiUrl)
             ? NormalizeHttpBaseUrl(apiUrl)
             : "https://api.telegram.org/";
-        var messageUri = new Uri(new Uri(apiBase, UriKind.Absolute), $"bot{botToken.Trim()}/sendMessage");
+        // Build the absolute URI as a single string: a real bot token contains ':' (123456:ABC),
+        // and relative-Uri composition would read the token prefix as the scheme and drop the host.
+        var messageUri = new Uri($"{apiBase}bot{botToken.Trim()}/sendMessage", UriKind.Absolute);
         var payload = new Dictionary<string, object?>
         {
             ["chat_id"] = chatId.Trim(),
-            ["text"] = $"{title.Trim()}: {message.Trim()}",
+            ["text"] = FitTelegramText($"{title.Trim()}: {message.Trim()}"),
         };
         if (parameters.TryGetValue("topicId", out var topicId) && !string.IsNullOrWhiteSpace(topicId))
         {
@@ -736,8 +746,8 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         }
 
         var rendered = body
-            .Replace("{title}", title.Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal)
-            .Replace("{content}", message.Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", "\\n", StringComparison.Ordinal), StringComparison.Ordinal)
+            .Replace("{title}", EscapeJsonTemplateValue(title), StringComparison.Ordinal)
+            .Replace("{content}", EscapeJsonTemplateValue(message), StringComparison.Ordinal)
             .Replace("{time}", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
         var request = new HttpRequestMessage(HttpMethod.Post, new Uri(url.Trim(), UriKind.Absolute))
@@ -746,14 +756,43 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
         };
         if (parameters.TryGetValue("headers", out var headers) && !string.IsNullOrWhiteSpace(headers))
         {
-            foreach (var header in ParseHeaderLines(headers))
-            {
-                request.Headers.TryAddWithoutValidation(header.Key, header.Value);
-            }
+            ApplyCustomWebhookHeaders(request, headers);
         }
 
         return await SendRequestAsync(request, "CustomWebhook", cancellationToken);
     }
+
+    // WPF 69b1ef2280: content headers (Content-Type, ...) are not part of the request header
+    // collection, so TryAddWithoutValidation returns false. Remove the default value on Content
+    // first and then add the user value to Content.Headers to avoid sending a duplicate header.
+    private static void ApplyCustomWebhookHeaders(HttpRequestMessage request, string headersText)
+    {
+        foreach (var header in ParseHeaderLines(headersText))
+        {
+            // WPF 69b1ef2280 skips names that are not RFC 9110 tokens; Remove/Add would throw on them.
+            if (!IsValidHeaderName(header.Key))
+            {
+                continue;
+            }
+
+            if (request.Headers.TryAddWithoutValidation(header.Key, header.Value))
+            {
+                continue;
+            }
+
+            if (request.Content is null)
+            {
+                continue;
+            }
+
+            request.Content.Headers.Remove(header.Key);
+            request.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
+    }
+
+    private static bool IsValidHeaderName(string name)
+        => name.Length > 0
+           && name.All(static value => value is > ' ' and < '\u007f' && !"()<>@,;:\\\"/[]?={}".Contains(value));
 
     private async Task<UiOperationResult> SendDingTalkAsync(
         IReadOnlyDictionary<string, string> parameters,
@@ -942,9 +981,14 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             using var response = await _sendHttpAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
+                // WPF 571356b47b: the failure reason (message is too long) only exists in the
+                // response body, so a bare status code is not diagnosable.
+                // The URL never reaches the log: webhook/send-key channels embed credentials in
+                // path or query (WPF b8e93a047c), so only the scheme+authority is recorded.
                 return UiOperationResult.Fail(
                     UiErrorCode.NotificationProviderNetworkFailure,
-                    $"Notification test failed via `{provider}`: HTTP {(int)response.StatusCode}.");
+                    $"Notification test failed via `{provider}`: HTTP {(int)response.StatusCode}.",
+                    await BuildFailureDetailsAsync(request, response, cancellationToken));
             }
 
             if (isProviderSuccess is not null)
@@ -954,7 +998,8 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
                 {
                     return UiOperationResult.Fail(
                         UiErrorCode.NotificationProviderNetworkFailure,
-                        $"Notification test failed via `{provider}`: provider response was not successful.");
+                        $"Notification test failed via `{provider}`: provider response was not successful.",
+                        BuildResponseExcerpt(responseText));
                 }
             }
 
@@ -971,6 +1016,80 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             return NetworkFailure(provider, ex);
         }
     }
+
+    private static async Task<string> BuildFailureDetailsAsync(
+        HttpRequestMessage request,
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        var details = $"status={(int)response.StatusCode}; endpoint={DescribeEndpoint(request.RequestUri)}";
+        var excerpt = BuildResponseExcerpt(await response.Content.ReadAsStringAsync(cancellationToken));
+        return string.IsNullOrEmpty(excerpt) ? details : $"{details}; body={excerpt}";
+    }
+
+    private static string DescribeEndpoint(Uri? uri)
+        => uri is null ? "unknown" : uri.GetLeftPart(UriPartial.Authority);
+
+    private static string BuildResponseExcerpt(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = body.Trim();
+        if (trimmed.Length <= FailureBodyExcerptLength)
+        {
+            return trimmed;
+        }
+
+        var length = char.IsLowSurrogate(trimmed[FailureBodyExcerptLength]) ? FailureBodyExcerptLength - 1 : FailureBodyExcerptLength;
+        return trimmed[..length] + "...";
+    }
+
+    // Token/keys are user-supplied parameters, so a provider that echoes the request back in its
+    // failure body would otherwise leak them through the message and the diagnostic log.
+    private static UiOperationResult RedactProviderSecrets(
+        UiOperationResult result,
+        IReadOnlyDictionary<string, string> parameters)
+    {
+        if (result.Success)
+        {
+            return result;
+        }
+
+        var secrets = parameters
+            .Where(static pair => IsSecretParameter(pair.Key) && pair.Value.Trim().Length >= 4)
+            .Select(static pair => pair.Value.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (secrets.Length == 0)
+        {
+            return result;
+        }
+
+        var message = Redact(result.Message, secrets);
+        var details = result.Error?.Details is null ? null : Redact(result.Error.Details, secrets);
+        var error = result.Error is null
+            ? null
+            : result.Error with { Message = message, Details = details };
+        return result with { Message = message, Error = error };
+    }
+
+    private static string Redact(string text, IReadOnlyList<string> secrets)
+    {
+        foreach (var secret in secrets)
+        {
+            text = text.Replace(secret, "[redacted]", StringComparison.Ordinal);
+        }
+
+        return text;
+    }
+
+    private static bool IsSecretParameter(string key)
+        => key.ToLowerInvariant() is "bottoken" or "chatid" or "topicid" or "sendkey" or "key"
+            or "accesstoken" or "secret" or "token" or "password" or "user" or "userid" or "url"
+            or "webhookurl" or "headers" or "body";
 
     private static UiOperationResult NetworkFailure(string provider, Exception exception)
         => UiOperationResult.Fail(
@@ -1014,6 +1133,37 @@ public sealed class NotificationProviderFeatureService : INotificationProviderFe
             ? trimmed
             : $"[MAA] {trimmed}";
     }
+
+    /// <summary>
+    /// Keeps the tail of an over-long Telegram message. WPF 571356b47b trims from the front
+    /// because the meaningful part (duration, configuration, error list) follows the logs.
+    /// The suffix start is moved past a split surrogate pair so the payload stays valid UTF-16.
+    /// </summary>
+    private static string FitTelegramText(string text)
+    {
+        if (text.Length <= TelegramMaxTextLength)
+        {
+            return text;
+        }
+
+        var suffixStart = text.Length - (TelegramMaxTextLength - TelegramTruncatedMark.Length);
+        if (char.IsLowSurrogate(text[suffixStart]))
+        {
+            suffixStart++;
+        }
+
+        return TelegramTruncatedMark + text[suffixStart..];
+    }
+
+    /// <summary>
+    /// Escapes a value that is embedded verbatim in a JSON string literal. WPF 69b1ef2280:
+    /// backslash and quote must be escaped and CR/LF would break the JSON structure.
+    /// </summary>
+    private static string EscapeJsonTemplateValue(string value) => value
+        .Replace("\\", "\\\\", StringComparison.Ordinal)
+        .Replace("\"", "\\\"", StringComparison.Ordinal)
+        .Replace("\r", string.Empty, StringComparison.Ordinal)
+        .Replace("\n", "\\n", StringComparison.Ordinal);
 
     private static string StripExternalLogColorMarkers(string content)
     {

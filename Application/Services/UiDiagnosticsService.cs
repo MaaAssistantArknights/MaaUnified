@@ -22,18 +22,25 @@ public sealed class UiDiagnosticsService
     private readonly Dictionary<string, DateTimeOffset> _lastPerformanceEventAt = new(StringComparer.Ordinal);
     private readonly string _debugDirectory;
     private readonly string _baseDirectory;
+    private readonly bool _verboseDiagnostics;
     private Func<IEnumerable<string>> _sensitiveValueProvider = static () => [];
 
     public UiDiagnosticsService(string baseDirectory, UiLogService uiLogService)
+        : this(baseDirectory, uiLogService, global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+    {
+    }
+
+    public UiDiagnosticsService(string baseDirectory, UiLogService uiLogService, bool verboseDiagnostics)
     {
         _baseDirectory = Path.GetFullPath(baseDirectory);
         _debugDirectory = Path.Combine(baseDirectory, "debug");
+        _verboseDiagnostics = verboseDiagnostics;
         StartupLogPath = Path.Combine(_debugDirectory, StartupLogFileName);
         ErrorLogPath = Path.Combine(_debugDirectory, "avalonia-ui-errors.log");
         EventLogPath = Path.Combine(_debugDirectory, "avalonia-ui-events.log");
         PlatformEventLogPath = Path.Combine(_debugDirectory, "avalonia-platform-events.log");
 
-        if (global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        if (_verboseDiagnostics)
         {
             uiLogService.LogReceived += log =>
             {
@@ -102,13 +109,22 @@ public sealed class UiDiagnosticsService
 
     public Task RecordEventAsync(string scope, string message, CancellationToken cancellationToken = default)
     {
-        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        if (!_verboseDiagnostics)
         {
             return Task.CompletedTask;
         }
 
         return WriteLineAsync(EventLogPath, $"{DateTimeOffset.UtcNow:O} [EVENT] [{scope}] {message}", cancellationToken);
     }
+
+    /// <summary>
+    /// Records something the user actually saw or chose (dialog content, notification text).
+    /// WPF 9262180332 keeps these in the regular gui.log of every build because support bundles
+    /// are useless without them; correspondingly this bypasses the verbose-diagnostics gate.
+    /// The line still goes through the sanitizer, so registered secrets never reach the bundle.
+    /// </summary>
+    public Task RecordUserVisibleEventAsync(string scope, string message, CancellationToken cancellationToken = default)
+        => WriteLineAsync(EventLogPath, $"{DateTimeOffset.UtcNow:O} [EVENT] [{scope}] {message}", cancellationToken);
 
     public Task RecordUiLagAsync(
         string scope,
@@ -189,7 +205,7 @@ public sealed class UiDiagnosticsService
         TimeSpan? minInterval = null,
         CancellationToken cancellationToken = default)
     {
-        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        if (!_verboseDiagnostics)
         {
             return Task.CompletedTask;
         }
@@ -242,7 +258,7 @@ public sealed class UiDiagnosticsService
         PlatformOperationResult result,
         CancellationToken cancellationToken = default)
     {
-        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        if (!_verboseDiagnostics)
         {
             return Task.CompletedTask;
         }
@@ -267,7 +283,7 @@ public sealed class UiDiagnosticsService
         PlatformOperationResult<T> result,
         CancellationToken cancellationToken = default)
     {
-        if (!global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+        if (!_verboseDiagnostics)
         {
             return Task.CompletedTask;
         }
@@ -342,17 +358,19 @@ public sealed class UiDiagnosticsService
                 sensitiveValues,
                 [_baseDirectory],
                 Path.Combine(baseDirectory, "debug"));
-            if (global::MAAUnified.Platform.MaaUnifiedBuildFlavor.CapturesVerboseDiagnostics)
+            // The event log is bundled in every build: dialog content and user choices are
+            // recorded there regardless of the diagnostics profile (WPF 9262180332).
+            AddRedactedFileOrPlaceholder(
+                archive,
+                archivedEntryNames,
+                EventLogPath,
+                "debug/avalonia-ui-events.log",
+                "UI event log is empty or missing.",
+                sensitiveValues,
+                [_baseDirectory],
+                Path.Combine(baseDirectory, "debug"));
+            if (_verboseDiagnostics)
             {
-                AddRedactedFileOrPlaceholder(
-                    archive,
-                    archivedEntryNames,
-                    EventLogPath,
-                    "debug/avalonia-ui-events.log",
-                    "UI event log is empty or missing.",
-                    sensitiveValues,
-                    [_baseDirectory],
-                    Path.Combine(baseDirectory, "debug"));
                 AddRedactedFileOrPlaceholder(
                     archive,
                     archivedEntryNames,

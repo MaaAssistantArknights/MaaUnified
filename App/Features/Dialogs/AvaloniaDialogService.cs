@@ -35,7 +35,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         {
             Title = NormalizeDialogTitle(request.Title),
         };
-        var token = await _runtime.DialogFeatureService.BeginDialogAsync(DialogType.Announcement, sourceScope, normalizedRequest.Title, cancellationToken);
+        var token = await BeginTracedDialogAsync(DialogType.Announcement, sourceScope, normalizedRequest.Title, cancellationToken, normalizedRequest);
         var dialog = new AnnouncementDialogView();
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
@@ -50,7 +50,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         var semantic = presentation.Result ?? DialogReturnSemantic.Close;
         var payload = semantic == DialogReturnSemantic.Cancel ? null : dialog.BuildPayload();
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
-        await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "announcement-dialog-complete", cancellationToken);
+        await CompleteTracedDialogAsync(token, semantic, "announcement-dialog-complete", cancellationToken, normalizedRequest);
         return new DialogCompletion<AnnouncementDialogPayload>(semantic, payload, "announcement-dialog-complete");
     }
 
@@ -63,7 +63,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         {
             Title = NormalizeDialogTitle(request.Title),
         };
-        var token = await _runtime.DialogFeatureService.BeginDialogAsync(DialogType.VersionUpdate, sourceScope, normalizedRequest.Title, cancellationToken);
+        var token = await BeginTracedDialogAsync(DialogType.VersionUpdate, sourceScope, normalizedRequest.Title, cancellationToken, normalizedRequest);
         var dialog = new VersionUpdateDialogView();
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
@@ -78,7 +78,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         var semantic = presentation.Result ?? DialogReturnSemantic.Close;
         var payload = semantic == DialogReturnSemantic.Confirm ? dialog.BuildPayload() : null;
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
-        await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "version-update-dialog-complete", cancellationToken);
+        await CompleteTracedDialogAsync(token, semantic, "version-update-dialog-complete", cancellationToken, normalizedRequest);
         return new DialogCompletion<VersionUpdateDialogPayload>(semantic, payload, "version-update-dialog-complete");
     }
 
@@ -91,7 +91,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         {
             Title = NormalizeDialogTitle(request.Title),
         };
-        var token = await _runtime.DialogFeatureService.BeginDialogAsync(DialogType.ProcessPicker, sourceScope, normalizedRequest.Title, cancellationToken);
+        var token = await BeginTracedDialogAsync(DialogType.ProcessPicker, sourceScope, normalizedRequest.Title, cancellationToken, normalizedRequest);
         var dialog = new ProcessPickerDialogView();
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
@@ -106,7 +106,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         var semantic = presentation.Result ?? DialogReturnSemantic.Close;
         var payload = semantic == DialogReturnSemantic.Confirm ? dialog.BuildPayload() : null;
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
-        await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "process-picker-dialog-complete", cancellationToken);
+        await CompleteTracedDialogAsync(token, semantic, "process-picker-dialog-complete", cancellationToken, normalizedRequest);
         return new DialogCompletion<ProcessPickerDialogPayload>(semantic, payload, "process-picker-dialog-complete");
     }
 
@@ -119,7 +119,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         {
             Title = NormalizeDialogTitle(request.Title),
         };
-        var token = await _runtime.DialogFeatureService.BeginDialogAsync(DialogType.EmulatorPath, sourceScope, normalizedRequest.Title, cancellationToken);
+        var token = await BeginTracedDialogAsync(DialogType.EmulatorPath, sourceScope, normalizedRequest.Title, cancellationToken, normalizedRequest);
         var dialog = new EmulatorPathSelectionDialogView();
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
@@ -134,7 +134,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         var semantic = presentation.Result ?? DialogReturnSemantic.Close;
         var payload = semantic == DialogReturnSemantic.Confirm ? dialog.BuildPayload() : null;
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
-        await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "emulator-path-dialog-complete", cancellationToken);
+        await CompleteTracedDialogAsync(token, semantic, "emulator-path-dialog-complete", cancellationToken, normalizedRequest);
         return new DialogCompletion<EmulatorPathDialogPayload>(semantic, payload, "emulator-path-dialog-complete");
     }
 
@@ -149,7 +149,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         {
             Title = NormalizeDialogTitle(request.Title),
         };
-        var token = await _runtime.DialogFeatureService.BeginDialogAsync(DialogType.Error, sourceScope, normalizedRequest.Title, cancellationToken);
+        var token = await BeginTracedDialogAsync(DialogType.Error, sourceScope, normalizedRequest.Title, cancellationToken, normalizedRequest);
         var dialog = new ErrorDialogView();
         dialog.ApplyRequest(
             normalizedRequest,
@@ -182,7 +182,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         }
 
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
-        await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "error-dialog-complete", cancellationToken);
+        await CompleteTracedDialogAsync(token, semantic, "error-dialog-complete", cancellationToken, normalizedRequest);
         return new DialogCompletion<ErrorDialogPayload>(semantic, payload, "error-dialog-complete");
     }
 
@@ -195,7 +195,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         {
             Title = NormalizeDialogTitle(request.Title),
         };
-        var token = await _runtime.DialogFeatureService.BeginDialogAsync(DialogType.AchievementList, sourceScope, normalizedRequest.Title, cancellationToken);
+        var token = await BeginTracedDialogAsync(DialogType.AchievementList, sourceScope, normalizedRequest.Title, cancellationToken, normalizedRequest);
         var dialog = new AchievementListDialogView();
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
@@ -210,7 +210,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         var semantic = presentation.Result ?? DialogReturnSemantic.Close;
         var payload = dialog.BuildPayload();
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
-        await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "achievement-list-dialog-complete", cancellationToken);
+        await CompleteTracedDialogAsync(token, semantic, "achievement-list-dialog-complete", cancellationToken, normalizedRequest);
         return new DialogCompletion<AchievementListDialogPayload>(semantic, payload, "achievement-list-dialog-complete");
     }
 
@@ -223,7 +223,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         {
             Title = NormalizeDialogTitle(request.Title),
         };
-        var token = await _runtime.DialogFeatureService.BeginDialogAsync(DialogType.Text, sourceScope, normalizedRequest.Title, cancellationToken);
+        var token = await BeginTracedDialogAsync(DialogType.Text, sourceScope, normalizedRequest.Title, cancellationToken, normalizedRequest);
         var dialog = new TextDialogView();
         dialog.ApplyRequest(normalizedRequest);
         using var chromeBinding = AttachChromeLocalization(dialog, normalizedRequest.Title, normalizedRequest.Chrome);
@@ -238,7 +238,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         var semantic = presentation.Result ?? DialogReturnSemantic.Close;
         var payload = semantic == DialogReturnSemantic.Confirm ? dialog.BuildPayload() : null;
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
-        await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, "text-dialog-complete", cancellationToken);
+        await CompleteTracedDialogAsync(token, semantic, "text-dialog-complete", cancellationToken, normalizedRequest);
         return new DialogCompletion<TextDialogPayload>(semantic, payload, "text-dialog-complete");
     }
 
@@ -251,7 +251,7 @@ public sealed class AvaloniaDialogService : IAppDialogService
         {
             Title = NormalizeDialogTitle(request.Title),
         };
-        var token = await _runtime.DialogFeatureService.BeginDialogAsync(DialogType.WarningConfirm, sourceScope, normalizedRequest.Title, cancellationToken);
+        var token = await BeginTracedDialogAsync(DialogType.WarningConfirm, sourceScope, normalizedRequest.Title, cancellationToken, normalizedRequest);
         var dialog = new WarningConfirmDialogView();
         dialog.ApplyRequest(
             normalizedRequest.Title,
@@ -285,8 +285,93 @@ public sealed class AvaloniaDialogService : IAppDialogService
         };
 
         await _runtime.DialogFeatureService.RecordDialogActionAsync(token, "return", semantic.ToString(), cancellationToken);
-        await _runtime.DialogFeatureService.CompleteDialogAsync(token, semantic, summary, cancellationToken);
+        await CompleteTracedDialogAsync(token, semantic, summary, cancellationToken, normalizedRequest);
         return new DialogCompletion<WarningConfirmDialogPayload>(semantic, payload, summary);
+    }
+
+    private Task<DialogTraceToken> BeginTracedDialogAsync(
+        DialogType dialogType,
+        string sourceScope,
+        string title,
+        CancellationToken cancellationToken,
+        object request)
+        => _runtime.DialogFeatureService.BeginDialogAsync(
+            dialogType,
+            sourceScope,
+            title,
+            cancellationToken,
+            DescribeDialog(request));
+
+    private Task<UiOperationResult> CompleteTracedDialogAsync(
+        DialogTraceToken token,
+        DialogReturnSemantic semantic,
+        string summary,
+        CancellationToken cancellationToken,
+        object request)
+        => _runtime.DialogFeatureService.CompleteDialogAsync(
+            token,
+            semantic,
+            summary,
+            cancellationToken,
+            SelectedButtonLabel(request, semantic));
+
+    /// <summary>
+    /// Captures what the user reads in the dialog (body and visible button labels) so the
+    /// diagnostics log can reconstruct the choice afterwards (WPF 9262180332).
+    /// </summary>
+    private static DialogLogDescriptor DescribeDialog(object request) => request switch
+    {
+        AnnouncementDialogRequest r => new(r.AnnouncementInfo, [r.ConfirmText, r.CancelText]),
+        VersionUpdateDialogRequest r => new($"{r.Summary}\n{r.Body}", [r.ConfirmText, r.CancelText]),
+        ProcessPickerDialogRequest r => new(
+            string.Join(", ", r.Items.Select(static item => item.DisplayName)),
+            [r.ConfirmText, r.CancelText]),
+        EmulatorPathDialogRequest r => new(string.Join(", ", r.CandidatePaths), [r.ConfirmText, r.CancelText]),
+        ErrorDialogRequest r => new($"{r.Context}: {r.Result.Message}", [r.ConfirmText, r.CancelText]),
+        AchievementListDialogRequest r => new(
+            $"items={r.Items.Count}; unlocked={r.UnlockedCount}/{r.TotalCount}",
+            [r.ConfirmText, r.CancelText]),
+        TextDialogRequest r => new($"{r.Prompt}\n{r.DefaultText}", [r.ConfirmText, r.CancelText]),
+        WarningConfirmDialogRequest r => new(r.Message, BuildWarningConfirmButtons(r)),
+        _ => new(null, null),
+    };
+
+    private static IReadOnlyList<string> BuildWarningConfirmButtons(WarningConfirmDialogRequest request)
+    {
+        var labels = new List<string>(2);
+        if (request.ShowConfirmButton)
+        {
+            labels.Add(request.ConfirmText);
+        }
+
+        if (request.ShowCancelButton)
+        {
+            labels.Add(request.CancelText);
+        }
+
+        return labels;
+    }
+
+    private static string? SelectedButtonLabel(object request, DialogReturnSemantic semantic)
+    {
+        var (confirm, cancel) = request switch
+        {
+            AnnouncementDialogRequest r => (r.ConfirmText, r.CancelText),
+            VersionUpdateDialogRequest r => (r.ConfirmText, r.CancelText),
+            ProcessPickerDialogRequest r => (r.ConfirmText, r.CancelText),
+            EmulatorPathDialogRequest r => (r.ConfirmText, r.CancelText),
+            ErrorDialogRequest r => (r.ConfirmText, r.CancelText),
+            AchievementListDialogRequest r => (r.ConfirmText, r.CancelText),
+            TextDialogRequest r => (r.ConfirmText, r.CancelText),
+            WarningConfirmDialogRequest r => (r.ConfirmText, r.CancelText),
+            _ => (string.Empty, string.Empty),
+        };
+        return semantic switch
+        {
+            DialogReturnSemantic.Confirm => confirm,
+            DialogReturnSemantic.Cancel => cancel,
+            _ => null,
+        };
     }
 
     private static Window? ResolveOwnerWindow()

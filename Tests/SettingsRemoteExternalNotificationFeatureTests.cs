@@ -1231,6 +1231,73 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
         }
     }
 
+    [Fact]
+    public async Task ExternalNotification_LegacyDiscordWebhook_LoadsAsCustomWebhookChannel()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync(
+            notificationProviderFeatureService: new ScriptedNotificationProviderFeatureService());
+        if (fixture.Config.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Discord Webhook");
+            profile.Values[ConfigurationKeys.ExternalNotificationDiscordWebhookUrl] =
+                JsonValue.Create("https://discord.example.com/api/webhooks/legacy");
+        }
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True(vm.ExternalNotificationEnabled);
+        Assert.Equal("CustomWebhook", vm.SelectedNotificationProvider);
+        Assert.Equal("https://discord.example.com/api/webhooks/legacy", vm.CustomWebhookUrl);
+        Assert.Equal("{\"content\": \"{content}\"}", vm.CustomWebhookBody);
+        Assert.Contains(
+            vm.NotificationProviderSelections,
+            static item => item.Provider == "CustomWebhook" && item.IsEnabled);
+        Assert.DoesNotContain(
+            vm.NotificationProviderSelections,
+            static item => string.Equals(item.Provider, "DiscordWebhook", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task ExternalNotification_LegacyDiscordWebhook_SaveWritesCustomWebhookKeysOnly()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync(
+            notificationProviderFeatureService: new ScriptedNotificationProviderFeatureService
+            {
+                ValidateHandler = static _ => UiOperationResult.Ok("valid"),
+            });
+        if (fixture.Config.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Discord Webhook");
+            profile.Values[ConfigurationKeys.ExternalNotificationDiscordWebhookUrl] =
+                JsonValue.Create("https://discord.example.com/api/webhooks/legacy");
+            profile.Values[ConfigurationKeys.ExternalNotificationCustomWebhookBody] =
+                JsonValue.Create("{\"content\": \"{content}\"}");
+        }
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        Assert.Equal("CustomWebhook", vm.SelectedNotificationProvider);
+        Assert.Contains("url=https://discord.example.com/api/webhooks/legacy", vm.NotificationProviderParametersText, StringComparison.Ordinal);
+        vm.ExternalNotificationEnabled = true;
+        await vm.SaveExternalNotificationAsync();
+
+        Assert.False(vm.HasExternalNotificationErrorMessage);
+        Assert.Equal("https://discord.example.com/api/webhooks/legacy", vm.CustomWebhookUrl);
+        Assert.Equal(
+            "CustomWebhook",
+            vm.SelectedNotificationProvider);
+        Assert.Equal(
+            "Custom Webhook",
+            ReadCurrentProfileString(fixture.Config, ConfigurationKeys.ExternalNotificationEnabled));
+        Assert.Equal(
+            "https://discord.example.com/api/webhooks/legacy",
+            ReadCurrentProfileString(fixture.Config, ConfigurationKeys.ExternalNotificationCustomWebhookUrl));
+        Assert.Equal(
+            "{\"content\": \"{content}\"}",
+            ReadCurrentProfileString(fixture.Config, ConfigurationKeys.ExternalNotificationCustomWebhookBody));
+    }
+
     [Theory]
     [InlineData("zh-cn", "MAA \u5916\u90e8\u901a\u77e5\u6d4b\u8bd5", "\u8fd9\u662f MAA \u5916\u90e8\u901a\u77e5\u6d4b\u8bd5\u4fe1\u606f\u3002\u5982\u679c\u4f60\u770b\u5230\u4e86\u8fd9\u6bb5\u5185\u5bb9\uff0c\u5c31\u8bf4\u660e\u901a\u77e5\u53d1\u9001\u6210\u529f\u4e86\uff01")]
     [InlineData("en-us", "MAA external notification test", "This is MAA external notification test information. If you see this content, the notification was sent successfully!")]

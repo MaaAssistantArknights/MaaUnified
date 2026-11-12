@@ -6326,8 +6326,15 @@ public sealed class PlatformCapabilityFeatureService : IPlatformCapabilityServic
         CancellationToken cancellationToken = default)
     {
         var result = await _platform.NotificationService.NotifyAsync(notification, cancellationToken);
+        // WPF 9262180332 logs every Growl with its type and content; the in-app banner and the
+        // system notification are the MAAUnified counterpart, so both go to the support bundle.
+        await _diagnostics.RecordUserVisibleEventAsync(
+            "Notification.Growl",
+            $"severity={notification.InAppSeverity}; useSystemNotification={notification.UseSystemNotification}; success={result.Success}; title={UiLogTextNormalizer.Normalize(notification.Title)}; content={UiLogTextNormalizer.Normalize(notification.Message)}",
+            cancellationToken);
         return await ToUiResultAsync(PlatformCapabilityId.Notification, "notify", result, cancellationToken);
     }
+
 
     public async Task<UiOperationResult> RegisterGlobalHotkeyAsync(string name, string gesture, CancellationToken cancellationToken = default)
     {
@@ -7225,16 +7232,24 @@ public sealed class DialogFeatureService : IDialogFeatureService
         DialogType dialogType,
         string sourceScope,
         string title,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        DialogLogDescriptor? logDescriptor = null)
     {
         var token = new DialogTraceToken(
             TraceId: Guid.NewGuid().ToString("N"),
             DialogType: dialogType,
             SourceScope: sourceScope,
             OpenedAtUtc: DateTimeOffset.UtcNow);
-        await _diagnostics.RecordEventAsync(
+        var content = UiLogTextNormalizer.Normalize(logDescriptor?.Content);
+        var buttons = UiLogTextNormalizer.Normalize(
+            logDescriptor?.Buttons is { Count: > 0 } labels
+                ? string.Join(" | ", labels.Where(static label => !string.IsNullOrWhiteSpace(label)))
+                : null);
+        // WPF 9262180332 logs title, body and visible button labels before the dialog opens so a
+        // support bundle can reconstruct what the user was looking at.
+        await _diagnostics.RecordUserVisibleEventAsync(
             "Dialog.Open",
-            $"trace={token.TraceId}; dialog={dialogType}; source={sourceScope}; title={title}",
+            $"trace={token.TraceId}; dialog={dialogType}; source={sourceScope}; title={title}; buttons={buttons}; content={content}",
             cancellationToken);
         return token;
     }
@@ -7245,7 +7260,7 @@ public sealed class DialogFeatureService : IDialogFeatureService
         string detail,
         CancellationToken cancellationToken = default)
     {
-        await _diagnostics.RecordEventAsync(
+        await _diagnostics.RecordUserVisibleEventAsync(
             "Dialog.Action",
             $"trace={token.TraceId}; dialog={token.DialogType}; source={token.SourceScope}; action={action}; detail={detail}",
             cancellationToken);
@@ -7256,11 +7271,16 @@ public sealed class DialogFeatureService : IDialogFeatureService
         DialogTraceToken token,
         DialogReturnSemantic semantic,
         string summary,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? selection = null)
     {
-        await _diagnostics.RecordEventAsync(
+        // WPF 9262180332 pairs the close record with the open record through the trace id and
+        // logs the selected button plus the dwell time.
+        var elapsedMs = Math.Max(0, (DateTimeOffset.UtcNow - token.OpenedAtUtc).TotalMilliseconds);
+        var selected = string.IsNullOrWhiteSpace(selection) ? $"(none) ({semantic})" : $"{selection} ({semantic})";
+        await _diagnostics.RecordUserVisibleEventAsync(
             "Dialog.Close",
-            $"trace={token.TraceId}; dialog={token.DialogType}; source={token.SourceScope}; return={semantic}; summary={summary}",
+            $"trace={token.TraceId}; dialog={token.DialogType}; source={token.SourceScope}; return={semantic}; summary={summary}; selection={selected}; durationMs={elapsedMs:0}",
             cancellationToken);
         return UiOperationResult.Ok("Dialog completion recorded.");
     }
@@ -7273,5 +7293,29 @@ public sealed class DialogFeatureService : IDialogFeatureService
         await _diagnostics.RecordFailedResultAsync(context, result, cancellationToken);
         ErrorRaised?.Invoke(this, new DialogErrorRaisedEvent(context, result, DateTimeOffset.UtcNow));
         return result;
+    }
+}
+
+/// <summary>
+/// Flattens text that goes into the single-line diagnostics event log: newlines become literal
+/// <c>\n</c> so one dialog or notification stays on one record, and very long bodies are capped.
+/// </summary>
+internal static class UiLogTextNormalizer
+{
+    private const int MaxLength = 2000;
+
+    public static string Normalize(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var normalized = text
+            .Replace("\r\n", "\\n", StringComparison.Ordinal)
+            .Replace('\r', ' ')
+            .Replace("\n", "\\n", StringComparison.Ordinal)
+            .Trim();
+        return normalized.Length <= MaxLength ? normalized : normalized[..MaxLength] + "...";
     }
 }

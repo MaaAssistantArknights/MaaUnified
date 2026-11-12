@@ -16,6 +16,7 @@ using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.Notifications;
 using MAAUnified.Application.Services.VersionUpdate;
 using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
@@ -56,8 +57,10 @@ public sealed partial class SettingsPageViewModel
             ["ServerChan"] = "ServerChan",
             ["Bark"] = "Bark",
             ["Discord"] = "Discord",
-            ["Discord Webhook"] = "DiscordWebhook",
-            ["DiscordWebhook"] = "DiscordWebhook",
+            // WPF f9c14e0be1 removed the ｢Discord Webhook｣ channel and migrates its URL into a
+            // Custom Webhook channel, so a stored CSV entry resolves to CustomWebhook.
+            ["Discord Webhook"] = "CustomWebhook",
+            ["DiscordWebhook"] = "CustomWebhook",
             ["DingTalk"] = "DingTalk",
             ["Telegram"] = "Telegram",
             ["Qmsg"] = "Qmsg",
@@ -790,6 +793,35 @@ public sealed partial class SettingsPageViewModel
             && !lines.Any(line => line.StartsWith("server=", StringComparison.OrdinalIgnoreCase)))
         {
             lines.Add("server=https://api.day.app");
+        }
+
+        if (string.Equals(provider, "CustomWebhook", StringComparison.OrdinalIgnoreCase))
+        {
+            // dev-v2 migration: a saved ｢Discord Webhook｣ URL becomes a Custom Webhook channel.
+            // The body field is free-form and consumes every following line when parsed, so the
+            // migrated url must be inserted before it.
+            var bodyIndex = lines.FindIndex(
+                static line => line.StartsWith("body=", StringComparison.OrdinalIgnoreCase));
+            if (!lines.Any(static line => line.StartsWith("url=", StringComparison.OrdinalIgnoreCase)))
+            {
+                var legacyWebhookUrl = ReadProfileString(
+                    config,
+                    ConfigurationKeys.ExternalNotificationDiscordWebhookUrl,
+                    string.Empty);
+                if (!string.IsNullOrWhiteSpace(legacyWebhookUrl))
+                {
+                    lines.Insert(bodyIndex < 0 ? lines.Count : bodyIndex, $"url={legacyWebhookUrl.Trim()}");
+                    if (bodyIndex >= 0)
+                    {
+                        bodyIndex++;
+                    }
+                }
+            }
+
+            if (bodyIndex < 0)
+            {
+                lines.Add($"body={ExternalNotificationChannels.DefaultCustomWebhookBody}");
+            }
         }
 
         return string.Join(Environment.NewLine, lines);

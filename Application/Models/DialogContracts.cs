@@ -26,6 +26,14 @@ public sealed record DialogTraceToken(
     string SourceScope,
     DateTimeOffset OpenedAtUtc);
 
+/// <summary>
+/// The parts of a dialog the user actually reads, recorded so a support bundle shows what was
+/// on screen when the user made a choice (WPF 9262180332 logs the MessageBox content).
+/// </summary>
+/// <param name="Content">Dialog body text.</param>
+/// <param name="Buttons">Visible button labels, in display order.</param>
+public sealed record DialogLogDescriptor(string? Content, IReadOnlyList<string>? Buttons);
+
 public sealed record DialogCompletion<TPayload>(
     DialogReturnSemantic Return,
     TPayload? Payload,
