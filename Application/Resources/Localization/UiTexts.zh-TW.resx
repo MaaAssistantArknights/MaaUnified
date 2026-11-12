@@ -2233,6 +2233,33 @@
   <data name="Settings.ExternalNotification.EnableDetails" xml:space="preserve">
     <value>輸出詳細資訊</value>
   </data>
+  <data name="Settings.ExternalNotification.IncludePreviousLogs" xml:space="preserve">
+    <value>附帶歷史日誌</value>
+  </data>
+  <data name="Settings.ExternalNotification.MaxEntries" xml:space="preserve">
+    <value>歷史日誌條數</value>
+  </data>
+  <data name="Settings.ExternalNotification.TimeMinutes" xml:space="preserve">
+    <value>歷史日誌時間窗（分鐘，0 關閉）</value>
+  </data>
+  <data name="Settings.ExternalNotification.FilterPreviousLogs" xml:space="preserve">
+    <value>依黑名單過濾歷史日誌</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendAfterLogCount" xml:space="preserve">
+    <value>新增日誌達到閾值時通知</value>
+  </data>
+  <data name="Settings.ExternalNotification.NewLogCount" xml:space="preserve">
+    <value>新增日誌條數閾值</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenContentMatches" xml:space="preserve">
+    <value>日誌內容符合白名單時通知</value>
+  </data>
+  <data name="Settings.ExternalNotification.Whitelist" xml:space="preserve">
+    <value>內容白名單（每行一個正則）</value>
+  </data>
+  <data name="Settings.ExternalNotification.Blacklist" xml:space="preserve">
+    <value>內容黑名單（每行一個正則）</value>
+  </data>
   <data name="Settings.ExternalNotification.Enabled" xml:space="preserve">
     <value>啟用的通知配置</value>
   </data>

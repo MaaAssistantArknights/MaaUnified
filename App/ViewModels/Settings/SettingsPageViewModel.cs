@@ -410,6 +410,15 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private bool _externalNotificationSendWhenStalled = true;
     private bool _externalNotificationSendBeforeScheduledStart;
     private bool _externalNotificationEnableDetails;
+    private bool _externalNotificationIncludePreviousLogs;
+    private int _externalNotificationMaxEntries = 2;
+    private int _externalNotificationTimeMinutes;
+    private bool _externalNotificationFilterPreviousLogs;
+    private bool _externalNotificationSendAfterLogCount;
+    private int _externalNotificationNewLogCount = 10;
+    private bool _externalNotificationSendWhenContentMatches;
+    private string _externalNotificationWhitelist = string.Empty;
+    private string _externalNotificationBlacklist = string.Empty;
     private string _externalNotificationStatusMessage = string.Empty;
     private string _externalNotificationWarningMessage = string.Empty;
     private string _externalNotificationErrorMessage = string.Empty;
@@ -1748,6 +1757,78 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         get => _externalNotificationEnableDetails;
         set => SetProperty(ref _externalNotificationEnableDetails, value);
     }
+
+    /// <summary>WPF dev-v2 ExternalNotification.Delivery.IncludePreviousLogs（f9c14e0be1）。</summary>
+    public bool ExternalNotificationIncludePreviousLogs
+    {
+        get => _externalNotificationIncludePreviousLogs;
+        set
+        {
+            if (SetProperty(ref _externalNotificationIncludePreviousLogs, value))
+            {
+                OnPropertyChanged(nameof(ExternalNotificationShowHistoryOptions));
+            }
+        }
+    }
+
+    /// <summary>WPF dev-v2 Delivery.MaxEntries：随附历史日志条数（默认 2，详情模式 100）。</summary>
+    public int ExternalNotificationMaxEntries
+    {
+        get => _externalNotificationMaxEntries;
+        set => SetProperty(ref _externalNotificationMaxEntries, value);
+    }
+
+    /// <summary>WPF dev-v2 Delivery.TimeMinutes：历史日志时间窗（0 关闭）。</summary>
+    public int ExternalNotificationTimeMinutes
+    {
+        get => _externalNotificationTimeMinutes;
+        set => SetProperty(ref _externalNotificationTimeMinutes, value);
+    }
+
+    /// <summary>WPF dev-v2 Delivery.FilterPreviousLogs：按黑名单过滤随附历史日志。</summary>
+    public bool ExternalNotificationFilterPreviousLogs
+    {
+        get => _externalNotificationFilterPreviousLogs;
+        set => SetProperty(ref _externalNotificationFilterPreviousLogs, value);
+    }
+
+    /// <summary>WPF dev-v2 Delivery.SendAfterLogCount：按新增日志条数触发。</summary>
+    public bool ExternalNotificationSendAfterLogCount
+    {
+        get => _externalNotificationSendAfterLogCount;
+        set => SetProperty(ref _externalNotificationSendAfterLogCount, value);
+    }
+
+    /// <summary>WPF dev-v2 Delivery.NewLogCount：触发阈值（1..10000）。</summary>
+    public int ExternalNotificationNewLogCount
+    {
+        get => _externalNotificationNewLogCount;
+        set => SetProperty(ref _externalNotificationNewLogCount, value);
+    }
+
+    /// <summary>WPF dev-v2 Delivery.SendWhenContentMatches：日志内容命中白名单时触发。</summary>
+    public bool ExternalNotificationSendWhenContentMatches
+    {
+        get => _externalNotificationSendWhenContentMatches;
+        set => SetProperty(ref _externalNotificationSendWhenContentMatches, value);
+    }
+
+    /// <summary>WPF dev-v2 Delivery.Whitelist：每行一个正则。</summary>
+    public string ExternalNotificationWhitelist
+    {
+        get => _externalNotificationWhitelist;
+        set => SetProperty(ref _externalNotificationWhitelist, value);
+    }
+
+    /// <summary>WPF dev-v2 Delivery.Blacklist：每行一个正则。</summary>
+    public string ExternalNotificationBlacklist
+    {
+        get => _externalNotificationBlacklist;
+        set => SetProperty(ref _externalNotificationBlacklist, value);
+    }
+
+    /// <summary>Gets a value indicating whether 随附历史日志的子选项可见。</summary>
+    public bool ExternalNotificationShowHistoryOptions => ExternalNotificationIncludePreviousLogs;
 
     public bool CanEditExternalNotification => ExternalNotificationEnabled && CanUseSensitiveSettings;
 
@@ -8814,6 +8895,37 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 ConfigurationKeys.ExternalNotificationSendBeforeScheduledStart,
                 false);
             ExternalNotificationEnableDetails = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnableDetails, false);
+            var enableDetails = ExternalNotificationEnableDetails;
+            ExternalNotificationIncludePreviousLogs = ReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationIncludePreviousLogs,
+                enableDetails);
+            ExternalNotificationMaxEntries = Math.Clamp(
+                ReadProfileInt(config, ConfigurationKeys.ExternalNotificationMaxEntries, enableDetails ? 100 : 2),
+                1,
+                10000);
+            ExternalNotificationTimeMinutes = Math.Clamp(
+                ReadProfileInt(config, ConfigurationKeys.ExternalNotificationTimeMinutes, 0),
+                0,
+                1439);
+            ExternalNotificationFilterPreviousLogs = ReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationFilterPreviousLogs,
+                false);
+            ExternalNotificationSendAfterLogCount = ReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationSendAfterLogCount,
+                false);
+            ExternalNotificationNewLogCount = Math.Clamp(
+                ReadProfileInt(config, ConfigurationKeys.ExternalNotificationNewLogCount, 10),
+                1,
+                10000);
+            ExternalNotificationSendWhenContentMatches = ReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationSendWhenContentMatches,
+                false);
+            ExternalNotificationWhitelist = ReadProfileString(config, ConfigurationKeys.ExternalNotificationWhitelist, string.Empty);
+            ExternalNotificationBlacklist = ReadProfileString(config, ConfigurationKeys.ExternalNotificationBlacklist, string.Empty);
             HotkeyShowGui = loadedShowGui;
             HotkeyLinkStart = loadedLinkStart;
             _persistedHotkeyShowGui = loadedShowGui;
@@ -9615,6 +9727,37 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 ConfigurationKeys.ExternalNotificationSendBeforeScheduledStart,
                 false);
             ExternalNotificationEnableDetails = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnableDetails, false);
+            var enableDetails = ExternalNotificationEnableDetails;
+            ExternalNotificationIncludePreviousLogs = ReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationIncludePreviousLogs,
+                enableDetails);
+            ExternalNotificationMaxEntries = Math.Clamp(
+                ReadProfileInt(config, ConfigurationKeys.ExternalNotificationMaxEntries, enableDetails ? 100 : 2),
+                1,
+                10000);
+            ExternalNotificationTimeMinutes = Math.Clamp(
+                ReadProfileInt(config, ConfigurationKeys.ExternalNotificationTimeMinutes, 0),
+                0,
+                1439);
+            ExternalNotificationFilterPreviousLogs = ReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationFilterPreviousLogs,
+                false);
+            ExternalNotificationSendAfterLogCount = ReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationSendAfterLogCount,
+                false);
+            ExternalNotificationNewLogCount = Math.Clamp(
+                ReadProfileInt(config, ConfigurationKeys.ExternalNotificationNewLogCount, 10),
+                1,
+                10000);
+            ExternalNotificationSendWhenContentMatches = ReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationSendWhenContentMatches,
+                false);
+            ExternalNotificationWhitelist = ReadProfileString(config, ConfigurationKeys.ExternalNotificationWhitelist, string.Empty);
+            ExternalNotificationBlacklist = ReadProfileString(config, ConfigurationKeys.ExternalNotificationBlacklist, string.Empty);
             LoadExternalNotificationProviderParametersFromConfig(config);
             configurationSummary = BuildExternalNotificationConfigurationSummary(
                 AvailableNotificationProviders.Where(provider => _enabledNotificationProviders.Contains(provider)));

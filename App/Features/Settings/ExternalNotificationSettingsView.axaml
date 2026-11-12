@@ -100,6 +100,67 @@
                       IsChecked="{Binding ExternalNotificationEnableDetails}"
                       IsEnabled="{Binding CanEditExternalNotificationDetails}" />
           </controls:SettingsDependentRow>
+
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding RootTexts[Settings.ExternalNotification.IncludePreviousLogs]}"
+                    IsChecked="{Binding ExternalNotificationIncludePreviousLogs}" />
+
+          <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack"
+                      IsEnabled="{Binding ExternalNotificationIncludePreviousLogs}">
+            <Grid ColumnDefinitions="Auto,16,Auto">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.ExternalNotification.MaxEntries]}" />
+              <controls:AppNumberInput Grid.Column="2"
+                                       Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                       Minimum="1"
+                                       Maximum="10000"
+                                       Value="{Binding ExternalNotificationMaxEntries}" />
+            </Grid>
+            <Grid ColumnDefinitions="Auto,16,Auto">
+              <controls:SettingsLabel Text="{Binding RootTexts[Settings.ExternalNotification.TimeMinutes]}" />
+              <controls:AppNumberInput Grid.Column="2"
+                                       Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                       Minimum="0"
+                                       Maximum="1439"
+                                       Value="{Binding ExternalNotificationTimeMinutes}" />
+            </Grid>
+            <CheckBox Classes="app-checkbox"
+                      Content="{Binding RootTexts[Settings.ExternalNotification.FilterPreviousLogs]}"
+                      IsChecked="{Binding ExternalNotificationFilterPreviousLogs}" />
+            <controls:AppTextInput Height="64"
+                                   AcceptsReturn="True"
+                                   DismissFocusOnEnter="False"
+                                   Watermark="{Binding RootTexts[Settings.ExternalNotification.Blacklist]}"
+                                   TextWrapping="Wrap"
+                                   Classes="settings-input settings-input-block"
+                                   Text="{Binding ExternalNotificationBlacklist, UpdateSourceTrigger=PropertyChanged}" />
+          </controls:AdaptiveSpacingStackPanel>
+
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding RootTexts[Settings.ExternalNotification.SendAfterLogCount]}"
+                    IsChecked="{Binding ExternalNotificationSendAfterLogCount}" />
+
+          <Grid ColumnDefinitions="Auto,16,Auto"
+                IsEnabled="{Binding ExternalNotificationSendAfterLogCount}">
+            <controls:SettingsLabel Text="{Binding RootTexts[Settings.ExternalNotification.NewLogCount]}" />
+            <controls:AppNumberInput Grid.Column="2"
+                                     Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                     Minimum="1"
+                                     Maximum="10000"
+                                     Value="{Binding ExternalNotificationNewLogCount}" />
+          </Grid>
+
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding RootTexts[Settings.ExternalNotification.SendWhenContentMatches]}"
+                    IsChecked="{Binding ExternalNotificationSendWhenContentMatches}" />
+
+          <controls:AppTextInput Height="64"
+                                 AcceptsReturn="True"
+                                 DismissFocusOnEnter="False"
+                                 IsEnabled="{Binding ExternalNotificationSendWhenContentMatches}"
+                                 Watermark="{Binding RootTexts[Settings.ExternalNotification.Whitelist]}"
+                                 TextWrapping="Wrap"
+                                 Classes="settings-input settings-input-block"
+                                 Text="{Binding ExternalNotificationWhitelist, UpdateSourceTrigger=PropertyChanged}" />
           <CheckBox Classes="app-checkbox"
                     Content="{Binding RootTexts[Settings.ExternalNotification.SendWhenError]}"
                     IsChecked="{Binding ExternalNotificationSendWhenError}" />

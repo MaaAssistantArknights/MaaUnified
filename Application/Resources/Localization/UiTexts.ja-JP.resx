@@ -2344,6 +2344,33 @@
   <data name="Settings.ExternalNotification.EnableDetails" xml:space="preserve">
     <value>詳細情報を出力</value>
   </data>
+  <data name="Settings.ExternalNotification.IncludePreviousLogs" xml:space="preserve">
+    <value>履歴ログを添付</value>
+  </data>
+  <data name="Settings.ExternalNotification.MaxEntries" xml:space="preserve">
+    <value>履歴ログの件数</value>
+  </data>
+  <data name="Settings.ExternalNotification.TimeMinutes" xml:space="preserve">
+    <value>履歴ログの時間枠（分、0 で無効）</value>
+  </data>
+  <data name="Settings.ExternalNotification.FilterPreviousLogs" xml:space="preserve">
+    <value>ブラックリストで履歴ログを絞り込む</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendAfterLogCount" xml:space="preserve">
+    <value>新しいログがしきい値に達したら通知</value>
+  </data>
+  <data name="Settings.ExternalNotification.NewLogCount" xml:space="preserve">
+    <value>新しいログ件数のしきい値</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenContentMatches" xml:space="preserve">
+    <value>ログがホワイトリストに一致したら通知</value>
+  </data>
+  <data name="Settings.ExternalNotification.Whitelist" xml:space="preserve">
+    <value>内容ホワイトリスト（1 行 1 正規表現）</value>
+  </data>
+  <data name="Settings.ExternalNotification.Blacklist" xml:space="preserve">
+    <value>内容ブラックリスト（1 行 1 正規表現）</value>
+  </data>
   <data name="Settings.ExternalNotification.Enabled" xml:space="preserve">
     <value>通知設定を有効化</value>
   </data>

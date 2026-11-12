@@ -1084,11 +1084,11 @@
     ]
   },
   "allowedInversions": {
-    "zh-cn": 213,
-    "zh-tw": 204,
-    "en-us": 214,
-    "ja-jp": 201,
-    "ko-kr": 201,
+    "zh-cn": 216,
+    "zh-tw": 207,
+    "en-us": 217,
+    "ja-jp": 204,
+    "ko-kr": 204,
     "pallas": 43
   }
 }

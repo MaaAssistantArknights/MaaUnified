@@ -412,6 +412,15 @@ public sealed partial class SettingsPageViewModel
             // Reads stay new-key-first with the legacy key as fallback.
             [ConfigurationKeys.ExternalNotificationSendWhenTimeout] = ExternalNotificationSendWhenStalled.ToString(),
             [ConfigurationKeys.ExternalNotificationEnableDetails] = ExternalNotificationEnableDetails.ToString(),
+            [ConfigurationKeys.ExternalNotificationIncludePreviousLogs] = ExternalNotificationIncludePreviousLogs.ToString(),
+            [ConfigurationKeys.ExternalNotificationMaxEntries] = ExternalNotificationMaxEntries.ToString(),
+            [ConfigurationKeys.ExternalNotificationTimeMinutes] = ExternalNotificationTimeMinutes.ToString(),
+            [ConfigurationKeys.ExternalNotificationFilterPreviousLogs] = ExternalNotificationFilterPreviousLogs.ToString(),
+            [ConfigurationKeys.ExternalNotificationSendAfterLogCount] = ExternalNotificationSendAfterLogCount.ToString(),
+            [ConfigurationKeys.ExternalNotificationNewLogCount] = ExternalNotificationNewLogCount.ToString(),
+            [ConfigurationKeys.ExternalNotificationSendWhenContentMatches] = ExternalNotificationSendWhenContentMatches.ToString(),
+            [ConfigurationKeys.ExternalNotificationWhitelist] = ExternalNotificationWhitelist,
+            [ConfigurationKeys.ExternalNotificationBlacklist] = ExternalNotificationBlacklist,
         };
 
         var applyProviderResult = await PopulateExternalNotificationProviderUpdatesAsync(

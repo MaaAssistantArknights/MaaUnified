@@ -524,6 +524,51 @@ public sealed class SettingsRemoteExternalNotificationFeatureTests
     }
 
     [Fact]
+    public async Task ExternalNotification_DeliverySettings_ShouldRoundTrip()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.ExternalNotificationEnabled = true;
+        vm.SelectedNotificationProvider = "Bark";
+        vm.NotificationProviderParametersText = "sendKey=abc123\nserver=https://api.day.app";
+
+        vm.ExternalNotificationIncludePreviousLogs = true;
+        vm.ExternalNotificationMaxEntries = 25;
+        vm.ExternalNotificationTimeMinutes = 30;
+        vm.ExternalNotificationFilterPreviousLogs = true;
+        vm.ExternalNotificationSendAfterLogCount = true;
+        vm.ExternalNotificationNewLogCount = 7;
+        vm.ExternalNotificationSendWhenContentMatches = true;
+        vm.ExternalNotificationWhitelist = "^ERROR";
+        vm.ExternalNotificationBlacklist = "^DEBUG";
+        await vm.SaveExternalNotificationAsync();
+
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        Assert.Equal("True", profile.Values[ConfigurationKeys.ExternalNotificationIncludePreviousLogs]!.GetValue<string>());
+        Assert.Equal("25", profile.Values[ConfigurationKeys.ExternalNotificationMaxEntries]!.GetValue<string>());
+        Assert.Equal("30", profile.Values[ConfigurationKeys.ExternalNotificationTimeMinutes]!.GetValue<string>());
+        Assert.Equal("True", profile.Values[ConfigurationKeys.ExternalNotificationFilterPreviousLogs]!.GetValue<string>());
+        Assert.Equal("True", profile.Values[ConfigurationKeys.ExternalNotificationSendAfterLogCount]!.GetValue<string>());
+        Assert.Equal("7", profile.Values[ConfigurationKeys.ExternalNotificationNewLogCount]!.GetValue<string>());
+        Assert.Equal("True", profile.Values[ConfigurationKeys.ExternalNotificationSendWhenContentMatches]!.GetValue<string>());
+        Assert.Equal("^ERROR", profile.Values[ConfigurationKeys.ExternalNotificationWhitelist]!.GetValue<string>());
+        Assert.Equal("^DEBUG", profile.Values[ConfigurationKeys.ExternalNotificationBlacklist]!.GetValue<string>());
+
+        var reloaded = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await reloaded.InitializeAsync();
+        Assert.True(reloaded.ExternalNotificationIncludePreviousLogs);
+        Assert.Equal(25, reloaded.ExternalNotificationMaxEntries);
+        Assert.Equal(30, reloaded.ExternalNotificationTimeMinutes);
+        Assert.True(reloaded.ExternalNotificationFilterPreviousLogs);
+        Assert.True(reloaded.ExternalNotificationSendAfterLogCount);
+        Assert.Equal(7, reloaded.ExternalNotificationNewLogCount);
+        Assert.True(reloaded.ExternalNotificationSendWhenContentMatches);
+        Assert.Equal("^ERROR", reloaded.ExternalNotificationWhitelist);
+        Assert.Equal("^DEBUG", reloaded.ExternalNotificationBlacklist);
+    }
+
+    [Fact]
     public async Task ExternalNotification_InvalidUnsavedLine_DoesNotReachDiagnosticsOrIssueReport()
     {
         const string sentinel = "UNSAVED/NOTIFY?token=raw+sentinel";

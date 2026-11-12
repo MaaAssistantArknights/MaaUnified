@@ -3460,6 +3460,33 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ExternalNotification.EnableDetails" xml:space="preserve">
     <value>Include detailed content</value>
   </data>
+  <data name="Settings.ExternalNotification.IncludePreviousLogs" xml:space="preserve">
+    <value>Attach recent logs</value>
+  </data>
+  <data name="Settings.ExternalNotification.MaxEntries" xml:space="preserve">
+    <value>Recent log entries</value>
+  </data>
+  <data name="Settings.ExternalNotification.TimeMinutes" xml:space="preserve">
+    <value>Log time window (minutes, 0 disables)</value>
+  </data>
+  <data name="Settings.ExternalNotification.FilterPreviousLogs" xml:space="preserve">
+    <value>Filter recent logs by blacklist</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendAfterLogCount" xml:space="preserve">
+    <value>Notify after new log count</value>
+  </data>
+  <data name="Settings.ExternalNotification.NewLogCount" xml:space="preserve">
+    <value>New log count threshold</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenContentMatches" xml:space="preserve">
+    <value>Notify when log matches whitelist</value>
+  </data>
+  <data name="Settings.ExternalNotification.Whitelist" xml:space="preserve">
+    <value>Content whitelist (one regex per line)</value>
+  </data>
+  <data name="Settings.ExternalNotification.Blacklist" xml:space="preserve">
+    <value>Content blacklist (one regex per line)</value>
+  </data>
   <data name="Settings.ExternalNotification.Enabled" xml:space="preserve">
     <value>Enable external notifications</value>
   </data>

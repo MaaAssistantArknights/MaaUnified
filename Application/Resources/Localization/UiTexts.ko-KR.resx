@@ -2345,6 +2345,33 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.ExternalNotification.EnableDetails" xml:space="preserve">
     <value>상세 정보 출력</value>
   </data>
+  <data name="Settings.ExternalNotification.IncludePreviousLogs" xml:space="preserve">
+    <value>최근 로그 첨부</value>
+  </data>
+  <data name="Settings.ExternalNotification.MaxEntries" xml:space="preserve">
+    <value>최근 로그 개수</value>
+  </data>
+  <data name="Settings.ExternalNotification.TimeMinutes" xml:space="preserve">
+    <value>로그 시간 범위(분, 0은 비활성)</value>
+  </data>
+  <data name="Settings.ExternalNotification.FilterPreviousLogs" xml:space="preserve">
+    <value>블랙리스트로 최근 로그 필터링</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendAfterLogCount" xml:space="preserve">
+    <value>새 로그가 임계값에 도달하면 알림</value>
+  </data>
+  <data name="Settings.ExternalNotification.NewLogCount" xml:space="preserve">
+    <value>새 로그 개수 임계값</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenContentMatches" xml:space="preserve">
+    <value>로그가 화이트리스트와 일치하면 알림</value>
+  </data>
+  <data name="Settings.ExternalNotification.Whitelist" xml:space="preserve">
+    <value>내용 화이트리스트(줄당 정규식 하나)</value>
+  </data>
+  <data name="Settings.ExternalNotification.Blacklist" xml:space="preserve">
+    <value>내용 블랙리스트(줄당 정규식 하나)</value>
+  </data>
   <data name="Settings.ExternalNotification.Enabled" xml:space="preserve">
     <value>알림 구성 사용</value>
   </data>

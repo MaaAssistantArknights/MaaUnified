@@ -3461,6 +3461,33 @@
   <data name="Settings.ExternalNotification.EnableDetails" xml:space="preserve">
     <value>启用详细内容</value>
   </data>
+  <data name="Settings.ExternalNotification.IncludePreviousLogs" xml:space="preserve">
+    <value>随附历史日志</value>
+  </data>
+  <data name="Settings.ExternalNotification.MaxEntries" xml:space="preserve">
+    <value>历史日志条数</value>
+  </data>
+  <data name="Settings.ExternalNotification.TimeMinutes" xml:space="preserve">
+    <value>历史日志时间窗（分钟，0 关闭）</value>
+  </data>
+  <data name="Settings.ExternalNotification.FilterPreviousLogs" xml:space="preserve">
+    <value>按黑名单过滤历史日志</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendAfterLogCount" xml:space="preserve">
+    <value>新增日志达到阈值时通知</value>
+  </data>
+  <data name="Settings.ExternalNotification.NewLogCount" xml:space="preserve">
+    <value>新增日志条数阈值</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenContentMatches" xml:space="preserve">
+    <value>日志内容匹配白名单时通知</value>
+  </data>
+  <data name="Settings.ExternalNotification.Whitelist" xml:space="preserve">
+    <value>内容白名单（每行一个正则）</value>
+  </data>
+  <data name="Settings.ExternalNotification.Blacklist" xml:space="preserve">
+    <value>内容黑名单（每行一个正则）</value>
+  </data>
   <data name="Settings.ExternalNotification.Enabled" xml:space="preserve">
     <value>启用外部通知</value>
   </data>
