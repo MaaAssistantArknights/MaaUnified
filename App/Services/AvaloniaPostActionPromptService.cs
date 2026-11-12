@@ -88,6 +88,7 @@ public sealed class AvaloniaPostActionPromptService : IPostActionPromptService
             PostActionType.Shutdown => localizer.GetOrDefault("PostAction.Dialog.Title.Shutdown", "Confirm Shutdown", "App.PostActionPrompt"),
             PostActionType.Hibernate => localizer.GetOrDefault("PostAction.Dialog.Title.Hibernate", "Confirm Hibernate", "App.PostActionPrompt"),
             PostActionType.Sleep => localizer.GetOrDefault("PostAction.Dialog.Title.Sleep", "Confirm Sleep", "App.PostActionPrompt"),
+            PostActionType.LockScreen => localizer.GetOrDefault("PostAction.Dialog.Title.LockScreen", "Confirm Lock Screen", "App.PostActionPrompt"),
             _ => DialogTextCatalog.WarningDialogTitle(language),
         };
     }
@@ -108,6 +109,10 @@ public sealed class AvaloniaPostActionPromptService : IPostActionPromptService
             PostActionType.Sleep => string.Format(
                 CultureInfo.CurrentCulture,
                 localizer.GetOrDefault("PostAction.Dialog.Message.Sleep", "MAA will put this computer to sleep in {0} seconds unless you cancel.", "App.PostActionPrompt"),
+                seconds),
+            PostActionType.LockScreen => string.Format(
+                CultureInfo.CurrentCulture,
+                localizer.GetOrDefault("PostAction.Dialog.Message.LockScreen", "Tasks completed, MAA will lock the screen in {0} seconds unless you cancel.", "App.PostActionPrompt"),
                 seconds),
             _ => DialogTextCatalog.WarningDialogPrompt(language),
         };

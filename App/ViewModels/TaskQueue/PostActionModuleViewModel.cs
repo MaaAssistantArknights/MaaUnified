@@ -1,4 +1,5 @@
 using MAAUnified.App.ViewModels.Infrastructure;
+using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.Services;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
@@ -10,6 +11,7 @@ public sealed class PostActionModuleViewModel : ObservableObject
 {
     private readonly MAAUnifiedRuntime _runtime;
     private readonly LocalizedTextMap _texts;
+    private readonly ConnectionGameSharedStateViewModel? _connectionGameSharedState;
     private CancellationTokenSource? _persistDebounceCts;
     private bool _once;
     private bool _exitArknights;
@@ -21,6 +23,8 @@ public sealed class PostActionModuleViewModel : ObservableObject
     private bool _shutdown;
     private bool _sleep;
     private bool _skipOnError;
+    private bool _lockScreen;
+    private bool _exitPCClient;
     private string _exitArknightsCommand = string.Empty;
     private string _backToAndroidHomeCommand = string.Empty;
     private string _exitEmulatorCommand = string.Empty;
@@ -31,11 +35,19 @@ public sealed class PostActionModuleViewModel : ObservableObject
     private bool _hasPendingCommandPersist;
     private PostActionConfig _persistentConfig = PostActionConfig.Default;
 
-    public PostActionModuleViewModel(MAAUnifiedRuntime runtime, LocalizedTextMap texts)
+    public PostActionModuleViewModel(
+        MAAUnifiedRuntime runtime,
+        LocalizedTextMap texts,
+        ConnectionGameSharedStateViewModel? connectionGameSharedState = null)
     {
         _runtime = runtime;
         _texts = texts;
+        _connectionGameSharedState = connectionGameSharedState;
         _texts.PropertyChanged += OnTextsPropertyChanged;
+        if (_connectionGameSharedState is not null)
+        {
+            _connectionGameSharedState.PropertyChanged += OnConnectionGameSharedStateChanged;
+        }
     }
 
     public LocalizedTextMap Texts => _texts;
@@ -44,11 +56,33 @@ public sealed class PostActionModuleViewModel : ObservableObject
 
     private static bool SupportsHibernate => !OperatingSystem.IsMacOS();
 
-    private bool HasAnySystemPowerAction => Shutdown || Sleep || (SupportsHibernate && Hibernate);
+    /// <summary>
+    /// Gets a value indicating whether the workstation lock is available on this platform.
+    /// WPF parity (d58cb0825b) uses the Windows <c>LockWorkStation</c> API; macOS/Linux are
+    /// explicit degradations (hidden checkbox + unsupported platform capability).
+    /// </summary>
+    private static bool SupportsLockScreen => OperatingSystem.IsWindows();
 
-    public bool ShowExitEmulator => SupportsExitEmulator;
+    private bool HasAnySystemPowerAction => Shutdown || Sleep || (SupportsHibernate && Hibernate) || (SupportsLockScreen && LockScreen);
+
+    /// <summary>
+    /// Gets a value indicating whether the current connection is the PC client (window binding),
+    /// WPF <c>ConnectSettingsUserControlModel.IsPCConnectConfig</c>. Changing it never rewrites
+    /// the stored exit selections (3b4f06dd86); it only filters what is shown and executed.
+    /// </summary>
+    public bool IsPCConnectMode => _connectionGameSharedState?.IsAttachWindowMode ?? false;
+
+    public bool ShowExitArknights => !IsPCConnectMode;
+
+    public bool ShowExitEmulator => SupportsExitEmulator && !IsPCConnectMode;
+
+    public bool ShowExitPCClient => IsPCConnectMode;
+
+    public bool ShowLockScreen => SupportsLockScreen;
 
     public bool ShowHibernate => SupportsHibernate;
+
+    public bool CanUseAndroidControlPostActions => !ExitEmulator && !IsPCConnectMode;
 
     public bool CanUseIfNoOtherMaa => HasAnySystemPowerAction;
 
@@ -63,6 +97,27 @@ public sealed class PostActionModuleViewModel : ObservableObject
 
         OnPropertyChanged(nameof(Texts));
         OnPropertyChanged(string.Empty);
+    }
+
+    private void OnConnectionGameSharedStateChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(e.PropertyName)
+            && !string.Equals(e.PropertyName, nameof(ConnectionGameSharedStateViewModel.ConnectConfig), StringComparison.Ordinal)
+            && !string.Equals(e.PropertyName, nameof(ConnectionGameSharedStateViewModel.IsAttachWindowMode), StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        // WPF parity (3b4f06dd86): switching the connection configuration re-evaluates the
+        // filtered getters/visibility and never rewrites the stored selections.
+        OnPropertyChanged(nameof(IsPCConnectMode));
+        OnPropertyChanged(nameof(ShowExitArknights));
+        OnPropertyChanged(nameof(ShowExitEmulator));
+        OnPropertyChanged(nameof(ShowExitPCClient));
+        OnPropertyChanged(nameof(CanUseAndroidControlPostActions));
+        OnPropertyChanged(nameof(ExitArknights));
+        OnPropertyChanged(nameof(ExitEmulator));
+        OnPropertyChanged(nameof(ExitPCClient));
     }
 
     public bool Once
@@ -86,9 +141,15 @@ public sealed class PostActionModuleViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether MAA exits Arknights after completion.
+    /// Mirrors WPF <c>PostActionSetting.ExitArknights</c> (3b4f06dd86): the getter is filtered to
+    /// ADB connections and hidden for the PC client, while the stored selection is preserved
+    /// across connection switches.
+    /// </summary>
     public bool ExitArknights
     {
-        get => _exitArknights;
+        get => _exitArknights && !IsPCConnectMode;
         set
         {
             if (!SetProperty(ref _exitArknights, value))
@@ -124,9 +185,14 @@ public sealed class PostActionModuleViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether MAA closes the emulator after completion.
+    /// WPF 3b4f06dd86 replaced the old ｢PC mode rewrites ExitEmulator｣ behavior with a filtered
+    /// getter; the stored selection is kept and only hidden/skipped for PC connections.
+    /// </summary>
     public bool ExitEmulator
     {
-        get => _exitEmulator;
+        get => SupportsExitEmulator && _exitEmulator && !IsPCConnectMode;
         set
         {
             value = SupportsExitEmulator && value;
@@ -135,6 +201,7 @@ public sealed class PostActionModuleViewModel : ObservableObject
                 return;
             }
 
+            OnPropertyChanged(nameof(CanUseAndroidControlPostActions));
             if (value)
             {
                 ExitArknights = false;
@@ -146,6 +213,26 @@ public sealed class PostActionModuleViewModel : ObservableObject
                 {
                     IfNoOtherMaa = false;
                 }
+            }
+
+            QueuePersist();
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether MAA closes the PC client after completion.
+    /// WPF parity: <c>PostActionSetting.ExitPCClient</c> (3b4f06dd86) — only shown and executed for
+    /// the PC (window binding) connection, decoupled from ExitArknights/ExitEmulator: selecting it
+    /// never clears them, and switching the connection never rewrites its stored value.
+    /// </summary>
+    public bool ExitPCClient
+    {
+        get => _exitPCClient && IsPCConnectMode;
+        set
+        {
+            if (!SetProperty(ref _exitPCClient, value))
+            {
+                return;
             }
 
             QueuePersist();
@@ -211,8 +298,42 @@ public sealed class PostActionModuleViewModel : ObservableObject
             {
                 Shutdown = false;
                 Sleep = false;
+                LockScreen = false;
             }
-            else if (!Shutdown && !Sleep)
+            else if (!Shutdown && !Sleep && !LockScreen)
+            {
+                IfNoOtherMaa = false;
+            }
+
+            OnPropertyChanged(nameof(CanUseIfNoOtherMaa));
+            QueuePersist();
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether MAA locks the workstation after completion.
+    /// WPF parity (d58cb0825b): LockScreen is mutually exclusive with Hibernate/Shutdown/Sleep
+    /// and participates in ｢Only if no other MAA｣, but it never clears the exit selections.
+    /// Windows only; on macOS/Linux the checkbox is hidden and the stored value is preserved.
+    /// </summary>
+    public bool LockScreen
+    {
+        get => SupportsLockScreen && _lockScreen;
+        set
+        {
+            value = SupportsLockScreen && value;
+            if (!SetProperty(ref _lockScreen, value))
+            {
+                return;
+            }
+
+            if (value)
+            {
+                Hibernate = false;
+                Shutdown = false;
+                Sleep = false;
+            }
+            else if (!Hibernate && !Shutdown && !Sleep)
             {
                 IfNoOtherMaa = false;
             }
@@ -236,10 +357,11 @@ public sealed class PostActionModuleViewModel : ObservableObject
             {
                 Hibernate = false;
                 Sleep = false;
+                LockScreen = false;
                 ExitArknights = false;
                 BackToAndroidHome = false;
             }
-            else if (!Hibernate && !Sleep)
+            else if (!Hibernate && !Sleep && !LockScreen)
             {
                 IfNoOtherMaa = false;
             }
@@ -263,8 +385,9 @@ public sealed class PostActionModuleViewModel : ObservableObject
             {
                 Hibernate = false;
                 Shutdown = false;
+                LockScreen = false;
             }
-            else if (!Hibernate && !Shutdown)
+            else if (!Hibernate && !Shutdown && !LockScreen)
             {
                 IfNoOtherMaa = false;
             }
@@ -397,21 +520,33 @@ public sealed class PostActionModuleViewModel : ObservableObject
 
     public PostActionConfig BuildRuntimeConfig()
     {
+        // WPF parity (3b4f06dd86): the filtered exit getters are read once, before the post-action
+        // sequence awaits anything, so a connection switch during task teardown can no longer
+        // retarget the action at the wrong client/emulator.
+        var isPcConnectMode = IsPCConnectMode;
         var hibernate = SupportsHibernate && Hibernate;
-        var exitEmulator = SupportsExitEmulator && ExitEmulator;
-        var canUseIfNoOther = Shutdown || Sleep || hibernate;
+        var lockScreen = SupportsLockScreen && LockScreen;
+        var exitEmulator = SupportsExitEmulator && !isPcConnectMode && _exitEmulator;
+        var exitArknights = !isPcConnectMode && _exitArknights;
+        var exitPCClient = isPcConnectMode && _exitPCClient;
+        // WPF 3b4f06dd86 clears the Android-side ｢back to home｣ bit when switching to the PC
+        // connection; we keep the stored value and only skip executing it for PC connections.
+        var backToAndroidHome = !isPcConnectMode && BackToAndroidHome;
+        var canUseIfNoOther = Shutdown || Sleep || hibernate || lockScreen;
         var ifNoOtherMaa = canUseIfNoOther && IfNoOtherMaa;
         var exitSelf = ExitSelf || ifNoOtherMaa;
 
         return new PostActionConfig
         {
             Once = Once,
-            ExitArknights = ExitArknights,
-            BackToAndroidHome = BackToAndroidHome,
+            ExitArknights = exitArknights,
+            BackToAndroidHome = backToAndroidHome,
             ExitEmulator = exitEmulator,
+            ExitPCClient = exitPCClient,
             ExitSelf = exitSelf,
             IfNoOtherMaa = ifNoOtherMaa,
             Hibernate = hibernate,
+            LockScreen = lockScreen,
             Shutdown = Shutdown,
             Sleep = Sleep,
             SkipOnError = SkipOnError,
@@ -430,8 +565,10 @@ public sealed class PostActionModuleViewModel : ObservableObject
         ExitArknights = false;
         BackToAndroidHome = false;
         ExitEmulator = false;
+        ExitPCClient = false;
         ExitSelf = false;
         IfNoOtherMaa = false;
+        LockScreen = false;
         Hibernate = false;
         Shutdown = false;
         Sleep = false;
@@ -453,8 +590,10 @@ public sealed class PostActionModuleViewModel : ObservableObject
         ExitArknights = false;
         BackToAndroidHome = false;
         ExitEmulator = false;
+        ExitPCClient = false;
         ExitSelf = false;
         IfNoOtherMaa = false;
+        LockScreen = false;
         Hibernate = false;
         Shutdown = false;
         Sleep = false;
@@ -468,7 +607,9 @@ public sealed class PostActionModuleViewModel : ObservableObject
             nameof(BackToAndroidHome) => BackToAndroidHome,
             nameof(ExitArknights) => ExitArknights,
             nameof(ExitEmulator) => ExitEmulator,
+            nameof(ExitPCClient) => ExitPCClient,
             nameof(ExitSelf) => ExitSelf,
+            nameof(LockScreen) => LockScreen,
             nameof(Sleep) => Sleep,
             nameof(Hibernate) => Hibernate,
             nameof(Shutdown) => Shutdown,
@@ -489,8 +630,14 @@ public sealed class PostActionModuleViewModel : ObservableObject
             case nameof(ExitEmulator):
                 ExitEmulator = value;
                 break;
+            case nameof(ExitPCClient):
+                ExitPCClient = value;
+                break;
             case nameof(ExitSelf):
                 ExitSelf = value;
+                break;
+            case nameof(LockScreen):
+                LockScreen = value;
                 break;
             case nameof(Sleep):
                 Sleep = value;
@@ -642,8 +789,8 @@ public sealed class PostActionModuleViewModel : ObservableObject
     {
         var persistent = _persistentConfig.Clone();
         var hibernate = SupportsHibernate && Hibernate;
-        var exitEmulator = SupportsExitEmulator && ExitEmulator;
-        var canUseIfNoOther = Shutdown || Sleep || hibernate;
+        var lockScreen = SupportsLockScreen && LockScreen;
+        var canUseIfNoOther = Shutdown || Sleep || hibernate || lockScreen;
         var ifNoOtherMaa = canUseIfNoOther && IfNoOtherMaa;
         var exitSelf = ExitSelf || ifNoOtherMaa;
 
@@ -657,15 +804,23 @@ public sealed class PostActionModuleViewModel : ObservableObject
 
         if (!Once)
         {
-            persistent.ExitArknights = ExitArknights;
+            // Persist the raw (unfiltered) exit selections: WPF 3b4f06dd86 removed the old
+            // ｢switching to PC rewrites ExitEmulator｣ behavior, so a connection switch must never
+            // erase what the user picked for the other mode.
+            persistent.ExitArknights = _exitArknights;
             persistent.BackToAndroidHome = BackToAndroidHome;
+            persistent.ExitPCClient = _exitPCClient;
             if (SupportsExitEmulator)
             {
-                persistent.ExitEmulator = exitEmulator;
+                persistent.ExitEmulator = _exitEmulator;
             }
             persistent.ExitSelf = exitSelf;
             persistent.IfNoOtherMaa = ifNoOtherMaa;
             persistent.Hibernate = hibernate;
+            if (SupportsLockScreen)
+            {
+                persistent.LockScreen = _lockScreen;
+            }
             persistent.Shutdown = Shutdown;
             persistent.Sleep = Sleep;
             persistent.SkipOnError = SkipOnError;
@@ -691,11 +846,15 @@ public sealed class PostActionModuleViewModel : ObservableObject
         ExitArknights = _persistentConfig.ExitArknights;
         BackToAndroidHome = _persistentConfig.BackToAndroidHome;
         ExitEmulator = _persistentConfig.ExitEmulator;
+        ExitPCClient = _persistentConfig.ExitPCClient;
         ExitSelf = _persistentConfig.ExitSelf;
+        LockScreen = _persistentConfig.LockScreen;
         Hibernate = _persistentConfig.Hibernate;
         Shutdown = _persistentConfig.Shutdown;
         Sleep = _persistentConfig.Sleep;
         SkipOnError = _persistentConfig.SkipOnError;
+        // Mutually exclusive setters above may clear it; restore from the snapshot last (WPF
+        // LoadPostActions does the same for IfNoOtherMaa).
         IfNoOtherMaa = _persistentConfig.IfNoOtherMaa;
         ExitArknightsCommand = _persistentConfig.Commands.ExitArknights;
         BackToAndroidHomeCommand = _persistentConfig.Commands.BackToAndroidHome;

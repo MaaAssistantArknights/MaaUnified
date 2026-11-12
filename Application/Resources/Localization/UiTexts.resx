@@ -2038,6 +2038,9 @@
   <data name="PostAction.ExitEmulator" xml:space="preserve">
     <value>关闭模拟器</value>
   </data>
+  <data name="PostAction.ExitPCClient" xml:space="preserve">
+    <value>退出 PC 客户端</value>
+  </data>
   <data name="PostAction.ExitSelf" xml:space="preserve">
     <value>关闭 MAA</value>
   </data>
@@ -2049,6 +2052,9 @@
   </data>
   <data name="PostAction.IfNoOther" xml:space="preserve">
     <value>仅无其他 MAA 时执行</value>
+  </data>
+  <data name="PostAction.LockScreen" xml:space="preserve">
+    <value>锁屏</value>
   </data>
   <data name="PostAction.Once" xml:space="preserve">
     <value>一次性(本轮生效)</value>
@@ -5863,6 +5869,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="PostAction.Dialog.Message.Hibernate" xml:space="preserve">
     <value>任务完成后将在 {0} 秒后执行休眠，期间可以取消。</value>
   </data>
+  <data name="PostAction.Dialog.Message.LockScreen" xml:space="preserve">
+    <value>任务完成后将在 {0} 秒后执行锁屏，期间可以取消。</value>
+  </data>
   <data name="PostAction.Dialog.Message.Shutdown" xml:space="preserve">
     <value>任务完成后将在 {0} 秒后执行关机，期间可以取消。</value>
   </data>
@@ -5871,6 +5880,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="PostAction.Dialog.Title.Hibernate" xml:space="preserve">
     <value>确认休眠</value>
+  </data>
+  <data name="PostAction.Dialog.Title.LockScreen" xml:space="preserve">
+    <value>确认锁屏</value>
   </data>
   <data name="PostAction.Dialog.Title.Shutdown" xml:space="preserve">
     <value>确认关机</value>

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 
 namespace MAAUnified.Platform;
@@ -23,7 +24,16 @@ internal static class PostActionExecutorSupport
             ExitSelf: exitSelf,
             Hibernate: BuildPowerCapability(PostActionType.Hibernate),
             Shutdown: BuildPowerCapability(PostActionType.Shutdown),
-            Sleep: BuildPowerCapability(PostActionType.Sleep));
+            Sleep: BuildPowerCapability(PostActionType.Sleep),
+            LockScreen: LockScreenHelper.GetCapability(),
+            // PC client close-down reuses MaaCore CloseDown, same as ExitArknights; the PC
+            // connection mode itself is filtered in the UI layer (WPF 3b4f06dd86).
+            ExitPCClient: BuildCoreManagedCapability("Exit PC client", "maa-core"));
+    }
+
+    public static async Task<PlatformOperationResult> ExecuteLockScreenAsync(CancellationToken cancellationToken)
+    {
+        return await LockScreenHelper.ExecuteAsync(cancellationToken);
     }
 
     public static async Task<PlatformOperationResult> ExecuteExitEmulatorAsync(
@@ -393,7 +403,7 @@ internal static class PostActionExecutorSupport
         return null;
     }
 
-    private static bool IsCommandAvailable(string fileName)
+    internal static bool IsCommandAvailable(string fileName)
     {
         if (string.IsNullOrWhiteSpace(fileName))
         {
@@ -448,6 +458,141 @@ internal static class PostActionExecutorSupport
 
         return false;
     }
+}
+
+/// <summary>
+/// Lock-screen capability and execution.
+/// WPF parity: <c>Utilities/PowerManagement.cs</c> <c>LockScreen()</c> (d58cb0825b) calls
+/// <c>LockWorkStation</c>, and the post-action flow cancels the countdown before locking.
+/// MAAUnified implements the Windows API (the only API WPF uses) plus a best-effort Linux
+/// session lock; macOS is an explicit placeholder because macOS exposes no supported API for
+/// locking the console session without user interaction.
+/// </summary>
+internal static class LockScreenHelper
+{
+    private const string Provider = "post-action";
+
+    private static readonly (string FileName, string Arguments, string Provider)[] LinuxLockCommands =
+    [
+        ("loginctl", "lock-session", "loginctl"),
+        ("xdg-screensaver", "lock", "xdg-screensaver"),
+    ];
+
+    public static PlatformCapabilityStatus GetCapability()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return new PlatformCapabilityStatus(
+                true,
+                "Lock screen is available via the Windows LockWorkStation API.",
+                Provider: "windows-lock-workstation");
+        }
+
+        if (OperatingSystem.IsLinux())
+        {
+            foreach (var command in LinuxLockCommands)
+            {
+                if (PostActionExecutorSupport.IsCommandAvailable(command.FileName))
+                {
+                    return new PlatformCapabilityStatus(
+                        true,
+                        $"Lock screen is available via `{command.FileName}`.",
+                        Provider: command.Provider);
+                }
+            }
+
+            return new PlatformCapabilityStatus(
+                false,
+                "Lock screen requires one of `loginctl` or `xdg-screensaver` on Linux and neither is available.",
+                Provider: Provider);
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return new PlatformCapabilityStatus(
+                false,
+                "Lock screen is not implemented on macOS (placeholder): there is no supported non-interactive lock API.",
+                Provider: "macos-placeholder",
+                HasFallback: true,
+                FallbackMode: "log-only");
+        }
+
+        return new PlatformCapabilityStatus(
+            false,
+            "Lock screen is unsupported on current platform.",
+            Provider: Provider);
+    }
+
+    public static async Task<PlatformOperationResult> ExecuteAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (OperatingSystem.IsWindows())
+        {
+            return LockWindowsWorkstation();
+        }
+
+        if (OperatingSystem.IsLinux())
+        {
+            var command = LinuxLockCommands.FirstOrDefault(candidate => PostActionExecutorSupport.IsCommandAvailable(candidate.FileName));
+            if (command.FileName is null)
+            {
+                return PlatformOperation.Failed(
+                    Provider,
+                    "Lock screen requires one of `loginctl` or `xdg-screensaver` on Linux and neither is available.",
+                    PlatformErrorCodes.PostActionUnsupported,
+                    "post-action.LockScreen");
+            }
+
+            return await PostActionExecutorSupport.ExecuteDirectCommandAsync(
+                command.Provider,
+                "post-action.LockScreen",
+                "Lock screen command accepted.",
+                command.FileName,
+                command.Arguments,
+                cancellationToken);
+        }
+
+        var capability = GetCapability();
+        return PlatformOperation.Failed(
+            capability.Provider,
+            capability.Message,
+            PlatformErrorCodes.PostActionUnsupported,
+            "post-action.LockScreen");
+    }
+
+    private static PlatformOperationResult LockWindowsWorkstation()
+    {
+        try
+        {
+            if (!LockWorkStation())
+            {
+                var error = Marshal.GetLastWin32Error();
+                return PlatformOperation.Failed(
+                    "windows-lock-workstation",
+                    $"LockWorkStation failed with Win32 error {error}.",
+                    PlatformErrorCodes.PostActionExecutionFailed,
+                    "post-action.LockScreen");
+            }
+
+            return PlatformOperation.NativeSuccess(
+                "windows-lock-workstation",
+                "Workstation locked.",
+                "post-action.LockScreen");
+        }
+        catch (Exception ex)
+        {
+            return PlatformOperation.Failed(
+                "windows-lock-workstation",
+                $"LockWorkStation failed: {ex.Message}",
+                PlatformErrorCodes.PostActionExecutionFailed,
+                "post-action.LockScreen");
+        }
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool LockWorkStation();
 }
 
 internal static class AndroidEmulatorAdbHelper

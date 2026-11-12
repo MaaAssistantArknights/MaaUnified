@@ -539,7 +539,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _fallbackUserDataUpdateModule = new UserDataUpdateModuleViewModel(runtime, Texts);
         _fallbackSingleStepModule = new SingleStepModuleViewModel(runtime, Texts);
         _fallbackCustomModule = new CustomModuleViewModel(runtime, Texts);
-        PostActionModule = new PostActionModuleViewModel(runtime, Texts);
+        PostActionModule = new PostActionModuleViewModel(runtime, Texts, _connectionGameSharedState);
         ApplySettingsModeToTaskModules();
         _fallbackStartUpModule.PropertyChanged += OnTypedModulePropertyChanged;
         _fallbackFightModule.PropertyChanged += OnTypedModulePropertyChanged;
@@ -1993,6 +1993,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             actions.Add(Texts.GetOrDefault("PostAction.ExitEmulator", "Exit emulator"));
         }
 
+        if (PostActionModule.ExitPCClient)
+        {
+            actions.Add(Texts.GetOrDefault("PostAction.ExitPCClient", "Exit PC client"));
+        }
+
         if (PostActionModule.ExitSelf)
         {
             actions.Add(Texts.GetOrDefault("PostAction.ExitSelf", "Exit MAA"));
@@ -2001,6 +2006,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         if (PostActionModule.IfNoOtherMaa)
         {
             actions.Add(Texts.GetOrDefault("PostAction.IfNoOther", "Only when no other MAA"));
+        }
+
+        if (PostActionModule.LockScreen)
+        {
+            actions.Add(Texts.GetOrDefault("PostAction.LockScreen", "Lock screen"));
         }
 
         if (PostActionModule.Sleep)
@@ -9609,6 +9619,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private async Task RunPostActionsAfterManualStopAsync()
     {
         var once = PostActionModule.Once;
+        // Snapshot the connection-filtered exit targets before the first await
+        // (WPF 3b4f06dd86) so a connection switch during teardown cannot retarget the action.
+        var postActionConfig = PostActionModule.BuildRuntimeConfig();
         try
         {
             var result = await Runtime.PostActionFeatureService.ExecuteAfterCompletionAsync(
@@ -9616,7 +9629,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     "RunDurationLimit",
                     WasSuccessfulTaskChain: true,
                     RunId: _currentRunId),
-                PostActionModule.BuildRuntimeConfig());
+                postActionConfig);
             if (!result.Success)
             {
                 LastErrorMessage = result.Message;
@@ -9643,14 +9656,16 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         IReadOnlyList<string> failedTaskNames)
     {
         var once = PostActionModule.Once;
+        // WPF parity (3b4f06dd86): read the filtered exit getters before any await — the end
+        // script below is awaited first and the user may switch the connection meanwhile.
+        var postActionConfig = PostActionModule.BuildRuntimeConfig();
         try
         {
             // WPF parity (TaskQueueViewModel.CheckAfterCompleted -> RunStopScriptOnceAsync):
             // natural completion shares the per-run launch slot with the manual stop path.
             await RunStopScriptOnceAsync(manualStop: false);
 
-            var config = PostActionModule.BuildRuntimeConfig();
-            if (config.SkipOnError && hasTaskErrors)
+            if (postActionConfig.SkipOnError && hasTaskErrors)
             {
                 // WPF cda1c3b07f: skip every action but still restore the ｢this run only｣
                 // checkbox. The restore lives in the finally so the early return cannot skip it.
@@ -9674,8 +9689,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     WasSuccessfulTaskChain: !hasTaskErrors,
                     RunId: runId,
                     TaskIndex: taskIndex),
-                config);
-
+                postActionConfig);
             if (!result.Success)
             {
                 LastErrorMessage = result.Message;

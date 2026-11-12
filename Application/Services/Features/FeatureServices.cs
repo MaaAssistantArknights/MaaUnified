@@ -5099,6 +5099,7 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
     private readonly UnifiedSessionService? _sessionService;
     private readonly IAppLifecycleService? _appLifecycleService;
     private readonly IPostActionPromptService _promptService;
+    private readonly IKeepAwakeService _keepAwake;
     private readonly Func<bool> _hasOtherMaaProcess;
 
     public PostActionFeatureService(
@@ -5117,7 +5118,8 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         IAppLifecycleService? appLifecycleService,
         IPostActionPromptService? promptService,
         UnifiedSessionService? sessionService = null,
-        Func<bool>? hasOtherMaaProcess = null)
+        Func<bool>? hasOtherMaaProcess = null,
+        IKeepAwakeService? keepAwakeService = null)
     {
         _configService = configService;
         _diagnostics = diagnostics;
@@ -5126,6 +5128,10 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         _sessionService = sessionService;
         _appLifecycleService = appLifecycleService;
         _promptService = promptService ?? new NoOpPostActionPromptService();
+        // WPF parity (TaskQueueViewModel.TimerCanceledAsync, 0b048d5e94): the post-action
+        // countdown holds an independently owned keep-awake request so the machine does not
+        // idle-sleep and freeze the countdown. Null means "host wired no provider".
+        _keepAwake = keepAwakeService ?? NoOpKeepAwakeService.Instance;
         _hasOtherMaaProcess = hasOtherMaaProcess ?? HasOtherMaaProcess;
     }
 
@@ -5279,6 +5285,8 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         AddUnsupported(effectiveConfig.Hibernate, PostActionType.Hibernate, nameof(PostActionType.Hibernate));
         AddUnsupported(effectiveConfig.Shutdown, PostActionType.Shutdown, nameof(PostActionType.Shutdown));
         AddUnsupported(effectiveConfig.Sleep, PostActionType.Sleep, nameof(PostActionType.Sleep));
+        AddUnsupported(effectiveConfig.LockScreen, PostActionType.LockScreen, nameof(PostActionType.LockScreen));
+        AddUnsupported(effectiveConfig.ExitPCClient, PostActionType.ExitPCClient, nameof(PostActionType.ExitPCClient));
 
         if (unsupported.Count > 0)
         {
@@ -5308,7 +5316,8 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         cancellationToken.ThrowIfCancellationRequested();
         var effectiveConfig = NormalizeForRuntime(config, out _);
         var warnings = new List<string>();
-        if (effectiveConfig.IfNoOtherMaa && !(effectiveConfig.Hibernate || effectiveConfig.Shutdown || effectiveConfig.Sleep))
+        if (effectiveConfig.IfNoOtherMaa
+            && !(effectiveConfig.LockScreen || effectiveConfig.Hibernate || effectiveConfig.Shutdown || effectiveConfig.Sleep))
         {
             warnings.Add(WarnKeyIfNoOtherNeedsSystemAction);
         }
@@ -5463,7 +5472,9 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         var skippedActions = new List<string>();
         var failures = new List<string>();
         var persistentExitSelfRestored = false;
-        var hasSystemActions = config.Hibernate || config.Shutdown || config.Sleep;
+        // WPF parity (d58cb0825b): LockScreen joins Hibernate/Shutdown/Sleep in the system-level
+        // group, so it also suppresses a bare ExitSelf and honours IfNoOtherMaa.
+        var hasSystemActions = config.LockScreen || config.Hibernate || config.Shutdown || config.Sleep;
         var skipSystemActionsForOtherMaa = config.IfNoOtherMaa && _hasOtherMaaProcess();
         if (skipSystemActionsForOtherMaa)
         {
@@ -5475,14 +5486,33 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
             await ExecuteActionAsync(PostActionType.BackToAndroidHome, cancellationToken);
         }
 
-        if (config.ExitArknights)
+        if (config.ExitArknights || config.ExitPCClient)
         {
-            await ExecuteActionAsync(PostActionType.ExitArknights, cancellationToken);
+            // WPF parity (3b4f06dd86): `exitArknights || exitPCClient` shares one CloseDown call;
+            // the connection mode only decides which checkbox produced it. Keep the snappier
+            // ExitArknights identity when both are set (the UI filters them by connection mode,
+            // so both are only set by an unfiltered config).
+            await ExecuteActionAsync(
+                config.ExitArknights ? PostActionType.ExitArknights : PostActionType.ExitPCClient,
+                cancellationToken);
         }
 
         if (config.ExitEmulator)
         {
             await ExecuteActionAsync(PostActionType.ExitEmulator, cancellationToken);
+        }
+
+        if (config.LockScreen)
+        {
+            if (skipSystemActionsForOtherMaa)
+            {
+                skippedActions.Add(nameof(PostActionType.LockScreen));
+                await RecordEventAsync(context, nameof(PostActionType.LockScreen), UiErrorCode.PostActionUnsupported, "Skipped by IfNoOtherMaa.");
+            }
+            else
+            {
+                await ExecuteActionAsync(PostActionType.LockScreen, cancellationToken);
+            }
         }
 
         if (config.Hibernate)
@@ -5572,7 +5602,7 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
                 return;
             }
 
-            if (IsPowerAction(action))
+            if (RequiresCountdownPrompt(action))
             {
                 if (config.Once
                     && action is PostActionType.Hibernate or PostActionType.Sleep
@@ -5583,6 +5613,10 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
                     persistentExitSelfRestored = true;
                 }
 
+                // WPF parity (0b048d5e94): hold the keep-awake lease for the whole countdown and
+                // release it before the action runs, so it can never block a configured
+                // Sleep/Shutdown/Hibernate from taking effect.
+                using var keepAwake = _keepAwake.CreateKeepAwakeRequest($"MAA post-action {action} countdown");
                 var promptResult = await _promptService.ConfirmPowerActionAsync(
                     new PostActionPromptRequest(action, PowerActionPromptCountdown, ResolveCurrentLanguage()),
                     token);
@@ -5662,6 +5696,11 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
                 "maa-core",
                 "Exit Arknights is available via MaaCore CloseDown.",
                 fallback),
+            PostActionType.ExitPCClient => ResolveNativeCapability(
+                _coreBridge?.SupportsStartCloseDown == true,
+                "maa-core",
+                "Exit PC client is available via MaaCore CloseDown.",
+                fallback),
             PostActionType.ExitSelf => ResolveNativeCapability(
                 _appLifecycleService?.SupportsExit == true,
                 "app-lifecycle",
@@ -5679,7 +5718,8 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         return action switch
         {
             PostActionType.BackToAndroidHome => await ExecuteBackToHomeAsync(request, cancellationToken),
-            PostActionType.ExitArknights => await ExecuteCloseDownAsync(request, cancellationToken),
+            PostActionType.ExitArknights => await ExecuteCloseDownAsync(PostActionType.ExitArknights, request, cancellationToken),
+            PostActionType.ExitPCClient => await ExecuteCloseDownAsync(PostActionType.ExitPCClient, request, cancellationToken),
             PostActionType.ExitSelf => await ExecuteExitSelfAsync(request, cancellationToken),
             _ => await _executor.ExecuteAsync(action, request, cancellationToken),
         };
@@ -5704,6 +5744,7 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
     }
 
     private async Task<PlatformOperationResult> ExecuteCloseDownAsync(
+        PostActionType closeDownAction,
         PostActionExecutorRequest request,
         CancellationToken cancellationToken)
     {
@@ -5714,13 +5755,16 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
                 : await _sessionService.StartCloseDownAsync(request.ClientType ?? string.Empty, cancellationToken);
             if (result.Success)
             {
-                return PlatformOperation.NativeSuccess("maa-core", "Exit Arknights executed via MaaCore CloseDown.", "post-action.ExitArknights");
+                return PlatformOperation.NativeSuccess(
+                    "maa-core",
+                    $"{closeDownAction} executed via MaaCore CloseDown.",
+                    $"post-action.{closeDownAction}");
             }
 
-            return MapCoreFailure(result, "maa-core", PostActionType.ExitArknights);
+            return MapCoreFailure(result, "maa-core", closeDownAction);
         }
 
-        return await _executor.ExecuteAsync(PostActionType.ExitArknights, request, cancellationToken);
+        return await _executor.ExecuteAsync(closeDownAction, request, cancellationToken);
     }
 
     private async Task<PlatformOperationResult> ExecuteExitSelfAsync(
@@ -5875,10 +5919,18 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
     }
 
     private static bool RequiresSettleDelay(PostActionType action)
-        => action is PostActionType.BackToAndroidHome or PostActionType.ExitArknights or PostActionType.ExitEmulator;
+        => action is PostActionType.BackToAndroidHome
+            or PostActionType.ExitArknights
+            or PostActionType.ExitPCClient
+            or PostActionType.ExitEmulator;
 
-    private static bool IsPowerAction(PostActionType action)
-        => action is PostActionType.Hibernate or PostActionType.Shutdown or PostActionType.Sleep;
+    // WPF parity: TimerCanceledAsync guards LockScreen exactly like the power actions
+    // (60 s cancellable countdown + keep awake), so both share the confirmation prompt.
+    private static bool RequiresCountdownPrompt(PostActionType action)
+        => action is PostActionType.LockScreen
+            or PostActionType.Hibernate
+            or PostActionType.Shutdown
+            or PostActionType.Sleep;
 
     private static PostActionConfig NormalizeForPersistentStorage(PostActionConfig source, out bool changed)
     {
@@ -5899,13 +5951,23 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         return normalized;
     }
 
-    private static PostActionConfig NormalizeForRuntime(PostActionConfig source, out bool changed)
+    private PostActionConfig NormalizeForRuntime(PostActionConfig source, out bool changed)
     {
         var normalized = NormalizeForPersistentStorage(source, out changed);
 
         if (!OperatingSystem.IsWindows() && normalized.ExitEmulator)
         {
             normalized.ExitEmulator = false;
+            changed = true;
+        }
+
+        // LockScreen stays in the persisted config (it is a Windows workplace-lock action), but it
+        // must not be dispatched, nor join the ｢system-level action｣ group that suppresses
+        // ExitSelf, when the platform backend cannot actually lock (macOS/Linux placeholder).
+        if (normalized.LockScreen
+            && !GetCapability(PostActionType.LockScreen, BuildExecutorRequest()).Supported)
+        {
+            normalized.LockScreen = false;
             changed = true;
         }
 
@@ -6010,6 +6072,8 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
             Shutdown = flags.HasFlag(LegacyPostActionFlags.Shutdown),
             Sleep = flags.HasFlag(LegacyPostActionFlags.Sleep),
             SkipOnError = flags.HasFlag(LegacyPostActionFlags.SkipOnError),
+            LockScreen = flags.HasFlag(LegacyPostActionFlags.LockScreen),
+            ExitPCClient = flags.HasFlag(LegacyPostActionFlags.ExitPCClient),
         };
     }
 
@@ -6205,6 +6269,10 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         };
     }
 
+    /// <summary>
+    /// Frozen WPF <c>PostActionSetting.PostActions</c> bit values, including the dev-v2
+    /// <c>LockScreen</c>/<c>ExitPCClient</c> additions (d58cb0825b, 3b4f06dd86).
+    /// </summary>
     [Flags]
     private enum LegacyPostActionFlags
     {
@@ -6218,6 +6286,8 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         Shutdown = 1 << 6,
         Sleep = 1 << 7,
         SkipOnError = 1 << 8,
+        LockScreen = 1 << 9,
+        ExitPCClient = 1 << 10,
     }
 
     private enum LegacyCompletionAction

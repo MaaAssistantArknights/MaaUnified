@@ -193,6 +193,8 @@ internal static class PostActionLegacyMigration
             Sleep = flags.HasFlag(LegacyPostActionFlags.Sleep),
             IfNoOtherMaa = flags.HasFlag(LegacyPostActionFlags.IfNoOtherMaa),
             SkipOnError = flags.HasFlag(LegacyPostActionFlags.SkipOnError),
+            LockScreen = flags.HasFlag(LegacyPostActionFlags.LockScreen),
+            ExitPCClient = flags.HasFlag(LegacyPostActionFlags.ExitPCClient),
         };
     }
 
@@ -386,6 +388,12 @@ internal static class PostActionLegacyMigration
         };
     }
 
+    /// <summary>
+    /// Frozen WPF <c>PostActionSetting.PostActions</c> bit values. Bits 0-7 keep the v6.3.7
+    /// meaning; <c>LockScreen</c>/<c>ExitPCClient</c> are the dev-v2 additions (d58cb0825b,
+    /// 3b4f06dd86) so a dev-v2 <c>Gui.PostActions</c> mask round-trips without losing them.
+    /// <c>SkipOnError</c> (1 &lt;&lt; 8) is still not modelled here.
+    /// </summary>
     [Flags]
     private enum LegacyPostActionFlags
     {
@@ -400,6 +408,8 @@ internal static class PostActionLegacyMigration
 
         // WPF cda1c3b07f: post actions are skipped when the run had a failed main-queue task.
         SkipOnError = 1 << 8,
+        LockScreen = 1 << 9,
+        ExitPCClient = 1 << 10,
     }
 
     private enum LegacyCompletionAction

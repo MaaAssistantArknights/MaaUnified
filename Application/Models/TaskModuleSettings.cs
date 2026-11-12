@@ -938,6 +938,18 @@ public sealed class PostActionConfig
     /// failed main-queue task. WPF cda1c3b07f (<c>PostActions.SkipOnError = 1 &lt;&lt; 8</c>).
     /// </summary>
     public bool SkipOnError { get; set; }
+    /// Gets or sets a value indicating whether MAA locks the workstation after completion.
+    /// WPF parity: <c>PostActions.LockScreen = 1 &lt;&lt; 9</c> (d58cb0825b). Windows only; the stored
+    /// value is preserved on other platforms and normalized away at runtime.
+    /// </summary>
+    public bool LockScreen { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether MAA closes the PC client after completion.
+    /// WPF parity: <c>PostActions.ExitPCClient = 1 &lt;&lt; 10</c> (3b4f06dd86). Only meaningful for the
+    /// PC (window binding) connection; the raw value survives connection switches.
+    /// </summary>
+    public bool ExitPCClient { get; set; }
 
     public PostActionCommandConfig Commands { get; set; } = PostActionCommandConfig.Default;
 
@@ -962,6 +974,8 @@ public sealed class PostActionConfig
             Shutdown = ReadBool(obj, false, "shutdown", "Shutdown"),
             Sleep = ReadBool(obj, false, "sleep", "Sleep"),
             SkipOnError = ReadBool(obj, false, "skip_on_error", "SkipOnError"),
+            LockScreen = ReadBool(obj, false, "lock_screen", "LockScreen"),
+            ExitPCClient = ReadBool(obj, false, "exit_pc_client", "ExitPCClient"),
             Commands = PostActionCommandConfig.FromJson(FindNode(obj, "commands", "Commands")),
         };
     }
@@ -980,13 +994,17 @@ public sealed class PostActionConfig
             ["shutdown"] = Shutdown,
             ["sleep"] = Sleep,
             ["skip_on_error"] = SkipOnError,
+            ["lock_screen"] = LockScreen,
+            ["exit_pc_client"] = ExitPCClient,
             ["commands"] = Commands.ToJson(),
         };
     }
 
     public bool HasAnyAction()
     {
-        return ExitArknights || BackToAndroidHome || ExitEmulator || ExitSelf || Hibernate || Shutdown || Sleep;
+        return ExitArknights || BackToAndroidHome || ExitEmulator || ExitSelf
+            || LockScreen || ExitPCClient
+            || Hibernate || Shutdown || Sleep;
     }
 
     /// <summary>
@@ -1011,6 +1029,8 @@ public sealed class PostActionConfig
             Shutdown = Shutdown,
             Sleep = Sleep,
             SkipOnError = SkipOnError,
+            LockScreen = LockScreen,
+            ExitPCClient = ExitPCClient,
             Commands = Commands.Clone(),
         };
     }

@@ -409,7 +409,8 @@ public static class MAAUnifiedRuntimeFactory
             bridge,
             appLifecycleService,
             new NoOpPostActionPromptService(),
-            sessionService);
+            sessionService,
+            keepAwakeService: platform.KeepAwakeService);
 
         _ = remoteControlFeatureService.StartRemotePollingAsync();
 

@@ -83,6 +83,12 @@ public sealed class PostActionPromptLocalizationTests
         "절전 모드 확인",
         "취소하지 않으면 MAA가 15초 후에 이 컴퓨터를 절전 모드로 전환합니다.",
         "지금 실행")]
+    [InlineData(
+        "ja-jp",
+        PostActionType.LockScreen,
+        "画面ロックの確認",
+        "キャンセルしない場合、MAA は 15 秒後に画面をロックします。",
+        "今すぐ実行")]
     public void PostActionDialogTexts_ShouldUseLocalizedResources(
         string language,
         PostActionType action,

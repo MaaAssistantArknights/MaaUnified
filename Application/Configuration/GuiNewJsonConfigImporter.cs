@@ -751,10 +751,10 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         JsonElement value,
         ImportReport report)
     {
-        // dev-v2 `SkipOnError`/`LockScreen`/`ExitPCClient` flags (P1-03 `cda1c3b07f`,
-        // P1-04 `d58cb0825b`) have no MAAUnified counterpart yet; keep the supported low bits
-        // and report the rest instead of dropping them silently.
-        const int supportedPostActionMask = 0xFF;
+        // dev-v2 `SkipOnError` (P1-03 `cda1c3b07f`) has no MAAUnified counterpart yet.
+        // `LockScreen`/`ExitPCClient` (P1-04 `d58cb0825b`, `3b4f06dd86`) now map to structured
+        // post actions, so only the remaining bits are reported instead of being dropped silently.
+        const int supportedPostActionMask = 0xFF | (1 << 9) | (1 << 10);
         if (!string.Equals(legacyKey, "MainFunction.PostActions", StringComparison.Ordinal)
             || !TryReadPostActionFlags(value, out var flags)
             || (flags & ~supportedPostActionMask) == 0)
@@ -763,7 +763,7 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         }
 
         report.Warnings.Add(
-            $"Profile `{profileName}` post actions contain unsupported flags 0x{flags & ~supportedPostActionMask:X}; only ExitArknights/BackToAndroidHome/ExitEmulator/ExitSelf/Hibernate/Shutdown/Sleep were imported.");
+            $"Profile `{profileName}` post actions contain unsupported flags 0x{flags & ~supportedPostActionMask:X}; only ExitArknights/BackToAndroidHome/ExitEmulator/ExitPCClient/ExitSelf/Hibernate/Shutdown/Sleep/LockScreen were imported.");
     }
 
     private static bool TryReadPostActionFlags(JsonElement value, out int flags)

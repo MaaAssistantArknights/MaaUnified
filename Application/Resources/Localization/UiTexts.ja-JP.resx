@@ -1085,6 +1085,9 @@
   <data name="PostAction.ExitEmulator" xml:space="preserve">
     <value>エミュレータを終了する</value>
   </data>
+  <data name="PostAction.ExitPCClient" xml:space="preserve">
+    <value>PC クライアントを終了する</value>
+  </data>
   <data name="PostAction.ExitSelf" xml:space="preserve">
     <value>MAAを終了する</value>
   </data>
@@ -1096,6 +1099,9 @@
   </data>
   <data name="PostAction.IfNoOther" xml:space="preserve">
     <value>他のMAAがない場合</value>
+  </data>
+  <data name="PostAction.LockScreen" xml:space="preserve">
+    <value>画面をロック</value>
   </data>
   <data name="PostAction.Once" xml:space="preserve">
     <value>今回のみ*</value>
@@ -5011,6 +5017,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="PostAction.Dialog.Message.Hibernate" xml:space="preserve">
     <value>キャンセルしない場合、MAA は {0} 秒後にこのコンピューターを休止状態にします。</value>
   </data>
+  <data name="PostAction.Dialog.Message.LockScreen" xml:space="preserve">
+    <value>キャンセルしない場合、MAA は {0} 秒後に画面をロックします。</value>
+  </data>
   <data name="PostAction.Dialog.Message.Shutdown" xml:space="preserve">
     <value>キャンセルしない場合、MAA は {0} 秒後にこのコンピューターをシャットダウンします。</value>
   </data>
@@ -5019,6 +5028,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="PostAction.Dialog.Title.Hibernate" xml:space="preserve">
     <value>休止状態の確認</value>
+  </data>
+  <data name="PostAction.Dialog.Title.LockScreen" xml:space="preserve">
+    <value>画面ロックの確認</value>
   </data>
   <data name="PostAction.Dialog.Title.Shutdown" xml:space="preserve">
     <value>シャットダウンの確認</value>

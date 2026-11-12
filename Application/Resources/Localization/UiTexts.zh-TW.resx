@@ -977,6 +977,9 @@
   <data name="PostAction.ExitEmulator" xml:space="preserve">
     <value>關閉 模擬器</value>
   </data>
+  <data name="PostAction.ExitPCClient" xml:space="preserve">
+    <value>關閉 PC 客戶端</value>
+  </data>
   <data name="PostAction.ExitSelf" xml:space="preserve">
     <value>關閉 MAA</value>
   </data>
@@ -988,6 +991,9 @@
   </data>
   <data name="PostAction.IfNoOther" xml:space="preserve">
     <value>無其他 MAA 執行時</value>
+  </data>
+  <data name="PostAction.LockScreen" xml:space="preserve">
+    <value>鎖定螢幕</value>
   </data>
   <data name="PostAction.Once" xml:space="preserve">
     <value>僅當次*</value>
@@ -5014,6 +5020,9 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="PostAction.Dialog.Message.Hibernate" xml:space="preserve">
     <value>任務完成後將在 {0} 秒後執行休眠，期間可以取消。</value>
   </data>
+  <data name="PostAction.Dialog.Message.LockScreen" xml:space="preserve">
+    <value>任務完成後將在 {0} 秒後執行鎖定螢幕，期間可以取消。</value>
+  </data>
   <data name="PostAction.Dialog.Message.Shutdown" xml:space="preserve">
     <value>任務完成後將在 {0} 秒後執行關機，期間可以取消。</value>
   </data>
@@ -5022,6 +5031,9 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   </data>
   <data name="PostAction.Dialog.Title.Hibernate" xml:space="preserve">
     <value>確認休眠</value>
+  </data>
+  <data name="PostAction.Dialog.Title.LockScreen" xml:space="preserve">
+    <value>確認鎖定螢幕</value>
   </data>
   <data name="PostAction.Dialog.Title.Shutdown" xml:space="preserve">
     <value>確認關機</value>

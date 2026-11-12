@@ -219,7 +219,15 @@ public sealed class RootViewStructureContractTests
         Assert.DoesNotContain("ExitEmulatorCommand", postActionText, StringComparison.Ordinal);
         Assert.DoesNotContain("ExitSelfCommand", postActionText, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding ShowExitEmulator}\"", postActionText, StringComparison.Ordinal);
+        // WPF parity 3b4f06dd86: exit targets are filtered by the current connection mode instead
+        // of being rewritten (ExitArknights/ExitEmulator for ADB, ExitPCClient for the PC client).
+        Assert.Contains("IsVisible=\"{Binding ShowExitArknights}\"", postActionText, StringComparison.Ordinal);
+        Assert.Contains("IsVisible=\"{Binding ShowExitPCClient}\"", postActionText, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding ShowHibernate}\"", postActionText, StringComparison.Ordinal);
+        // WPF parity d58cb0825b: lock screen is a Windows-only action (hidden as an explicit
+        // degradation on macOS/Linux), so it needs its own visibility gate.
+        Assert.Contains("IsVisible=\"{Binding ShowLockScreen}\"", postActionText, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding CanUseAndroidControlPostActions}\"", postActionText, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding CanUseIfNoOtherMaa}\"", postActionText, StringComparison.Ordinal);
     }
 
@@ -243,7 +251,9 @@ public sealed class RootViewStructureContractTests
                      "BackToAndroidHome",
                      "ExitArknights",
                      "ExitEmulator",
+                     "ExitPCClient",
                      "ExitSelf",
+                     "LockScreen",
                      "Sleep",
                      "Hibernate",
                      "Shutdown",
@@ -252,7 +262,9 @@ public sealed class RootViewStructureContractTests
             Assert.Contains($"Tag=\"{action}\"", postActionText, StringComparison.Ordinal);
         }
 
-        Assert.Equal(7, System.Text.RegularExpressions.Regex.Matches(postActionText, "OnPostActionTogglePointerPressed").Count);
+        // WPF dev-v2 PostActionUserControl.xaml has nine right-click ｢only this time｣ toggles
+        // (v6.3.7 seven + LockScreen + ExitPCClient).
+        Assert.Equal(9, System.Text.RegularExpressions.Regex.Matches(postActionText, "OnPostActionTogglePointerPressed").Count);
         Assert.Contains("PointerPressed=\"OnClearPointerPressed\"", postActionText, StringComparison.Ordinal);
         Assert.Contains("VM.ToggleActionOnce(actionName)", postActionCode, StringComparison.Ordinal);
         Assert.Contains("VM.ClearActionsOnce()", postActionCode, StringComparison.Ordinal);

@@ -439,6 +439,13 @@ public interface IAttachWindowTargetFinder
     IReadOnlyList<nint> FindVisibleWindowsByExactTitle(string exactTitle);
 }
 
+/// <summary>
+/// Identity of a single post-completion action. This is not a flags mask: each member is
+/// dispatched separately and diagnostics print the member name. The <c>LockScreen</c> and
+/// <c>ExitPCClient</c> values intentionally mirror the WPF <c>PostActions</c> bit positions
+/// (1&lt;&lt;9 / 1&lt;&lt;10, d58cb0825b / 3b4f06dd86) so the persisted legacy bitmask and the
+/// runtime action identity can be cross-checked; earlier members keep their original values.
+/// </summary>
 public enum PostActionType
 {
     ExitArknights = 0,
@@ -448,6 +455,12 @@ public enum PostActionType
     Hibernate = 4,
     Shutdown = 5,
     Sleep = 6,
+
+    /// <summary>Lock the workstation (WPF <c>PostActions.LockScreen</c>).</summary>
+    LockScreen = 1 << 9,
+
+    /// <summary>Close the PC client (WPF <c>PostActions.ExitPCClient</c>, PC/window-binding connection only).</summary>
+    ExitPCClient = 1 << 10,
 }
 
 public sealed record PostActionExecutorRequest(
@@ -472,7 +485,9 @@ public sealed record PostActionCapabilityMatrix(
     PlatformCapabilityStatus ExitSelf,
     PlatformCapabilityStatus Hibernate,
     PlatformCapabilityStatus Shutdown,
-    PlatformCapabilityStatus Sleep)
+    PlatformCapabilityStatus Sleep,
+    PlatformCapabilityStatus? LockScreen = null,
+    PlatformCapabilityStatus? ExitPCClient = null)
 {
     public PlatformCapabilityStatus Get(PostActionType action)
     {
@@ -485,6 +500,16 @@ public sealed record PostActionCapabilityMatrix(
             PostActionType.Hibernate => Hibernate,
             PostActionType.Shutdown => Shutdown,
             PostActionType.Sleep => Sleep,
+            // Platforms that predate the P1-04 additions pass null; degrade explicitly instead
+            // of silently reporting a supported/unknown action.
+            PostActionType.LockScreen => LockScreen ?? new PlatformCapabilityStatus(
+                false,
+                "Lock screen is unsupported on current platform.",
+                Provider: "unknown"),
+            PostActionType.ExitPCClient => ExitPCClient ?? new PlatformCapabilityStatus(
+                false,
+                "Exit PC client is unsupported on current platform.",
+                Provider: "unknown"),
             _ => new PlatformCapabilityStatus(false, "Unknown action.", Provider: "unknown"),
         };
     }
@@ -505,4 +530,24 @@ public interface IPostActionExecutorService
     Task<PlatformOperationResult> ExecuteUserScriptAsync(
         string scriptPath,
         CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Keep-awake lease provider used by the post-action countdown. WPF parity:
+/// <c>SleepManagement.CreateKeepAwakeRequest</c> (0b048d5e94) — the post-action countdown runs
+/// after the task queue already returned to idle, so an unattended machine may fall asleep and
+/// freeze the countdown unless an independently owned power request is held.
+/// </summary>
+public interface IKeepAwakeService
+{
+    PlatformCapabilityStatus Capability { get; }
+
+    /// <summary>
+    /// Creates an independently owned keep-awake lease. Disposing the lease clears only this
+    /// request (it never clears a keep-awake window owned by a running task), and disposing it
+    /// twice is a no-op.
+    /// </summary>
+    /// <param name="reason">Human readable reason surfaced by the OS power request.</param>
+    /// <returns>The lease, or <see langword="null"/> when the current platform cannot keep awake.</returns>
+    IDisposable? CreateKeepAwakeRequest(string reason);
 }

@@ -32,13 +32,14 @@
       <CheckBox Classes="app-checkbox"
                 Content="{Binding Texts[PostAction.BackToHome]}"
                 IsChecked="{Binding BackToAndroidHome}"
-                IsEnabled="{Binding !ExitEmulator}"
+                IsEnabled="{Binding CanUseAndroidControlPostActions}"
                 Tag="BackToAndroidHome"
                 PointerPressed="OnPostActionTogglePointerPressed" />
       <CheckBox Classes="app-checkbox"
                 Content="{Binding Texts[PostAction.ExitArknights]}"
                 IsChecked="{Binding ExitArknights}"
                 IsEnabled="{Binding !ExitEmulator}"
+                IsVisible="{Binding ShowExitArknights}"
                 Tag="ExitArknights"
                 PointerPressed="OnPostActionTogglePointerPressed" />
       <CheckBox Classes="app-checkbox"
@@ -47,6 +48,13 @@
                 IsEnabled="{Binding !IfNoOtherMaa}"
                 IsVisible="{Binding ShowExitEmulator}"
                 Tag="ExitEmulator"
+                PointerPressed="OnPostActionTogglePointerPressed" />
+      <CheckBox Classes="app-checkbox"
+                Content="{Binding Texts[PostAction.ExitPCClient]}"
+                IsChecked="{Binding ExitPCClient}"
+                IsEnabled="{Binding !IfNoOtherMaa}"
+                IsVisible="{Binding ShowExitPCClient}"
+                Tag="ExitPCClient"
                 PointerPressed="OnPostActionTogglePointerPressed" />
       <CheckBox Classes="app-checkbox"
                 Content="{Binding Texts[PostAction.ExitSelf]}"
@@ -61,6 +69,13 @@
     </controls:AdaptiveSpacingStackPanel>
 
     <controls:AdaptiveSpacingStackPanel Classes="post-action-toggle-stack">
+      <CheckBox Classes="app-checkbox"
+                Content="{Binding Texts[PostAction.LockScreen]}"
+                IsChecked="{Binding LockScreen}"
+                IsEnabled="{Binding !IfNoOtherMaa}"
+                IsVisible="{Binding ShowLockScreen}"
+                Tag="LockScreen"
+                PointerPressed="OnPostActionTogglePointerPressed" />
       <CheckBox Classes="app-checkbox"
                 Content="{Binding Texts[PostAction.Sleep]}"
                 IsChecked="{Binding Sleep}"

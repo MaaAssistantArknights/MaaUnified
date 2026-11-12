@@ -1085,6 +1085,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="PostAction.ExitEmulator" xml:space="preserve">
     <value>에뮬레이터를 종료</value>
   </data>
+  <data name="PostAction.ExitPCClient" xml:space="preserve">
+    <value>PC 클라이언트를 종료</value>
+  </data>
   <data name="PostAction.ExitSelf" xml:space="preserve">
     <value>MAA를 종료</value>
   </data>
@@ -1096,6 +1099,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   </data>
   <data name="PostAction.IfNoOther" xml:space="preserve">
     <value>다른 MAA가 없는 경우</value>
+  </data>
+  <data name="PostAction.LockScreen" xml:space="preserve">
+    <value>화면 잠금</value>
   </data>
   <data name="PostAction.Once" xml:space="preserve">
     <value>이번에만*</value>
@@ -5012,6 +5018,9 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   <data name="PostAction.Dialog.Message.Hibernate" xml:space="preserve">
     <value>취소하지 않으면 MAA가 {0}초 후에 이 컴퓨터를 최대 절전 모드로 전환합니다.</value>
   </data>
+  <data name="PostAction.Dialog.Message.LockScreen" xml:space="preserve">
+    <value>취소하지 않으면 MAA가 {0}초 후에 화면을 잠급니다.</value>
+  </data>
   <data name="PostAction.Dialog.Message.Shutdown" xml:space="preserve">
     <value>취소하지 않으면 MAA가 {0}초 후에 이 컴퓨터를 종료합니다.</value>
   </data>
@@ -5020,6 +5029,9 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   </data>
   <data name="PostAction.Dialog.Title.Hibernate" xml:space="preserve">
     <value>최대 절전 확인</value>
+  </data>
+  <data name="PostAction.Dialog.Title.LockScreen" xml:space="preserve">
+    <value>화면 잠금 확인</value>
   </data>
   <data name="PostAction.Dialog.Title.Shutdown" xml:space="preserve">
     <value>종료 확인</value>

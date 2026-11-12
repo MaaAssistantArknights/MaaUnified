@@ -19,6 +19,8 @@ public sealed class PlatformServiceBundle
     public IGpuCapabilityService GpuCapabilityService { get; init; } = new UnsupportedGpuCapabilityService();
 
     public ITaskbarProgressService TaskbarProgressService { get; init; } = new NoOpTaskbarProgressService();
+
+    public IKeepAwakeService KeepAwakeService { get; init; } = NoOpKeepAwakeService.Instance;
 }
 
 public static class PlatformServicesFactory
@@ -42,6 +44,7 @@ public static class PlatformServicesFactory
         IPostActionExecutorService postActionExecutorService;
         IGpuCapabilityService gpuCapabilityService;
         ITaskbarProgressService taskbarProgressService;
+        IKeepAwakeService keepAwakeService;
 
         try
         {
@@ -196,6 +199,15 @@ public static class PlatformServicesFactory
             taskbarProgressService = new NoOpTaskbarProgressService();
         }
 
+        try
+        {
+            keepAwakeService = new SleepManagementService();
+        }
+        catch
+        {
+            keepAwakeService = NoOpKeepAwakeService.Instance;
+        }
+
         return new PlatformServiceBundle {
             TrayService = trayService,
             NotificationService = notificationService,
@@ -206,6 +218,7 @@ public static class PlatformServicesFactory
             PostActionExecutorService = postActionExecutorService,
             GpuCapabilityService = gpuCapabilityService,
             TaskbarProgressService = taskbarProgressService,
+            KeepAwakeService = keepAwakeService,
         };
     }
 }

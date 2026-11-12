@@ -263,3 +263,21 @@ public sealed class NoOpPostActionExecutorService : IPostActionExecutorService
             "post-action.UserScript"));
     }
 }
+
+/// <summary>
+/// Default keep-awake provider used when a host does not wire a real
+/// <see cref="IKeepAwakeService"/>. It never blocks and always degrades explicitly.
+/// </summary>
+public sealed class NoOpKeepAwakeService : IKeepAwakeService
+{
+    public static NoOpKeepAwakeService Instance { get; } = new();
+
+    public PlatformCapabilityStatus Capability { get; } = new(
+        false,
+        "Keep-awake is not available in the current environment; the post-action countdown runs without sleep protection.",
+        Provider: "no-op",
+        HasFallback: true,
+        FallbackMode: "countdown-without-sleep-protection");
+
+    public IDisposable? CreateKeepAwakeRequest(string reason) => null;
+}

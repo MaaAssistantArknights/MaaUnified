@@ -140,7 +140,8 @@ public partial class App : Avalonia.Application
                 Runtime.CoreBridge,
                 appLifecycleService,
                 new AvaloniaPostActionPromptService(desktop),
-                Runtime.SessionService);
+                Runtime.SessionService,
+                keepAwakeService: Runtime.Platform.KeepAwakeService);
 
             MainShellViewModel vm;
             try

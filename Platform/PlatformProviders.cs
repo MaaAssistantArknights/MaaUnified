@@ -5919,6 +5919,11 @@ public sealed class CommandPostActionExecutorService : IPostActionExecutorServic
                 "Back to Android home requires MaaCore native provider.",
                 PlatformErrorCodes.PostActionUnsupported,
                 $"post-action.{action}"),
+            PostActionType.ExitPCClient => PlatformOperation.Failed(
+                "maa-core",
+                "Exit PC client requires MaaCore native provider.",
+                PlatformErrorCodes.PostActionUnsupported,
+                $"post-action.{action}"),
             PostActionType.ExitEmulator => await PostActionExecutorSupport.ExecuteExitEmulatorAsync(request, cancellationToken),
             PostActionType.ExitSelf => PlatformOperation.Failed(
                 "app-lifecycle",
@@ -5928,6 +5933,7 @@ public sealed class CommandPostActionExecutorService : IPostActionExecutorServic
             PostActionType.Hibernate => await PostActionExecutorSupport.ExecutePowerActionAsync(action, cancellationToken),
             PostActionType.Shutdown => await PostActionExecutorSupport.ExecutePowerActionAsync(action, cancellationToken),
             PostActionType.Sleep => await PostActionExecutorSupport.ExecutePowerActionAsync(action, cancellationToken),
+            PostActionType.LockScreen => await PostActionExecutorSupport.ExecuteLockScreenAsync(cancellationToken),
             _ => PlatformOperation.Failed("post-action", "Unknown post action.", PlatformErrorCodes.PostActionExecutionFailed, $"post-action.{action}"),
         };
     }

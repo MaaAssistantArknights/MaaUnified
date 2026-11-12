@@ -3665,6 +3665,86 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task GuiNewImport_DevV2PostActions_ShouldMapLockScreenAndExitPcClientBits_AndKeepWarnOnSkipOnError()
+    {
+        // WPF dev-v2 d58cb0825b adds LockScreen = 1 << 9 and 3b4f06dd86 adds ExitPCClient = 1 << 10
+        // to Gui.PostActions. Bit 1<<8 (SkipOnError, P1-03 cda1c3b07f) is still unmapped and must
+        // keep reporting a warning instead of being dropped silently.
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [],
+                  "Gui": {
+                    "PostActions": 1792
+                  }
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var profile = service.CurrentConfig.Profiles["Default"];
+        Assert.True(profile.Values.ContainsKey("TaskQueue.PostAction"));
+        Assert.False(profile.Values.ContainsKey("MainFunction.PostActions"));
+        var migrated = PostActionConfig.FromJson(profile.Values["TaskQueue.PostAction"]);
+        Assert.True(migrated.LockScreen);
+        Assert.True(migrated.ExitPCClient);
+        Assert.False(migrated.ExitArknights);
+        Assert.False(migrated.ExitEmulator);
+        Assert.False(migrated.ExitSelf);
+        Assert.Contains(
+            report.Warnings,
+            warning => warning.Contains("unsupported flags 0x100", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ImportLegacy_GuiPostActionsLegacyBitmask_KeepsOldBits_WhileAddingP1_04Bits()
+    {
+        // Old v6.3.7 bits must keep their meaning: 5 = ExitArknights | ExitEmulator, plus
+        // 1 << 9 (LockScreen) and 1 << 10 (ExitPCClient).
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "ConnectAddress": "10.0.0.7:5555"
+                }
+              },
+              "Global": {
+                "MainFunction.PostActions": "1541"
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var profile = service.CurrentConfig.Profiles["Default"];
+        var migrated = PostActionConfig.FromJson(profile.Values["TaskQueue.PostAction"]);
+        Assert.True(migrated.ExitArknights);
+        Assert.True(migrated.ExitEmulator);
+        Assert.True(migrated.LockScreen);
+        Assert.True(migrated.ExitPCClient);
+        Assert.False(migrated.BackToAndroidHome);
+        Assert.False(migrated.ExitSelf);
+        Assert.False(profile.Values.ContainsKey("MainFunction.PostActions"));
+    }
+
+    [Fact]
     public async Task ImportLegacy_GuiActionAfterCompletedWithoutPostActions_RemainsReadable_AndMigratesOnLoad()
     {
         var root = CreateTempRoot();

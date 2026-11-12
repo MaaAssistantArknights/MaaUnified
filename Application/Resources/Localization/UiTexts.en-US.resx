@@ -2038,6 +2038,9 @@ If necessary, please go to Control Panel > Windows Tools > Task Scheduler to cre
   <data name="PostAction.ExitEmulator" xml:space="preserve">
     <value>Exit emulator</value>
   </data>
+  <data name="PostAction.ExitPCClient" xml:space="preserve">
+    <value>Exit PC client</value>
+  </data>
   <data name="PostAction.ExitSelf" xml:space="preserve">
     <value>Exit MAA</value>
   </data>
@@ -2049,6 +2052,9 @@ If necessary, please go to Control Panel > Windows Tools > Task Scheduler to cre
   </data>
   <data name="PostAction.IfNoOther" xml:space="preserve">
     <value>Only if no other MAA</value>
+  </data>
+  <data name="PostAction.LockScreen" xml:space="preserve">
+    <value>Lock screen</value>
   </data>
   <data name="PostAction.Once" xml:space="preserve">
     <value>Once for current run</value>
@@ -5883,6 +5889,9 @@ A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created b
   <data name="PostAction.Dialog.Message.Hibernate" xml:space="preserve">
     <value>MAA will hibernate this computer in {0} seconds unless you cancel.</value>
   </data>
+  <data name="PostAction.Dialog.Message.LockScreen" xml:space="preserve">
+    <value>MAA will lock the screen in {0} seconds unless you cancel.</value>
+  </data>
   <data name="PostAction.Dialog.Message.Shutdown" xml:space="preserve">
     <value>MAA will shut down this computer in {0} seconds unless you cancel.</value>
   </data>
@@ -5891,6 +5900,9 @@ A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created b
   </data>
   <data name="PostAction.Dialog.Title.Hibernate" xml:space="preserve">
     <value>Confirm Hibernate</value>
+  </data>
+  <data name="PostAction.Dialog.Title.LockScreen" xml:space="preserve">
+    <value>Confirm Lock Screen</value>
   </data>
   <data name="PostAction.Dialog.Title.Shutdown" xml:space="preserve">
     <value>Confirm Shutdown</value>
