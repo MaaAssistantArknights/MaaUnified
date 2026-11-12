@@ -401,7 +401,10 @@ public sealed class ToolboxModuleO2FeatureTests
         var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
         await vm.InitializeAsync();
 
-        Assert.Equal("SS@Store@Begin", vm.MiniGameTaskName);
+        // WPF dev-v2 ordering starts the built-in list with Secret Front, so the
+        // programmatic fallback is the first available entry for the active client.
+        Assert.NotEqual("MiniGame@Unavailable@Begin", vm.MiniGameTaskName);
+        Assert.Contains(vm.MiniGameTaskList, item => string.Equals(item.Value, vm.MiniGameTaskName, StringComparison.Ordinal));
 
         // The unavailable persisted selection is dropped from the view model, but
         // the programmatic fallback must not silently overwrite the persisted value.

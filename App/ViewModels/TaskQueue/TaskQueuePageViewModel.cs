@@ -48,7 +48,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         TaskModuleTypes.Mall,
         TaskModuleTypes.Award,
         TaskModuleTypes.Roguelike,
-        TaskModuleTypes.Reclamation,
     ];
 
     // Keep AllTasksCompleted notification eligibility aligned with WPF's _mainTaskTypes.
@@ -61,7 +60,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         TaskModuleTypes.Mall,
         TaskModuleTypes.Award,
         TaskModuleTypes.Roguelike,
-        TaskModuleTypes.Reclamation,
     };
 
     private int _mainTasksCompletedCount;
@@ -113,7 +111,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         TaskModuleTypes.Mall,
         TaskModuleTypes.Award,
         TaskModuleTypes.Roguelike,
-        TaskModuleTypes.Reclamation,
         TaskModuleTypes.SwitchTheme,
         TaskModuleTypes.OperProgress,
         TaskModuleTypes.SingleStep,
@@ -2098,7 +2095,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         // WPF seeds defaults through sequential add notifications; each add moves
         // the settings selection to the newly added row, so the final seeded task
-        // (Reclamation, last index) ends up selected and persisted.
+        // (Roguelike, last index) ends up selected and persisted.
         var reloadSelectionIndex = seededDefaults
             ? Tasks.Count - 1
             : ResolveReloadSelectionIndex(preferProfileSelectedIndex, previousSelectedIndex, Tasks.Count);

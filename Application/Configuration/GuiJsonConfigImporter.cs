@@ -223,6 +223,15 @@ public sealed class GuiJsonConfigImporter : IConfigImporter
                 report.Errors.Add(error);
             }
 
+            if (ToolboxReclamationSettingsMigration.IsReclamationTask(convertedTask))
+            {
+                // dev-v2 66e003377c: Reclamation moved out of the task queue into the toolbox;
+                // keep the parameters instead of dropping the row.
+                ToolboxReclamationSettingsMigration.ApplyTaskParams(convertedTask, config);
+                report.MappedFieldCount += 1;
+                continue;
+            }
+
             profile.TaskQueue.Add(convertedTask);
             report.MappedFieldCount += 1;
         }

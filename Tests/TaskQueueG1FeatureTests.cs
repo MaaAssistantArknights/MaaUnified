@@ -148,6 +148,8 @@ public sealed class TaskQueueG1FeatureTests
         var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
 
+        // WPF dev-v2 66e003377c: Reclamation left the default queue (it is a toolbox mini-game
+        // now), so the seeded order ends at Roguelike.
         var expected = new[]
         {
             TaskModuleTypes.StartUp,
@@ -157,7 +159,6 @@ public sealed class TaskQueueG1FeatureTests
             TaskModuleTypes.Mall,
             TaskModuleTypes.Award,
             TaskModuleTypes.Roguelike,
-            TaskModuleTypes.Reclamation,
         };
 
         Assert.Equal(expected.Length, vm.Tasks.Count);
@@ -175,9 +176,9 @@ public sealed class TaskQueueG1FeatureTests
 
         // WPF seeds defaults through sequential add notifications; each add moves
         // the settings selection to the newly added row, so the final seeded task
-        // (Reclamation) ends up selected and persisted.
-        Assert.Equal(8, vm.Tasks.Count);
-        Assert.Equal(TaskModuleTypes.Reclamation, vm.SelectedTask?.Type);
+        // (Roguelike after Reclamation moved to the toolbox) ends up selected and persisted.
+        Assert.Equal(7, vm.Tasks.Count);
+        Assert.Equal(TaskModuleTypes.Roguelike, vm.SelectedTask?.Type);
         Assert.True(fixture.Config.TryGetCurrentProfile(out var profile));
         Assert.Equal(vm.Tasks.Count - 1, profile.Values["TaskSelectedIndex"]?.GetValue<int>());
     }
@@ -210,9 +211,9 @@ public sealed class TaskQueueG1FeatureTests
         // Defaults only return on the next page/application initialization.
         var reloaded = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await reloaded.InitializeAsync();
-        Assert.Equal(8, reloaded.Tasks.Count);
+        Assert.Equal(7, reloaded.Tasks.Count);
         Assert.Equal(TaskModuleTypes.StartUp, reloaded.Tasks[0].Type);
-        Assert.Equal(TaskModuleTypes.Reclamation, reloaded.SelectedTask?.Type);
+        Assert.Equal(TaskModuleTypes.Roguelike, reloaded.SelectedTask?.Type);
     }
 
     [Fact]

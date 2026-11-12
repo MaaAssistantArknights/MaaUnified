@@ -144,6 +144,67 @@ internal static class LegacyConfigValueMappings
         ["AchievementPopupAutoClose"] = "Achievement.PopupAutoClose",
     };
 
+    // dev-v2 66e003377c 把工具箱设置拆成 Toolbox.Recruitment/OperBox/Gacha/Peep/MiniGame 五节，
+    // 并把生息演算从任务队列搬进 Toolbox.MiniGame.Reclamation。本表把 dev-v2 的节内键映射回
+    // MAAUnified 仍在读写的扁平键；MiniGame 的新键沿用 dev-v2 原名（生息演算/活动商店）。
+    private static readonly Dictionary<string, string> DevV2ToolboxKeyAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // v6.3.7/dev-v2 过渡形状：未分节的平铺 Toolbox 键（ToolboxSectionMigrationConverter
+        // 的 _sectionKeys 会在运行时把同批键搬进分节，这里等价映射到同一个扁平目标键）。
+        ["Toolbox.ChooseLevel3"] = "Recruit.ChooseLevel3",
+        ["Toolbox.ChooseLevel3Time"] = "Toolbox.Recruit.ChooseLevel3.Time",
+        ["Toolbox.ChooseLevel4"] = "Recruit.ChooseLevel4",
+        ["Toolbox.ChooseLevel4Time"] = "Toolbox.Recruit.ChooseLevel4.Time",
+        ["Toolbox.ChooseLevel5"] = "Recruit.ChooseLevel5",
+        ["Toolbox.ChooseLevel5Time"] = "Toolbox.Recruit.ChooseLevel5.Time",
+        ["Toolbox.ChooseLevel6"] = "Recruit.ChooseLevel6",
+        ["Toolbox.AutoSetTime"] = "Recruit.AutoSetTime",
+        ["Toolbox.ShowPotential"] = "Recruit.ShowPotential",
+        ["Toolbox.OperBoxExportFormat"] = "OperBox.SelectedExportValue",
+        ["Toolbox.GachaShowDisclaimerNoMore"] = "Gacha.ShowDisclaimerNoMore",
+        ["Toolbox.PeepTargetFps"] = "Peep.TargetFps",
+        ["Toolbox.EventShopBlackList"] = ToolboxSettingKeys.EventShopBlackList,
+        ["Toolbox.EventShopBlackListDataSupplementInstrument"] = ToolboxSettingKeys.EventShopBlackListDataSupplementInstrument,
+        ["Toolbox.EventShopBlackListDataSupplementStick"] = ToolboxSettingKeys.EventShopBlackListDataSupplementStick,
+        ["Toolbox.EventShopBlackListLmd"] = ToolboxSettingKeys.EventShopBlackListLmd,
+        ["Toolbox.EventShopBlackListFurniturePart"] = ToolboxSettingKeys.EventShopBlackListFurniturePart,
+        ["Toolbox.EventShopBlackListOther"] = ToolboxSettingKeys.EventShopBlackListOther,
+
+        // Toolbox.Recruitment
+        ["Toolbox.Recruitment.ChooseLevel3"] = "Recruit.ChooseLevel3",
+        ["Toolbox.Recruitment.ChooseLevel3Time"] = "Toolbox.Recruit.ChooseLevel3.Time",
+        ["Toolbox.Recruitment.ChooseLevel4"] = "Recruit.ChooseLevel4",
+        ["Toolbox.Recruitment.ChooseLevel4Time"] = "Toolbox.Recruit.ChooseLevel4.Time",
+        ["Toolbox.Recruitment.ChooseLevel5"] = "Recruit.ChooseLevel5",
+        ["Toolbox.Recruitment.ChooseLevel5Time"] = "Toolbox.Recruit.ChooseLevel5.Time",
+        ["Toolbox.Recruitment.ChooseLevel6"] = "Recruit.ChooseLevel6",
+        ["Toolbox.Recruitment.AutoSetTime"] = "Recruit.AutoSetTime",
+        ["Toolbox.Recruitment.ShowPotential"] = "Recruit.ShowPotential",
+
+        // Toolbox.OperBox
+        ["Toolbox.OperBox.OperBoxExportFormat"] = "OperBox.SelectedExportValue",
+
+        // Toolbox.Gacha
+        ["Toolbox.Gacha.GachaShowDisclaimerNoMore"] = "Gacha.ShowDisclaimerNoMore",
+
+        // Toolbox.Peep
+        ["Toolbox.Peep.PeepTargetFps"] = "Peep.TargetFps",
+
+        // Toolbox.MiniGame (dev-v2 names are kept; WPF stores the same keys under the section)
+        ["Toolbox.MiniGame.EventShopBlackList"] = ToolboxSettingKeys.EventShopBlackList,
+        ["Toolbox.MiniGame.EventShopBlackListDataSupplementInstrument"] = ToolboxSettingKeys.EventShopBlackListDataSupplementInstrument,
+        ["Toolbox.MiniGame.EventShopBlackListDataSupplementStick"] = ToolboxSettingKeys.EventShopBlackListDataSupplementStick,
+        ["Toolbox.MiniGame.EventShopBlackListLmd"] = ToolboxSettingKeys.EventShopBlackListLmd,
+        ["Toolbox.MiniGame.EventShopBlackListFurniturePart"] = ToolboxSettingKeys.EventShopBlackListFurniturePart,
+        ["Toolbox.MiniGame.EventShopBlackListOther"] = ToolboxSettingKeys.EventShopBlackListOther,
+        ["Toolbox.MiniGame.Reclamation.Theme"] = ToolboxSettingKeys.ReclamationTheme,
+        ["Toolbox.MiniGame.Reclamation.Mode"] = ToolboxSettingKeys.ReclamationMode,
+        ["Toolbox.MiniGame.Reclamation.IncrementMode"] = ToolboxSettingKeys.ReclamationIncrementMode,
+        ["Toolbox.MiniGame.Reclamation.MaxCraftCountPerRound"] = ToolboxSettingKeys.ReclamationMaxCraftCountPerRound,
+        ["Toolbox.MiniGame.Reclamation.ToolToCraft"] = ToolboxSettingKeys.ReclamationToolToCraft,
+        ["Toolbox.MiniGame.Reclamation.ClearStore"] = ToolboxSettingKeys.ReclamationClearStore,
+    };
+
     // dev-v2 `382009b97b` renamed the root `VersionUpdate` object to `Update` and renamed
     // several sub keys (`53870a7a52` added the credentials/source fields).
     private static readonly Dictionary<string, string> DevV2UpdateKeyAliases = new(StringComparer.OrdinalIgnoreCase)
@@ -322,6 +383,69 @@ internal static class LegacyConfigValueMappings
     public static string NormalizeGlobalKey(string key)
     {
         return GlobalKeyAliases.TryGetValue(key, out var mapped) ? mapped : key;
+    }
+
+    /// <summary>
+    /// Maps a dev-v2 toolbox path (absolute, e.g. <c>Toolbox.Recruitment.ChooseLevel3</c>) to the
+    /// flat key MAAUnified reads and writes. Unknown toolbox paths are preserved verbatim by the
+    /// importer, so no mapping is required for them.
+    /// </summary>
+    public static string? TryMapDevV2ToolboxKey(string absolutePath)
+    {
+        if (string.IsNullOrWhiteSpace(absolutePath))
+        {
+            return null;
+        }
+
+        var normalized = absolutePath.Trim();
+        if (!normalized.StartsWith(ToolboxSettingKeys.SectionPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return DevV2ToolboxKeyAliases.TryGetValue(normalized, out var mapped) ? mapped : null;
+    }
+
+    /// <summary>
+    /// Normalizes dev-v2 toolbox values whose MAAUnified representation differs
+    /// (currently the OperBox export format enum).
+    /// </summary>
+    public static JsonNode? NormalizeToolboxValue(string targetKey, JsonNode? value)
+    {
+        if (!string.Equals(targetKey, "OperBox.SelectedExportValue", StringComparison.Ordinal))
+        {
+            return value;
+        }
+
+        return JsonValue.Create(NormalizeOperBoxExportFormat(value));
+    }
+
+    private static int NormalizeOperBoxExportFormat(JsonNode? value)
+    {
+        if (value is JsonValue jsonValue)
+        {
+            if (jsonValue.TryGetValue(out int numeric))
+            {
+                return Math.Clamp(numeric, 0, 3);
+            }
+
+            if (jsonValue.TryGetValue(out string? text))
+            {
+                var token = NormalizeToken(text);
+                return token switch
+                {
+                    "clipboard" => 0,
+                    "json" => 1,
+                    "markdown" => 2,
+                    "csv" => 3,
+                    _ => int.TryParse(token, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                        ? Math.Clamp(parsed, 0, 3)
+                        : 0,
+                };
+            }
+        }
+
+        return 0;
     }
 
     /// <summary>

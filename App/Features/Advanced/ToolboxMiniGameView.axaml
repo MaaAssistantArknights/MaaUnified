@@ -34,6 +34,11 @@
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
+    <Style Selector="TextBlock.toolbox-minigame-category-text">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+    </Style>
+
     <Style Selector="TextBlock.toolbox-minigame-tip-text">
       <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
       <Setter Property="Margin" Value="0,2,0,0" />
@@ -65,8 +70,13 @@
         </controls:AppSelect.ItemTemplate>
       </controls:AppSelect>
 
-      <TextBlock Classes="toolbox-minigame-context-text"
-                 Text="{Binding SelectedMiniGameEntry.Display}" />
+      <StackPanel Spacing="2">
+        <TextBlock Classes="toolbox-minigame-context-text"
+                   Text="{Binding SelectedMiniGameEntry.Display}" />
+        <TextBlock Classes="toolbox-minigame-category-text"
+                   IsVisible="{Binding HasMiniGameCategory}"
+                   Text="{Binding MiniGameCategoryText}" />
+      </StackPanel>
 
       <StackPanel Classes="toolbox-minigame-secretfront-stack"
                   IsVisible="{Binding IsMiniGameSecretFront}"
@@ -97,6 +107,113 @@
             </controls:AppSelect.ItemTemplate>
           </controls:AppSelect>
         </Grid>
+      </StackPanel>
+
+      <StackPanel Classes="toolbox-minigame-secretfront-stack"
+                  IsVisible="{Binding IsMiniGameReclamation}"
+                  IsEnabled="{Binding CanEditMiniGameOptions}">
+        <Grid ColumnDefinitions="180,*">
+          <TextBlock Classes="toolbox-minigame-field-label"
+                     Text="{Binding ReclamationThemeText}" />
+          <controls:AppSelect Grid.Column="1"
+                              Classes="toolbox-minigame-selector"
+                              Margin="12,0,0,0"
+                              ItemsSource="{Binding ReclamationThemeOptions}"
+                              SelectedValueBinding="{Binding Value}"
+                              SelectedValue="{Binding ReclamationTheme}">
+            <controls:AppSelect.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Label}" />
+              </DataTemplate>
+            </controls:AppSelect.ItemTemplate>
+          </controls:AppSelect>
+        </Grid>
+
+        <Grid ColumnDefinitions="180,*">
+          <TextBlock Classes="toolbox-minigame-field-label"
+                     Text="{Binding ReclamationModeText}" />
+          <controls:AppSelect Grid.Column="1"
+                              Classes="toolbox-minigame-selector"
+                              Margin="12,0,0,0"
+                              ItemsSource="{Binding ReclamationModeOptions}"
+                              SelectedValueBinding="{Binding Value}"
+                              SelectedValue="{Binding ReclamationModeInputValue}">
+            <controls:AppSelect.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+              </DataTemplate>
+            </controls:AppSelect.ItemTemplate>
+          </controls:AppSelect>
+        </Grid>
+
+        <Grid ColumnDefinitions="180,*"
+              IsVisible="{Binding IsReclamationArchiveMode}">
+          <TextBlock Classes="toolbox-minigame-field-label"
+                     Text="{Binding ReclamationToolToCraftText}" />
+          <controls:AppTextInput Grid.Column="1"
+                                 Margin="12,0,0,0"
+                                 Text="{Binding ReclamationToolToCraft}" />
+        </Grid>
+
+        <Grid ColumnDefinitions="180,*">
+          <TextBlock Classes="toolbox-minigame-field-label"
+                     Text="{Binding ReclamationIncrementModeText}" />
+          <controls:AppSelect Grid.Column="1"
+                              Classes="toolbox-minigame-selector"
+                              Margin="12,0,0,0"
+                              ItemsSource="{Binding ReclamationIncrementModeOptions}"
+                              SelectedValueBinding="{Binding Value}"
+                              SelectedValue="{Binding ReclamationIncrementModeInputValue}">
+            <controls:AppSelect.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Label}" />
+              </DataTemplate>
+            </controls:AppSelect.ItemTemplate>
+          </controls:AppSelect>
+        </Grid>
+
+        <Grid ColumnDefinitions="180,*"
+              IsVisible="{Binding ShowReclamationArchiveSettings}">
+          <TextBlock Classes="toolbox-minigame-field-label"
+                     Text="{Binding ReclamationMaxCraftCountPerRoundText}" />
+          <controls:AppTextInput Grid.Column="1"
+                                 Margin="12,0,0,0"
+                                 Text="{Binding ReclamationMaxCraftCountPerRoundInput}" />
+        </Grid>
+
+        <CheckBox Classes="app-checkbox"
+                  IsVisible="{Binding ShowReclamationClearStore}"
+                  Content="{Binding ReclamationClearStoreText}"
+                  IsChecked="{Binding ReclamationClearStore}" />
+      </StackPanel>
+
+      <CheckBox Classes="app-checkbox"
+                IsVisible="{Binding IsMiniGameAutoRaisePotential}"
+                IsEnabled="{Binding CanEditMiniGameOptions}"
+                Content="{Binding AutoRaisePotentialUseNormalTokenText}"
+                IsChecked="{Binding AutoRaisePotentialUseNormalToken}" />
+
+      <StackPanel Classes="toolbox-minigame-secretfront-stack"
+                  IsVisible="{Binding IsMiniGameEventShop}"
+                  IsEnabled="{Binding CanEditMiniGameOptions}">
+        <CheckBox Classes="app-checkbox"
+                  Content="{Binding EventShopDataSupplementInstrumentText}"
+                  IsChecked="{Binding EventShopBlackListDataSupplementInstrument}" />
+        <CheckBox Classes="app-checkbox"
+                  Content="{Binding EventShopDataSupplementStickText}"
+                  IsChecked="{Binding EventShopBlackListDataSupplementStick}" />
+        <CheckBox Classes="app-checkbox"
+                  Content="{Binding EventShopLmdText}"
+                  IsChecked="{Binding EventShopBlackListLmd}" />
+        <CheckBox Classes="app-checkbox"
+                  Content="{Binding EventShopFurniturePartText}"
+                  IsChecked="{Binding EventShopBlackListFurniturePart}" />
+        <CheckBox Classes="app-checkbox"
+                  Content="{Binding EventShopOtherText}"
+                  IsChecked="{Binding EventShopBlackListOther}" />
+        <controls:AppTextInput IsVisible="{Binding EventShopBlackListOther}"
+                               Watermark="{Binding EventShopOtherWatermark}"
+                               Text="{Binding EventShopBlackList}" />
       </StackPanel>
 
       <TextBlock Classes="app-body long-wrap toolbox-minigame-tip-text"

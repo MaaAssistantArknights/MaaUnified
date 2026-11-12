@@ -60,6 +60,16 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
                     JsonElement? taskQueueProp = null;
                     foreach (var valueProp in configProp.Value.EnumerateObject())
                     {
+                        // dev-v2 66e003377c: the flat Toolbox settings object was split into
+                        // Recruitment/OperBox/Gacha/Peep/MiniGame sections and moved next to
+                        // `Gui`. MAAUnified stores the same values as flat global keys.
+                        if (string.Equals(valueProp.Name, "Toolbox", StringComparison.Ordinal)
+                            && valueProp.Value.ValueKind == JsonValueKind.Object)
+                        {
+                            MergeToolboxSection(configProp.Name, valueProp.Value, target, fillMissingOnly, report);
+                            continue;
+                        }
+
                         // dev-v2 (`382009b97b`) nests every per-profile setting under `Gui`. Must stay
                         // case sensitive: v6.3.7 stores the flat `GUI.InverseClearMode` key here.
                         if (string.Equals(valueProp.Name, "Gui", StringComparison.Ordinal)
@@ -788,6 +798,65 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         return false;
     }
 
+    // dev-v2 `Gui.Toolbox`（661 行迁移转换器 `ToolboxSectionMigrationConverter` 的逆操作）：
+    // 五节的已知键映射回 MAAUnified 的扁平键；生息演算/活动商店等新键沿用 dev-v2 原名。
+    // 未知结构按原路径写回全局配置并告警，保证不丢数据。
+    private static void MergeToolboxSection(
+        string profileName,
+        JsonElement toolbox,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        foreach (var prop in toolbox.EnumerateObject())
+        {
+            MergeToolboxValue(profileName, prop.Name, prop.Value, target, fillMissingOnly, report);
+        }
+    }
+
+    private static void MergeToolboxValue(
+        string profileName,
+        string path,
+        JsonElement value,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        var fullPath = $"{ToolboxSettingKeys.SectionPrefix}{path}";
+        var mappedKey = LegacyConfigValueMappings.TryMapDevV2ToolboxKey(fullPath);
+        if (mappedKey is not null)
+        {
+            JsonImportMergeHelper.MergeGlobalValue(
+                target,
+                LegacyConfigValueMappings.NormalizeGlobalKey(mappedKey),
+                LegacyConfigValueMappings.NormalizeToolboxValue(mappedKey, JsonImportMergeHelper.ToJsonNode(value)),
+                fillMissingOnly,
+                report);
+            return;
+        }
+
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var child in value.EnumerateObject())
+            {
+                MergeToolboxValue(profileName, $"{path}.{child.Name}", child.Value, target, fillMissingOnly, report);
+            }
+
+            return;
+        }
+
+        // 未识别的叶子键仍按 dev-v2 原名保存（例如 OperBoxAvatarMode 这类 MAAUnified 尚无 UI
+        // 的设置），下次导出仍可还原，不会静默丢值。
+        JsonImportMergeHelper.MergeGlobalValue(
+            target,
+            fullPath,
+            JsonImportMergeHelper.ToJsonNode(value),
+            fillMissingOnly,
+            report);
+        report.Warnings.Add(
+            $"Profile `{profileName}` Toolbox key `{fullPath}` has no MAAUnified consumer and was preserved as-is.");
+    }
+
     private static void MergeTaskQueue(
         UnifiedProfile profile,
         UnifiedConfig config,
@@ -835,6 +904,18 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
                 {
                     report.Errors.Add(error);
                 }
+            }
+
+            if (ToolboxReclamationSettingsMigration.IsReclamationTask(convertedTask))
+            {
+                // dev-v2 66e003377c: Reclamation is no longer a queue task. The first entry's
+                // parameters move into Toolbox.MiniGame.Reclamation; duplicates were already
+                // dropped by WPF's migration converter.
+                ToolboxReclamationSettingsMigration.ApplyTaskParams(convertedTask, config);
+                report.MappedFieldCount += 1;
+                report.Warnings.Add(
+                    $"Reclamation task `{convertedTask.Name}` was migrated into Toolbox.MiniGame.Reclamation settings and removed from the task queue.");
+                continue;
             }
 
             profile.TaskQueue.Add(convertedTask);

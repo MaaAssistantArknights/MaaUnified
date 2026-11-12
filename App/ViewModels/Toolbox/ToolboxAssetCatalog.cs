@@ -67,6 +67,12 @@ internal static class ToolboxAssetCatalog
         ["MiniGameNameSsStoreTip"] = "Start on the event store page.\nDo not buy the infinite pool.",
         ["MiniGameNameRAStore"] = "Reclamation Store",
         ["MiniGameNameRAStoreTip"] = "Start on the event store page.",
+        ["ReclamationTitle"] = "Reclamation Algorithm",
+        ["AutoRaisePotentialTitle"] = "Auto Raise Potential",
+        ["AutoRaisePotentialTip"] = "Start on the operator potential upgrade screen.",
+        ["MiniGameCategoryCurrentEvent"] = "Current Events",
+        ["MiniGameCategoryPermanent"] = "Permanent Activities",
+        ["MiniGameCategoryPermanentFeature"] = "Permanent Features",
     };
     private static readonly IReadOnlyDictionary<string, string> MiniGameTextZhCn = new Dictionary<string, string>(MiniGameTextEnUs, StringComparer.Ordinal)
     {
@@ -81,6 +87,12 @@ internal static class ToolboxAssetCatalog
         ["MiniGameNameSsStoreTip"] = "请在活动商店页面开始。\n不买无限池。",
         ["MiniGameNameRAStore"] = "生息演算商店",
         ["MiniGameNameRAStoreTip"] = "请在活动商店页面开始。",
+        ["ReclamationTitle"] = "生息演算",
+        ["AutoRaisePotentialTitle"] = "自动升级潜能",
+        ["AutoRaisePotentialTip"] = "在干员潜能提升界面开始。",
+        ["MiniGameCategoryCurrentEvent"] = "当期活动",
+        ["MiniGameCategoryPermanent"] = "常驻活动",
+        ["MiniGameCategoryPermanentFeature"] = "常驻功能",
     };
     private static readonly IReadOnlyDictionary<string, string> MiniGameTextZhTw = new Dictionary<string, string>(MiniGameTextEnUs, StringComparer.Ordinal)
     {
@@ -89,6 +101,12 @@ internal static class ToolboxAssetCatalog
         ["MiniGameNameYellowTicketStore"] = "黃票商店",
         ["MiniGameNameSsStore"] = "活動商店",
         ["MiniGameNameRAStore"] = "生息演算商店",
+        ["ReclamationTitle"] = "生息演算",
+        ["AutoRaisePotentialTitle"] = "自動昇級潛能",
+        ["AutoRaisePotentialTip"] = "在幹員潛能提升介面開始。",
+        ["MiniGameCategoryCurrentEvent"] = "目前活動",
+        ["MiniGameCategoryPermanent"] = "常駐活動",
+        ["MiniGameCategoryPermanentFeature"] = "常駐功能",
     };
     private static readonly IReadOnlyDictionary<string, string> MiniGameTextJaJp = new Dictionary<string, string>(MiniGameTextEnUs, StringComparer.Ordinal)
     {
@@ -97,6 +115,12 @@ internal static class ToolboxAssetCatalog
         ["MiniGameNameYellowTicketStore"] = "黄資格証ショップ",
         ["MiniGameNameSsStore"] = "イベントショップ",
         ["MiniGameNameRAStore"] = "生息演算ショップ",
+        ["ReclamationTitle"] = "生息演算",
+        ["AutoRaisePotentialTitle"] = "自動潜在能力強化",
+        ["AutoRaisePotentialTip"] = "オペレーターの潜在能力強化画面で開始してください。",
+        ["MiniGameCategoryCurrentEvent"] = "現在のイベント",
+        ["MiniGameCategoryPermanent"] = "常設イベント",
+        ["MiniGameCategoryPermanentFeature"] = "常設機能",
     };
     private static readonly IReadOnlyDictionary<string, string> MiniGameTextKoKr = new Dictionary<string, string>(MiniGameTextEnUs, StringComparer.Ordinal)
     {
@@ -105,6 +129,12 @@ internal static class ToolboxAssetCatalog
         ["MiniGameNameYellowTicketStore"] = "노랑 증서 상점",
         ["MiniGameNameSsStore"] = "이벤트 상점",
         ["MiniGameNameRAStore"] = "생식연산 상점",
+        ["ReclamationTitle"] = "생존 연산",
+        ["AutoRaisePotentialTitle"] = "잠재능력 자동 상승",
+        ["AutoRaisePotentialTip"] = "오퍼레이터 잠재능력 상승 화면에서 시작하세요.",
+        ["MiniGameCategoryCurrentEvent"] = "현재 이벤트",
+        ["MiniGameCategoryPermanent"] = "상시 활동",
+        ["MiniGameCategoryPermanentFeature"] = "상시 기능",
     };
 
     public static IReadOnlyDictionary<string, ToolboxOperatorAsset> GetOperators()
@@ -496,40 +526,43 @@ internal static class ToolboxAssetCatalog
         string? coreVersion,
         DateTime utcNow)
     {
-        var entries = new List<ToolboxMiniGameEntry>
+        // WPF dev-v2 (a105eccd05) categories: current-event entries come from StageActivity and
+        // are listed before the built-in permanent entries; 66e003377c adds Reclamation as a
+        // toolbox mini-game now that it is no longer a queue task.
+        var permanentCategory = ResolveMiniGameText("MiniGameCategoryPermanent", language) ?? "Permanent";
+        var permanentFeatureCategory = ResolveMiniGameText("MiniGameCategoryPermanentFeature", language) ?? "Permanent Feature";
+        var builtIns = new List<ToolboxMiniGameEntry>
         {
-            new(ResolveMiniGameText("MiniGameNameSsStore", language) ?? "Event Store", "SS@Store@Begin", ResolveMiniGameText("MiniGameNameSsStoreTip", language) ?? string.Empty),
-            new(ResolveMiniGameText("MiniGameNameGreenTicketStore", language) ?? "Green Cert Store", "GreenTicket@Store@Begin", ResolveMiniGameText("MiniGameNameGreenTicketStoreTip", language) ?? string.Empty),
-            new(ResolveMiniGameText("MiniGameNameYellowTicketStore", language) ?? "Yellow Cert Store", "YellowTicket@Store@Begin", ResolveMiniGameText("MiniGameNameYellowTicketStoreTip", language) ?? string.Empty),
-            new(ResolveMiniGameText("MiniGameNameRAStore", language) ?? "Reclamation Store", "RA@Store@Begin", ResolveMiniGameText("MiniGameNameRAStoreTip", language) ?? string.Empty),
-            new(ResolveMiniGameText("MiniGame@SecretFront", language) ?? "Secret Front", "MiniGame@SecretFront", ResolveMiniGameText("MiniGame@SecretFrontTip", language) ?? string.Empty),
+            new(ResolveMiniGameText("MiniGame@SecretFront", language) ?? "Secret Front", "MiniGame@SecretFront", ResolveMiniGameText("MiniGame@SecretFrontTip", language) ?? string.Empty, permanentCategory),
+            new(ResolveMiniGameText("ReclamationTitle", language) ?? "Reclamation", "Reclamation", ResolveMiniGameText("ReclamationTip", language) ?? string.Empty, permanentCategory),
+            new(ResolveMiniGameText("MiniGameNameSsStore", language) ?? "Event Store", "SS@Store@Begin", ResolveMiniGameText("MiniGameNameSsStoreTip", language) ?? string.Empty, permanentFeatureCategory),
+            new(ResolveMiniGameText("MiniGameNameGreenTicketStore", language) ?? "Green Cert Store", "GreenTicket@Store@Begin", ResolveMiniGameText("MiniGameNameGreenTicketStoreTip", language) ?? string.Empty, permanentFeatureCategory),
+            new(ResolveMiniGameText("MiniGameNameYellowTicketStore", language) ?? "Yellow Cert Store", "YellowTicket@Store@Begin", ResolveMiniGameText("MiniGameNameYellowTicketStoreTip", language) ?? string.Empty, permanentFeatureCategory),
+            new(ResolveMiniGameText("MiniGameNameRAStore", language) ?? "Reclamation Store", "RA@Store@Begin", ResolveMiniGameText("MiniGameNameRAStoreTip", language) ?? string.Empty, permanentFeatureCategory),
+            new(ResolveMiniGameText("AutoRaisePotentialTitle", language) ?? "Auto Raise Potential", "MiniGame@AutoRaisePotential@Begin", ResolveMiniGameText("AutoRaisePotentialTip", language) ?? string.Empty, permanentFeatureCategory),
         };
 
+        var activityEntries = new List<ToolboxMiniGameEntry>();
         var path = ResolveMiniGameStagePath();
-        if (path is null)
+        if (path is not null)
         {
-            return entries;
-        }
-
-        try
-        {
-            var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
-            if (root is null)
+            try
             {
-                return entries;
+                var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
+                if (root is not null
+                    && TryResolveMiniGameClientNode(root, clientType, out var clientNode))
+                {
+                    AppendMiniGameEntries(activityEntries, clientNode["miniGame"], language, coreVersion, utcNow);
+                }
             }
-
-            if (TryResolveMiniGameClientNode(root, clientType, out var clientNode))
+            catch
             {
-                AppendMiniGameEntries(entries, clientNode["miniGame"], language, coreVersion, utcNow);
+                // Ignore optional stage activity parse failures.
             }
         }
-        catch
-        {
-            // Ignore optional stage activity parse failures.
-        }
 
-        return entries
+        return activityEntries
+            .Concat(builtIns)
             .GroupBy(entry => entry.Value, StringComparer.Ordinal)
             .Select(group => group.First())
             .ToArray();
@@ -591,13 +624,17 @@ internal static class ToolboxAssetCatalog
             return;
         }
 
+        var defaultCategory = ResolveMiniGameText("MiniGameCategoryPermanent", language) ?? "Permanent";
+        var currentEventCategory = ResolveMiniGameText("MiniGameCategoryCurrentEvent", language) ?? "Current Event";
+
         if (node is JsonValue value && value.TryGetValue(out string? simpleValue) && !string.IsNullOrWhiteSpace(simpleValue))
         {
             var trimmed = simpleValue.Trim();
             target.Add(new ToolboxMiniGameEntry(
                 ResolveMiniGameText(trimmed, language) ?? trimmed,
                 trimmed,
-                ResolveMiniGameText(trimmed + "Tip", language) ?? string.Empty));
+                ResolveMiniGameText(trimmed + "Tip", language) ?? string.Empty,
+                defaultCategory));
             return;
         }
 
@@ -617,6 +654,8 @@ internal static class ToolboxAssetCatalog
         _ = TryReadString(obj["value"], out var lowerValue);
         _ = TryReadString(obj["Tip"], out var tip);
         _ = TryReadString(obj["TipKey"], out var tipKey);
+        _ = TryReadString(obj["Category"], out var category);
+        _ = TryReadString(obj["CategoryKey"], out var categoryKey);
 
         var finalValue = FirstNonEmpty(explicitValue, lowerValue, display, displayKey);
         if (string.IsNullOrWhiteSpace(finalValue))
@@ -624,9 +663,21 @@ internal static class ToolboxAssetCatalog
             return;
         }
 
+        // WPF a105eccd05: an entry belongs to the current-event category when StageActivity
+        // carries activity times for it; a CategoryKey/Category from the API overrides that.
+        var isCurrentEvent = obj["Activity"] is JsonObject
+            || obj["activity"] is JsonObject
+            || obj["UtcStartTime"] is not null
+            || obj["UtcExpireTime"] is not null;
+        var finalCategory = FirstNonEmpty(
+            ResolveMiniGameText(categoryKey, language),
+            category,
+            isCurrentEvent ? currentEventCategory : defaultCategory,
+            defaultCategory);
+
         var finalDisplay = FirstNonEmpty(display, ResolveMiniGameText(displayKey, language), finalValue);
         var finalTip = FirstNonEmpty(ResolveMiniGameText(tipKey, language), tip, ResolveMiniGameText(displayKey + "Tip", language), string.Empty);
-        target.Add(new ToolboxMiniGameEntry(finalDisplay!, finalValue!, finalTip!));
+        target.Add(new ToolboxMiniGameEntry(finalDisplay!, finalValue!, finalTip!, finalCategory!, isCurrentEvent));
     }
 
     private static bool IsMiniGameEntryAvailable(JsonObject entry, string? coreVersion, DateTime utcNow)
@@ -1145,4 +1196,9 @@ public sealed record ToolboxItemAsset(
     string ClassifyType,
     int SortId);
 
-public sealed record ToolboxMiniGameEntry(string Display, string Value, string Tip);
+public sealed record ToolboxMiniGameEntry(
+    string Display,
+    string Value,
+    string Tip,
+    string Category = "",
+    bool IsCurrentEvent = false);

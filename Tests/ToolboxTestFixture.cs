@@ -114,7 +114,7 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
             ShellFeatureService = new ShellFeatureService(connect),
             TaskQueueFeatureService = new TaskQueueFeatureService(session, config),
             CopilotFeatureService = new CopilotFeatureService(),
-            ToolboxFeatureService = new ToolboxFeatureService(bridge, connect),
+            ToolboxFeatureService = new ToolboxFeatureService(bridge, connect, config),
             RemoteControlFeatureService = new RemoteControlFeatureService(),
             PlatformCapabilityService = capability,
             OverlayFeatureService = new OverlayFeatureService(capability),

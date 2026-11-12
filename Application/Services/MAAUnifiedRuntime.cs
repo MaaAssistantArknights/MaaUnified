@@ -339,7 +339,7 @@ public static class MAAUnifiedRuntimeFactory
         var shellFeatureService = new ShellFeatureService(connectFeatureService);
         var taskQueueFeatureService = new TaskQueueFeatureService(sessionService, configService);
         var copilotFeatureService = new CopilotFeatureService();
-        var toolboxFeatureService = new ToolboxFeatureService(bridge, connectFeatureService);
+        var toolboxFeatureService = new ToolboxFeatureService(bridge, connectFeatureService, configService);
         var remoteControlFeatureService = new RemoteControlFeatureServiceImpl(
             configService,
             sessionService,

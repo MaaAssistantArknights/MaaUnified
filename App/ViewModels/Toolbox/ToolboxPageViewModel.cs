@@ -18,7 +18,9 @@ using MAAUnified.App.Services;
 using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.ViewModels.TaskQueue;
+using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
+using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
@@ -43,6 +45,11 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     // existing gui.json keeps selecting the same export action here.
     private const string OperBoxExportFormatKey = "OperBox.SelectedExportValue";
     private const string MiniGameSecretFrontTaskName = "MiniGame@SecretFront";
+    // dev-v2 66e003377c: Reclamation is a toolbox mini-game entry, not a queue task.
+    private const string ReclamationMiniGameTaskName = "Reclamation";
+    // dev-v2 8a6ca5f276 / 1bc83ba6e6: dedicated dispatch for these two mini-game entries.
+    private const string AutoRaisePotentialMiniGameTaskName = "MiniGame@AutoRaisePotential@Begin";
+    private const string EventShopMiniGameTaskName = "SS@Store@Begin";
     private const string RecruitTaskChain = "Recruit";
     private const string DepotTaskChain = "Depot";
     private const string OperBoxTaskChain = "OperBox";
@@ -155,6 +162,20 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         nameof(MiniGameEndingText),
         nameof(MiniGameEventPriorityText),
         nameof(MiniGameCommandText),
+        nameof(ReclamationThemeText),
+        nameof(ReclamationModeText),
+        nameof(ReclamationIncrementModeText),
+        nameof(ReclamationMaxCraftCountPerRoundText),
+        nameof(ReclamationToolToCraftText),
+        nameof(ReclamationClearStoreText),
+        nameof(ReclamationTip),
+        nameof(AutoRaisePotentialUseNormalTokenText),
+        nameof(EventShopDataSupplementInstrumentText),
+        nameof(EventShopDataSupplementStickText),
+        nameof(EventShopLmdText),
+        nameof(EventShopFurniturePartText),
+        nameof(EventShopOtherText),
+        nameof(EventShopOtherWatermark),
         nameof(ExecutionReviewTitle),
         nameof(ExecutionReviewResultLabelText),
         nameof(ExecutionReviewParametersLabelText),
@@ -246,6 +267,22 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private string _miniGameSecretFrontEvent = string.Empty;
     private string _miniGameTip = string.Empty;
     private readonly List<ToolboxNamedOption> _miniGameSecretFrontEventOptions = [];
+    private string _reclamationTheme = "Tales";
+    private int _reclamationMode = 1;
+    private int _reclamationIncrementMode;
+    private int _reclamationMaxCraftCountPerRound = 16;
+    private string _reclamationToolToCraft = string.Empty;
+    private bool _reclamationClearStore = true;
+    private string _eventShopBlackList = string.Empty;
+    private bool _eventShopBlackListDataSupplementInstrument;
+    private bool _eventShopBlackListDataSupplementStick;
+    private bool _eventShopBlackListLmd;
+    private bool _eventShopBlackListFurniturePart;
+    private bool _eventShopBlackListOther;
+    private bool _autoRaisePotentialUseNormalToken;
+    private readonly List<ToolboxNamedOption> _reclamationThemeOptions = [];
+    private readonly List<ToolboxNamedOption> _reclamationModeOptions = [];
+    private readonly List<ToolboxNamedOption> _reclamationIncrementModeOptions = [];
     private readonly List<ToolboxNamedOption> _operBoxExportFormatOptions = [];
     private int _operBoxExportFormatValue;
 
@@ -298,6 +335,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         DepotGroups = new BatchedObservableCollection<DepotItemGroupViewModel>();
         MiniGameTaskList = new ObservableCollection<ToolboxMiniGameEntry>();
         RebuildMiniGameSecretFrontEventOptions();
+        RebuildReclamationOptions();
         RebuildOperBoxExportFormatOptions();
         MiniGameSecretFrontEndingOptions =
         [
@@ -1098,6 +1136,12 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             UpdateMiniGameSelectionFromTaskName();
             MiniGameTip = ResolveMiniGameTip(normalized);
             OnPropertyChanged(nameof(IsMiniGameSecretFront));
+            OnPropertyChanged(nameof(IsMiniGameReclamation));
+            OnPropertyChanged(nameof(IsMiniGameAutoRaisePotential));
+            OnPropertyChanged(nameof(IsMiniGameEventShop));
+            OnPropertyChanged(nameof(MiniGameCategoryText));
+            OnPropertyChanged(nameof(HasMiniGameCategory));
+            OnPropertyChanged(nameof(ReclamationTip));
             PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
         }
     }
@@ -1168,6 +1212,319 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     }
 
     public bool IsMiniGameSecretFront => string.Equals(MiniGameTaskName, MiniGameSecretFrontTaskName, StringComparison.Ordinal);
+
+    public bool IsMiniGameReclamation => string.Equals(MiniGameTaskName, ReclamationMiniGameTaskName, StringComparison.Ordinal);
+
+    public bool IsMiniGameAutoRaisePotential => string.Equals(MiniGameTaskName, AutoRaisePotentialMiniGameTaskName, StringComparison.Ordinal);
+
+    public bool IsMiniGameEventShop => string.Equals(MiniGameTaskName, EventShopMiniGameTaskName, StringComparison.Ordinal);
+
+    public string MiniGameCategoryText => SelectedMiniGameEntry?.Category ?? string.Empty;
+
+    public bool HasMiniGameCategory => !string.IsNullOrWhiteSpace(MiniGameCategoryText);
+
+    public IReadOnlyList<ToolboxNamedOption> ReclamationThemeOptions => _reclamationThemeOptions;
+
+    public ToolboxNamedOption? SelectedReclamationThemeOption
+    {
+        get => ReclamationThemeOptions.FirstOrDefault(option => string.Equals(option.Value, ReclamationTheme, StringComparison.Ordinal))
+            ?? ReclamationThemeOptions[0];
+        set => ReclamationTheme = value?.Value ?? "Tales";
+    }
+
+    public string ReclamationTheme
+    {
+        get => _reclamationTheme;
+        set
+        {
+            var normalized = string.IsNullOrWhiteSpace(value) ? "Tales" : value.Trim();
+            if (!SetTrackedProperty(ref _reclamationTheme, normalized))
+            {
+                return;
+            }
+
+            RebuildReclamationModeOptions();
+            if (!ReclamationModeOptions.Any(option => string.Equals(option.Value, ReclamationMode.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)))
+            {
+                ReclamationMode = IsReclamationRelaunchAnchor ? 16 : 1;
+            }
+
+            if (IsReclamationRelaunchAnchor)
+            {
+                ReclamationClearStore = false;
+            }
+
+            OnPropertyChanged(nameof(SelectedReclamationThemeOption));
+            OnPropertyChanged(nameof(IsReclamationRelaunchAnchor));
+            OnPropertyChanged(nameof(IsReclamationArchiveMode));
+            OnPropertyChanged(nameof(ShowReclamationArchiveSettings));
+            OnPropertyChanged(nameof(ShowReclamationClearStore));
+            OnPropertyChanged(nameof(ReclamationTip));
+            RefreshReclamationMiniGameTip();
+            PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
+        }
+    }
+
+    public IReadOnlyList<ToolboxNamedOption> ReclamationModeOptions => _reclamationModeOptions;
+
+    public string ReclamationModeInputValue
+    {
+        get => ReclamationMode.ToString(CultureInfo.InvariantCulture);
+        set
+        {
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+            {
+                ReclamationMode = parsed;
+            }
+        }
+    }
+
+    public ToolboxNamedOption? SelectedReclamationModeOption
+    {
+        get => ReclamationModeOptions.FirstOrDefault(option => string.Equals(option.Value, ReclamationMode.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
+            ?? ReclamationModeOptions[0];
+        set => ReclamationMode = int.TryParse(value?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : (IsReclamationRelaunchAnchor ? 16 : 1);
+    }
+
+    public int ReclamationMode
+    {
+        get => _reclamationMode;
+        set
+        {
+            var normalized = IsReclamationModeAllowed(value) ? value : IsReclamationRelaunchAnchor ? 16 : 1;
+            if (!SetTrackedProperty(ref _reclamationMode, normalized))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(SelectedReclamationModeOption));
+            OnPropertyChanged(nameof(ReclamationModeInputValue));
+            OnPropertyChanged(nameof(IsReclamationArchiveMode));
+            OnPropertyChanged(nameof(ShowReclamationArchiveSettings));
+            OnPropertyChanged(nameof(ShowReclamationClearStore));
+            OnPropertyChanged(nameof(ReclamationTip));
+            RefreshReclamationMiniGameTip();
+            PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
+        }
+    }
+
+    public IReadOnlyList<ToolboxNamedOption> ReclamationIncrementModeOptions => _reclamationIncrementModeOptions;
+
+    public string ReclamationIncrementModeInputValue
+    {
+        get => ReclamationIncrementMode.ToString(CultureInfo.InvariantCulture);
+        set
+        {
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+            {
+                ReclamationIncrementMode = Math.Clamp(parsed, 0, 1);
+            }
+        }
+    }
+
+    public ToolboxNamedOption? SelectedReclamationIncrementModeOption
+    {
+        get => ReclamationIncrementModeOptions.FirstOrDefault(option => string.Equals(option.Value, ReclamationIncrementMode.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
+            ?? ReclamationIncrementModeOptions[0];
+        set => ReclamationIncrementMode = int.TryParse(value?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? Math.Clamp(parsed, 0, 1)
+            : 0;
+    }
+
+    public int ReclamationIncrementMode
+    {
+        get => _reclamationIncrementMode;
+        set
+        {
+            var normalized = value is >= 0 and <= 1 ? value : 0;
+            if (SetTrackedProperty(ref _reclamationIncrementMode, normalized))
+            {
+                OnPropertyChanged(nameof(SelectedReclamationIncrementModeOption));
+                OnPropertyChanged(nameof(ReclamationIncrementModeInputValue));
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
+            }
+        }
+    }
+
+    public int ReclamationMaxCraftCountPerRound
+    {
+        get => _reclamationMaxCraftCountPerRound;
+        set
+        {
+            var normalized = Math.Max(0, value);
+            if (SetTrackedProperty(ref _reclamationMaxCraftCountPerRound, normalized))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
+            }
+        }
+    }
+
+    public string ReclamationMaxCraftCountPerRoundInput
+    {
+        get => ReclamationMaxCraftCountPerRound.ToString(CultureInfo.InvariantCulture);
+        set
+        {
+            if (int.TryParse(NormalizeToken(value), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+            {
+                ReclamationMaxCraftCountPerRound = parsed;
+            }
+        }
+    }
+
+    public string ReclamationToolToCraft
+    {
+        get => _reclamationToolToCraft;
+        set
+        {
+            var normalized = (value ?? string.Empty).Replace('；', ';').Trim();
+            if (SetTrackedProperty(ref _reclamationToolToCraft, normalized))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
+            }
+        }
+    }
+
+    public bool ReclamationClearStore
+    {
+        get => _reclamationClearStore;
+        set
+        {
+            if (SetTrackedProperty(ref _reclamationClearStore, value))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
+            }
+        }
+    }
+
+    public bool IsReclamationRelaunchAnchor => string.Equals(ReclamationTheme, "RelaunchAnchor", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsReclamationArchiveMode => !IsReclamationRelaunchAnchor && ReclamationMode == 1;
+
+    public bool ShowReclamationArchiveSettings => IsReclamationArchiveMode;
+
+    public bool ShowReclamationClearStore => !IsReclamationRelaunchAnchor;
+
+    public string ReclamationTip => ReclamationTheme switch
+    {
+        "RelaunchAnchor" => T("Toolbox.MiniGame.Reclamation.RelaunchAnchor.Tip", "Reclamation Algorithm: Relaunch Anchor. Pick the RA stage to farm."),
+        "Fire" => T("Toolbox.MiniGame.Reclamation.Fire.Tip", "Reclamation Algorithm: Fire Within the Sand is closed."),
+        _ => IsReclamationArchiveMode
+            ? T("Toolbox.MiniGame.Reclamation.TalesInSave.Tip", "Reclamation Algorithm with a save: craft support tools to farm points.")
+            : T("Toolbox.MiniGame.Reclamation.TalesNoSave.Tip", "Reclamation Algorithm without a save: enter and leave stages to farm points."),
+    };
+
+    public bool AutoRaisePotentialUseNormalToken
+    {
+        get => _autoRaisePotentialUseNormalToken;
+        set
+        {
+            if (SetTrackedProperty(ref _autoRaisePotentialUseNormalToken, value))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
+            }
+        }
+    }
+
+    public string EventShopBlackList
+    {
+        get => _eventShopBlackList;
+        set
+        {
+            var normalized = (value ?? string.Empty).Replace('；', ';').Trim();
+            if (SetTrackedProperty(ref _eventShopBlackList, normalized))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
+            }
+        }
+    }
+
+    public bool EventShopBlackListOther
+    {
+        get => _eventShopBlackListOther;
+        set
+        {
+            if (SetTrackedProperty(ref _eventShopBlackListOther, value))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
+            }
+        }
+    }
+
+    public bool EventShopBlackListDataSupplementInstrument
+    {
+        get => _eventShopBlackListDataSupplementInstrument;
+        set
+        {
+            if (SetTrackedProperty(ref _eventShopBlackListDataSupplementInstrument, value))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
+            }
+        }
+    }
+
+    public bool EventShopBlackListDataSupplementStick
+    {
+        get => _eventShopBlackListDataSupplementStick;
+        set
+        {
+            if (SetTrackedProperty(ref _eventShopBlackListDataSupplementStick, value))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
+            }
+        }
+    }
+
+    public bool EventShopBlackListLmd
+    {
+        get => _eventShopBlackListLmd;
+        set
+        {
+            if (SetTrackedProperty(ref _eventShopBlackListLmd, value))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
+            }
+        }
+    }
+
+    public bool EventShopBlackListFurniturePart
+    {
+        get => _eventShopBlackListFurniturePart;
+        set
+        {
+            if (SetTrackedProperty(ref _eventShopBlackListFurniturePart, value))
+            {
+                PersistBridgeSettingsIfNotLoading(ToolboxToolKind.MiniGame);
+            }
+        }
+    }
+
+    public string EventShopDataSupplementInstrumentText => T("Toolbox.MiniGame.EventShop.DataSupplementInstrument", "Data Supplement Instrument");
+
+    public string EventShopDataSupplementStickText => T("Toolbox.MiniGame.EventShop.DataSupplementStick", "Data Supplement Stick");
+
+    public string EventShopLmdText => T("Toolbox.MiniGame.EventShop.Lmd", "LMD");
+
+    public string EventShopFurniturePartText => T("Toolbox.MiniGame.EventShop.FurniturePart", "Furniture Part");
+
+    public string EventShopOtherText => T("Toolbox.MiniGame.EventShop.Other", "Other custom items");
+
+    public string EventShopOtherWatermark => T("Toolbox.MiniGame.EventShop.Blacklist.Tip", "Selected items are added to the blacklist (separated by `;`).");
+
+    public string AutoRaisePotentialUseNormalTokenText => T("Toolbox.MiniGame.AutoRaisePotential.UseNormalToken", "Use normal tokens when mid tokens are insufficient");
+
+    public string ReclamationThemeText => T("Toolbox.MiniGame.Reclamation.Theme", "Theme");
+
+    public string ReclamationModeText => T("Toolbox.MiniGame.Reclamation.Mode", "Mode");
+
+    public string ReclamationIncrementModeText => T("Toolbox.MiniGame.Reclamation.IncrementMode", "Increment mode");
+
+    public string ReclamationMaxCraftCountPerRoundText => T("Toolbox.MiniGame.Reclamation.MaxCraftCountPerRound", "Max craft rounds per run");
+
+    public string ReclamationToolToCraftText => T("Toolbox.MiniGame.Reclamation.ToolToCraft.Tip", "Support tools to craft");
+
+    public string ReclamationClearStoreText => T("Toolbox.MiniGame.Reclamation.ClearStore", "Buy from the store after the task");
 
     public bool IsMiniGameRunning => _activeTool == ToolboxToolKind.MiniGame && IsExecuting;
 
@@ -1758,11 +2115,101 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     public async Task StartMiniGameAsync(CancellationToken cancellationToken = default)
     {
-        var request = new ToolboxDispatchRequest(
+        await DispatchToolAsync(
             ToolboxToolKind.MiniGame,
-            MiniGame: new ToolboxMiniGameRequest(GetMiniGameTask()),
-            ParameterSummary: BuildCurrentParameterText(ToolboxToolKind.MiniGame));
-        await DispatchToolAsync(ToolboxToolKind.MiniGame, request, PrepareMiniGameForStart, cancellationToken);
+            BuildMiniGameDispatchRequest(),
+            PrepareMiniGameForStart,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// WPF dev-v2 (66e003377c / 8a6ca5f276 / 1bc83ba6e6) 的顺序分派：
+    /// Reclamation 走任务类型编译，AutoRaisePotential 与活动商店走带附加参数的 Custom 任务，
+    /// 其余小游戏沿用 <c>task_names</c>。
+    /// </summary>
+    private ToolboxDispatchRequest BuildMiniGameDispatchRequest()
+    {
+        var parameterSummary = BuildCurrentParameterText(ToolboxToolKind.MiniGame);
+        if (IsMiniGameReclamation)
+        {
+            return new ToolboxDispatchRequest(
+                ToolboxToolKind.MiniGame,
+                Reclamation: new ToolboxReclamationRequest(BuildReclamationParameters()),
+                ParameterSummary: parameterSummary);
+        }
+
+        if (IsMiniGameAutoRaisePotential)
+        {
+            return new ToolboxDispatchRequest(
+                ToolboxToolKind.MiniGame,
+                AutoRaisePotential: new ToolboxAutoRaisePotentialRequest(AutoRaisePotentialUseNormalToken),
+                ParameterSummary: parameterSummary);
+        }
+
+        return new ToolboxDispatchRequest(
+            ToolboxToolKind.MiniGame,
+            MiniGame: new ToolboxMiniGameRequest(GetMiniGameTask(), BuildEventShopBlackList()),
+            ParameterSummary: parameterSummary);
+    }
+
+    private ReclamationTaskParamsDto BuildReclamationParameters()
+    {
+        return new ReclamationTaskParamsDto
+        {
+            Theme = ReclamationTheme,
+            Mode = ReclamationMode,
+            IncrementMode = ReclamationIncrementMode,
+            NumCraftBatches = ReclamationMaxCraftCountPerRound,
+            ToolsToCraft = ReclamationToolToCraft
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList(),
+            ClearStore = ReclamationClearStore,
+        };
+    }
+
+    private IReadOnlyList<string> BuildEventShopBlackList()
+    {
+        if (!IsMiniGameEventShop)
+        {
+            return [];
+        }
+
+        // 与 WPF StartEventShop 一致：勾选的预设项按游戏客户端语言提交关键词，
+        // 自定义项按 `;` 拆分去重；匹配语言由游戏客户端而非 GUI 语言决定。
+        var keywords = new List<string>();
+        var clientType = ResolveClientType();
+        var localized = ToolboxMiniGameKeywords.ResolveEventShopKeywords(clientType);
+        if (EventShopBlackListDataSupplementInstrument)
+        {
+            keywords.Add(localized.DataSupplementInstrument);
+        }
+
+        if (EventShopBlackListDataSupplementStick)
+        {
+            keywords.Add(localized.DataSupplementStick);
+        }
+
+        if (EventShopBlackListLmd)
+        {
+            keywords.Add(localized.Lmd);
+        }
+
+        if (EventShopBlackListFurniturePart)
+        {
+            keywords.Add(localized.FurniturePart);
+        }
+
+        if (EventShopBlackListOther)
+        {
+            keywords.AddRange(EventShopBlackList
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        }
+
+        return keywords
+            .Where(keyword => !string.IsNullOrWhiteSpace(keyword))
+            .Select(keyword => keyword.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
     }
 
     public async Task TogglePeepAsync(CancellationToken cancellationToken = default)
@@ -2694,6 +3141,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private void RefreshLocalizedCollections()
     {
         RebuildMiniGameSecretFrontEventOptions();
+        RebuildReclamationOptions();
         RebuildOperBoxExportFormatOptions();
         OnPropertyChanged(nameof(OperBoxExportText));
         if (_operBoxListsMaterialized)
@@ -4323,6 +4771,37 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                         T("Toolbox.Validation.MiniGameSecretFrontEndingInvalid", "When task is `MiniGame@SecretFront`, ending must be one of A~E."));
                 }
 
+                if (IsMiniGameReclamation)
+                {
+                    if (ReclamationTheme is not ("Tales" or "Fire" or "RelaunchAnchor"))
+                    {
+                        return UiOperationResult.Fail(
+                            UiErrorCode.ToolboxInvalidParameters,
+                            T("Toolbox.Validation.ReclamationThemeInvalid", "Reclamation theme must be Tales, Fire or RelaunchAnchor."));
+                    }
+
+                    if (!IsReclamationModeAllowed(ReclamationMode))
+                    {
+                        return UiOperationResult.Fail(
+                            UiErrorCode.ToolboxInvalidParameters,
+                            T("Toolbox.Validation.ReclamationModeInvalid", "The selected reclamation mode is not supported by the current theme."));
+                    }
+
+                    if (ReclamationIncrementMode is < 0 or > 1)
+                    {
+                        return UiOperationResult.Fail(
+                            UiErrorCode.ToolboxInvalidParameters,
+                            T("Toolbox.Validation.ReclamationIncrementModeInvalid", "Increment mode must be 0 (click) or 1 (hold)."));
+                    }
+
+                    if (ReclamationMaxCraftCountPerRound < 0)
+                    {
+                        return UiOperationResult.Fail(
+                            UiErrorCode.ToolboxInvalidParameters,
+                            T("Toolbox.Validation.ReclamationCraftCountInvalid", "Max craft rounds per run must be zero or greater."));
+                    }
+                }
+
                 return UiOperationResult.Ok("MiniGame parameters validated.");
             default:
                 return UiOperationResult.Fail(UiErrorCode.ToolNotSupported, $"Tool `{tool}` is not supported.");
@@ -4387,6 +4866,19 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 updates[LegacyConfigurationKeys.MiniGameTaskName] = MiniGameTaskName;
                 updates[LegacyConfigurationKeys.MiniGameSecretFrontEnding] = MiniGameSecretFrontEnding;
                 updates[LegacyConfigurationKeys.MiniGameSecretFrontEvent] = MiniGameSecretFrontEvent;
+                updates[ToolboxSettingKeys.ReclamationTheme] = ReclamationTheme;
+                updates[ToolboxSettingKeys.ReclamationMode] = ReclamationMode.ToString(CultureInfo.InvariantCulture);
+                updates[ToolboxSettingKeys.ReclamationIncrementMode] = ReclamationIncrementMode.ToString(CultureInfo.InvariantCulture);
+                updates[ToolboxSettingKeys.ReclamationMaxCraftCountPerRound] = ReclamationMaxCraftCountPerRound.ToString(CultureInfo.InvariantCulture);
+                updates[ToolboxSettingKeys.ReclamationToolToCraft] = ReclamationToolToCraft;
+                updates[ToolboxSettingKeys.ReclamationClearStore] = ReclamationClearStore.ToString();
+                updates[ToolboxSettingKeys.EventShopBlackList] = EventShopBlackList;
+                updates[ToolboxSettingKeys.EventShopBlackListDataSupplementInstrument] = EventShopBlackListDataSupplementInstrument.ToString();
+                updates[ToolboxSettingKeys.EventShopBlackListDataSupplementStick] = EventShopBlackListDataSupplementStick.ToString();
+                updates[ToolboxSettingKeys.EventShopBlackListLmd] = EventShopBlackListLmd.ToString();
+                updates[ToolboxSettingKeys.EventShopBlackListFurniturePart] = EventShopBlackListFurniturePart.ToString();
+                updates[ToolboxSettingKeys.EventShopBlackListOther] = EventShopBlackListOther.ToString();
+                updates[ToolboxSettingKeys.AutoRaisePotentialUseNormalToken] = AutoRaisePotentialUseNormalToken.ToString();
                 break;
         }
 
@@ -4796,6 +5288,11 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
         MiniGameTip = ResolveMiniGameTip(MiniGameTaskName);
         OnPropertyChanged(nameof(SelectedMiniGameEntry));
+        OnPropertyChanged(nameof(MiniGameCategoryText));
+        OnPropertyChanged(nameof(HasMiniGameCategory));
+        OnPropertyChanged(nameof(IsMiniGameReclamation));
+        OnPropertyChanged(nameof(IsMiniGameAutoRaisePotential));
+        OnPropertyChanged(nameof(IsMiniGameEventShop));
     }
 
     private void UpdateMiniGameSelectionFromTaskName()
@@ -4805,12 +5302,25 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(SelectedMiniGameEntry));
     }
 
+    private void RefreshReclamationMiniGameTip()
+    {
+        if (IsMiniGameReclamation)
+        {
+            MiniGameTip = ResolveMiniGameTip(MiniGameTaskName);
+        }
+    }
+
     private string ResolveMiniGameTip(string taskName)
     {
         var entry = MiniGameTaskList.FirstOrDefault(item => string.Equals(item.Value, taskName, StringComparison.Ordinal));
         if (entry is null)
         {
             return T("Toolbox.Tip.MiniGameNameEmpty", "Select a mini-game above to start.");
+        }
+
+        if (string.Equals(taskName, ReclamationMiniGameTaskName, StringComparison.Ordinal))
+        {
+            return ReclamationTip;
         }
 
         return string.IsNullOrWhiteSpace(entry.Tip)
@@ -4881,6 +5391,61 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(MiniGameSecretFrontEventOptions));
     }
 
+    private void RebuildReclamationOptions()
+    {
+        _reclamationThemeOptions.Clear();
+        _reclamationThemeOptions.Add(new ToolboxNamedOption(T("Toolbox.MiniGame.Reclamation.Theme.Tales", "Tales Within the Sand"), "Tales"));
+        _reclamationThemeOptions.Add(new ToolboxNamedOption(T("Toolbox.MiniGame.Reclamation.Theme.Fire", "Fire Within the Sand"), "Fire"));
+        _reclamationThemeOptions.Add(new ToolboxNamedOption(T("Toolbox.MiniGame.Reclamation.Theme.RelaunchAnchor", "Relaunch Anchor"), "RelaunchAnchor"));
+
+        _reclamationIncrementModeOptions.Clear();
+        _reclamationIncrementModeOptions.Add(new ToolboxNamedOption(T("Toolbox.MiniGame.Reclamation.IncrementMode.Click", "Click"), "0"));
+        _reclamationIncrementModeOptions.Add(new ToolboxNamedOption(T("Toolbox.MiniGame.Reclamation.IncrementMode.Hold", "Hold"), "1"));
+
+        RebuildReclamationModeOptions();
+
+        OnPropertyChanged(nameof(ReclamationThemeOptions));
+        OnPropertyChanged(nameof(SelectedReclamationThemeOption));
+        OnPropertyChanged(nameof(ReclamationIncrementModeOptions));
+        OnPropertyChanged(nameof(SelectedReclamationIncrementModeOption));
+        OnPropertyChanged(nameof(ReclamationThemeText));
+        OnPropertyChanged(nameof(ReclamationModeText));
+        OnPropertyChanged(nameof(ReclamationIncrementModeText));
+        OnPropertyChanged(nameof(ReclamationMaxCraftCountPerRoundText));
+        OnPropertyChanged(nameof(ReclamationToolToCraftText));
+        OnPropertyChanged(nameof(ReclamationClearStoreText));
+        OnPropertyChanged(nameof(ReclamationTip));
+    }
+
+    // WPF dev-v2 Reclamation: Tales keeps the prosperity modes, RelaunchAnchor only exposes the
+    // RA stages; the option order matches ReclamationUserControlModel.RefreshModeList.
+    private void RebuildReclamationModeOptions()
+    {
+        _reclamationModeOptions.Clear();
+        if (IsReclamationRelaunchAnchor)
+        {
+            _reclamationModeOptions.Add(new ToolboxNamedOption(T("Toolbox.MiniGame.Reclamation.Mode.RA1", "RA-1"), "16"));
+            _reclamationModeOptions.Add(new ToolboxNamedOption(T("Toolbox.MiniGame.Reclamation.Mode.RA4", "RA-4"), "48"));
+            _reclamationModeOptions.Add(new ToolboxNamedOption(T("Toolbox.MiniGame.Reclamation.Mode.RA15", "RA-15"), "32"));
+        }
+        else
+        {
+            _reclamationModeOptions.Add(new ToolboxNamedOption(T("Toolbox.MiniGame.Reclamation.Mode.ProsperityNoSave", "No save: enter and leave stages to farm points"), "0"));
+            _reclamationModeOptions.Add(new ToolboxNamedOption(T("Toolbox.MiniGame.Reclamation.Mode.ProsperityInSave", "With a save: craft support tools to farm points"), "1"));
+        }
+
+        OnPropertyChanged(nameof(ReclamationModeOptions));
+        OnPropertyChanged(nameof(SelectedReclamationModeOption));
+        OnPropertyChanged(nameof(ReclamationModeInputValue));
+    }
+
+    private bool IsReclamationModeAllowed(int mode)
+    {
+        return IsReclamationRelaunchAnchor
+            ? mode is 16 or 32 or 48
+            : mode is 0 or 1;
+    }
+
     private void RebuildOperBoxExportFormatOptions()
     {
         _operBoxExportFormatOptions.Clear();
@@ -4927,6 +5492,19 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             MiniGameTaskName = ReadStringSetting(LegacyConfigurationKeys.MiniGameTaskName, "SS@Store@Begin");
             MiniGameSecretFrontEnding = ReadStringSetting(LegacyConfigurationKeys.MiniGameSecretFrontEnding, "A");
             MiniGameSecretFrontEvent = ReadStringSetting(LegacyConfigurationKeys.MiniGameSecretFrontEvent, string.Empty);
+            ReclamationTheme = ReadStringSetting(ToolboxSettingKeys.ReclamationTheme, "Tales");
+            ReclamationMode = ReadIntSetting(ToolboxSettingKeys.ReclamationMode, IsReclamationRelaunchAnchor ? 16 : 1);
+            ReclamationIncrementMode = ReadIntSetting(ToolboxSettingKeys.ReclamationIncrementMode, 0);
+            ReclamationMaxCraftCountPerRound = ReadIntSetting(ToolboxSettingKeys.ReclamationMaxCraftCountPerRound, 16);
+            ReclamationToolToCraft = ReadStringSetting(ToolboxSettingKeys.ReclamationToolToCraft, string.Empty);
+            ReclamationClearStore = ReadBoolSetting(ToolboxSettingKeys.ReclamationClearStore, true);
+            EventShopBlackList = ReadStringSetting(ToolboxSettingKeys.EventShopBlackList, string.Empty);
+            EventShopBlackListDataSupplementInstrument = ReadBoolSetting(ToolboxSettingKeys.EventShopBlackListDataSupplementInstrument, false);
+            EventShopBlackListDataSupplementStick = ReadBoolSetting(ToolboxSettingKeys.EventShopBlackListDataSupplementStick, false);
+            EventShopBlackListLmd = ReadBoolSetting(ToolboxSettingKeys.EventShopBlackListLmd, false);
+            EventShopBlackListFurniturePart = ReadBoolSetting(ToolboxSettingKeys.EventShopBlackListFurniturePart, false);
+            EventShopBlackListOther = ReadBoolSetting(ToolboxSettingKeys.EventShopBlackListOther, false);
+            AutoRaisePotentialUseNormalToken = ReadBoolSetting(ToolboxSettingKeys.AutoRaisePotentialUseNormalToken, false);
         }
         finally
         {
@@ -5013,9 +5591,29 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             ToolboxToolKind.Depot => $"format={NormalizeToken(DepotFormat)};topN={NormalizeToken(DepotTopNInput)}",
             ToolboxToolKind.Gacha => $"drawCount={NormalizeToken(GachaDrawCountInput)};showDisclaimerNoMore={GachaShowDisclaimerNoMore.ToString().ToLowerInvariant()}",
             ToolboxToolKind.VideoRecognition => $"targetFps={PeepTargetFps}",
-            ToolboxToolKind.MiniGame => $"taskName={NormalizeToken(MiniGameTaskName)};secretFrontEnding={NormalizeToken(MiniGameSecretFrontEnding)};secretFrontEvent={NormalizeToken(MiniGameSecretFrontEvent)}",
+            ToolboxToolKind.MiniGame => BuildMiniGameParameterSummary(),
             _ => string.Empty,
         };
+    }
+
+    private string BuildMiniGameParameterSummary()
+    {
+        if (IsMiniGameReclamation)
+        {
+            return $"taskName={ReclamationMiniGameTaskName};theme={NormalizeToken(ReclamationTheme)};mode={ReclamationMode};incrementMode={ReclamationIncrementMode};maxCraftCountPerRound={ReclamationMaxCraftCountPerRound};clearStore={ReclamationClearStore.ToString().ToLowerInvariant()}";
+        }
+
+        if (IsMiniGameAutoRaisePotential)
+        {
+            return $"taskName={AutoRaisePotentialMiniGameTaskName};useNormalToken={AutoRaisePotentialUseNormalToken.ToString().ToLowerInvariant()}";
+        }
+
+        if (IsMiniGameEventShop)
+        {
+            return $"taskName={EventShopMiniGameTaskName};blacklist={string.Join('|', BuildEventShopBlackList().Select(NormalizeToken))}";
+        }
+
+        return $"taskName={NormalizeToken(MiniGameTaskName)};secretFrontEnding={NormalizeToken(MiniGameSecretFrontEnding)};secretFrontEvent={NormalizeToken(MiniGameSecretFrontEvent)}";
     }
 
     private string BuildRecruitSelectedLevelsSummary()

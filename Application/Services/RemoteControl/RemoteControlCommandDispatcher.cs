@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Orchestration;
@@ -127,12 +128,10 @@ internal sealed class RemoteControlCommandDispatcher
                     commandId,
                     new HashSet<string>(StringComparer.OrdinalIgnoreCase) { TaskModuleTypes.Roguelike },
                     cancellationToken),
-                "LinkStart-Reclamation" => await DispatchLinkStartAsync(
-                    request,
-                    command,
-                    commandId,
-                    new HashSet<string>(StringComparer.OrdinalIgnoreCase) { TaskModuleTypes.Reclamation },
-                    cancellationToken),
+                // WPF dev-v2 (66e003377c): Reclamation left the task queue, so both the new
+                // toolbox protocol name and the legacy LinkStart alias drive the toolbox entry.
+                "Toolbox-Reclamation" => await DispatchToolboxReclamationAsync(request, command, commandId, cancellationToken),
+                "LinkStart-Reclamation" => await DispatchToolboxReclamationAsync(request, command, commandId, cancellationToken),
                 "Toolbox-GachaOnce" => await DispatchGachaAsync(request, command, commandId, once: true, cancellationToken),
                 "Toolbox-GachaTenTimes" => await DispatchGachaAsync(request, command, commandId, once: false, cancellationToken),
                 "CaptureImage" => await DispatchCaptureImageAsync(request, command, cancellationToken),
@@ -180,6 +179,7 @@ internal sealed class RemoteControlCommandDispatcher
             "LinkStart-Mission" or
             "LinkStart-AutoRoguelike" or
             "LinkStart-Reclamation" or
+            "Toolbox-Reclamation" or
             "Toolbox-GachaOnce" or
             "Toolbox-GachaTenTimes" or
             "CaptureImage" or
@@ -281,6 +281,70 @@ internal sealed class RemoteControlCommandDispatcher
             $"Remote command `{command}` queued {appendResult.Value} task(s) and started execution.",
             details: $"queued={appendResult.Value}",
             taskType: taskType);
+    }
+
+    // WPF parity (66e003377c RemoteControlService): `Toolbox-Reclamation` waits for the running
+    // state to become idle, starts the toolbox mini-game entry and only then reports. The legacy
+    // `LinkStart-Reclamation` name is kept as an alias of the same path.
+    private async Task<RemoteControlCommandResult> DispatchToolboxReclamationAsync(
+        RemoteControlCommandRequest request,
+        string command,
+        string? commandId,
+        CancellationToken cancellationToken)
+    {
+        if (_toolboxFeatureService is null || _configService is null)
+        {
+            return Fail(request, command, UiErrorCode.RemoteControlUnsupported, "Toolbox service is unavailable.");
+        }
+
+        if (IsSessionRunningOrStopping())
+        {
+            return Fail(
+                request,
+                command,
+                UiErrorCode.SessionStateNotAllowed,
+                $"Remote command `{command}` cannot start new tasks while session state is `{_sessionService!.CurrentState}`. Stop the current run first.");
+        }
+
+        await WaitUntilIdleAsync(cancellationToken);
+
+        var connected = await EnsureConnectedAsync(cancellationToken);
+        if (!connected.Success)
+        {
+            return Fail(request, command, connected.Error?.Code ?? UiErrorCode.RemoteControlUnsupported, connected.Message, connected.Error?.Details);
+        }
+
+        var parameters = ToolboxReclamationSettingsMigration.ReadSettings(_configService.CurrentConfig);
+        var result = await _toolboxFeatureService.DispatchToolAsync(
+            new ToolboxDispatchRequest(
+                ToolboxToolKind.MiniGame,
+                Reclamation: new ToolboxReclamationRequest(parameters),
+                ParameterSummary: $"taskName=Reclamation;theme={parameters.Theme};mode={parameters.Mode}"),
+            cancellationToken);
+        if (!result.Success || result.Value is null)
+        {
+            return Fail(
+                request,
+                command,
+                result.Error?.Code ?? UiErrorCode.ToolboxExecutionFailed,
+                result.Message,
+                result.Error?.Details);
+        }
+
+        if (!string.IsNullOrWhiteSpace(commandId))
+        {
+            SetRunningTaskId(commandId);
+        }
+
+        await WaitUntilIdleAsync(cancellationToken);
+
+        return Success(
+            request,
+            command,
+            $"Remote command `{command}` dispatched.",
+            coreTaskId: result.Value.CoreTaskId,
+            taskType: result.Value.TaskType,
+            details: result.Value.ParameterSummary);
     }
 
     private async Task<RemoteControlCommandResult> DispatchGachaAsync(
@@ -698,6 +762,7 @@ internal sealed class RemoteControlCommandDispatcher
             "linkstart-mission" => "LinkStart-Mission",
             "linkstart-autoroguelike" => "LinkStart-AutoRoguelike",
             "linkstart-reclamation" => "LinkStart-Reclamation",
+            "toolbox-reclamation" => "Toolbox-Reclamation",
             "toolbox-gachaonce" => "Toolbox-GachaOnce",
             "toolbox-gachatentimes" => "Toolbox-GachaTenTimes",
             "captureimage" => "CaptureImage",

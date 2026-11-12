@@ -8,11 +8,14 @@ using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.Platform;
+using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
 namespace MAAUnified.Tests;
 
 public sealed class ConfigurationImportTests
 {
+    private const string OperBoxSelectedExportValueKey = "OperBox.SelectedExportValue";
+
     [Fact]
     public async Task GuiImport_FlatMallMissingLists_UsesLocalizedWpfDefaults()
     {
@@ -1154,22 +1157,20 @@ public sealed class ConfigurationImportTests
         Assert.Equal(20001, roguelikeFindPlaytime.Params["mode"]?.GetValue<int>());
         Assert.Equal(2, roguelikeFindPlaytime.Params["find_playTime_target"]?.GetValue<int>());
 
-        var reclamationNoSave = tasks.Single(task => task.Name == "ReclamationNoSave");
-        Assert.Equal("Fire", reclamationNoSave.Params["theme"]?.GetValue<string>());
-        Assert.Equal(0, reclamationNoSave.Params["mode"]?.GetValue<int>());
-        Assert.Equal(1, reclamationNoSave.Params["increment_mode"]?.GetValue<int>());
-        Assert.Equal(["荧光棒"], ReadStringArray((JsonArray)reclamationNoSave.Params["tools_to_craft"]!));
-        Assert.True(reclamationNoSave.Params["clear_store"]?.GetValue<bool>());
+        // WPF dev-v2 66e003377c: Reclamation queue entries are migrated into the toolbox
+        // mini-game settings (Toolbox.MiniGame.Reclamation.*); the first entry supplies the
+        // values and duplicates are dropped. No Reclamation row is left in the queue.
+        Assert.DoesNotContain(tasks, task => string.Equals(task.Type, TaskModuleTypes.Reclamation, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(report.Warnings, warning => warning.Contains("Toolbox.MiniGame.Reclamation", StringComparison.Ordinal));
 
-        var reclamationArchive = tasks.Single(task => task.Name == "ReclamationArchive");
-        Assert.Equal(1, reclamationArchive.Params["mode"]?.GetValue<int>());
-        Assert.Equal(
-            ["荧光棒", "工具A", "工具A", "工具B,工具C|工具D"],
-            ReadStringArray((JsonArray)reclamationArchive.Params["tools_to_craft"]!));
-
-        var reclamationUnsupported = tasks.Single(task => task.Name == "ReclamationUnsupported");
-        Assert.Equal("RelaunchAnchor", reclamationUnsupported.Params["theme"]?.GetValue<string>());
-        Assert.Equal(16, reclamationUnsupported.Params["mode"]?.GetValue<int>());
+        var globals = service.CurrentConfig.GlobalValues;
+        Assert.Equal("Fire", globals[ToolboxSettingKeys.ReclamationTheme]?.GetValue<string>());
+        Assert.Equal(0, globals[ToolboxSettingKeys.ReclamationMode]?.GetValue<int>());
+        Assert.Equal(1, globals[ToolboxSettingKeys.ReclamationIncrementMode]?.GetValue<int>());
+        Assert.Equal(16, globals[ToolboxSettingKeys.ReclamationMaxCraftCountPerRound]?.GetValue<int>());
+        Assert.Equal("荧光棒", globals[ToolboxSettingKeys.ReclamationToolToCraft]?.GetValue<string>());
+        Assert.True(globals[ToolboxSettingKeys.ReclamationClearStore]?.GetValue<bool>());
+        Assert.Equal("Reclamation", globals[MAAUnified.Compat.Constants.ConfigurationKeys.MiniGameTaskName]?.GetValue<string>());
         Assert.DoesNotContain(report.Warnings, warning => warning.Contains("RA/RelaunchAnchor", StringComparison.Ordinal));
 
         var recruit = tasks.Single(task => task.Name == "Recruit");
@@ -2086,7 +2087,128 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
-    public async Task GuiNewImport_ReclamationRelaunchAnchorModes_ShouldPreserveRaThemeAndModes()
+    public void GuiNewImport_ReclamationRelaunchAnchorModes_ShouldPreserveRaThemeAndModes()
+    {
+        // The import migration keeps the first Reclamation entry only (WPF
+        // ToolboxSectionMigrationConverter), so RA stage mapping is asserted on the converter.
+        var config = new UnifiedConfig();
+        var profile = config.Profiles["Default"];
+        foreach (var (name, mode) in new[] { ("RA1", 16), ("RA15", 32), ("RA4", 48) })
+        {
+            var legacyTask = new JsonObject
+            {
+                ["$type"] = "ReclamationTask",
+                ["Name"] = name,
+                ["IsEnable"] = true,
+                ["Theme"] = "RelaunchAnchor",
+                ["Mode"] = mode,
+            };
+
+            Assert.True(
+                LegacyTaskSchemaConverter.TryConvertLegacyTask(
+                    legacyTask,
+                    profile,
+                    config,
+                    out var converted,
+                    out var error,
+                    LegacyTaskSchemaConversionOptions.GuiNewJson),
+                error);
+
+            Assert.Equal(TaskModuleTypes.Reclamation, converted.Type);
+            Assert.Equal("RelaunchAnchor", converted.Params["theme"]?.GetValue<string>());
+            Assert.Equal(mode, converted.Params["mode"]?.GetValue<int>());
+
+            // Migration keeps the theme/mode pair intact in the toolbox settings.
+            var migrated = new UnifiedConfig();
+            ToolboxReclamationSettingsMigration.ApplyTaskParams(converted, migrated);
+            Assert.Equal("RelaunchAnchor", migrated.GlobalValues[ToolboxSettingKeys.ReclamationTheme]?.GetValue<string>());
+            Assert.Equal(mode, migrated.GlobalValues[ToolboxSettingKeys.ReclamationMode]?.GetValue<int>());
+        }
+    }
+
+    [Fact]
+    public async Task GuiNewImport_DevV2ToolboxSection_ShouldMapKnownKeysAndPreserveUnknown()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "Toolbox": {
+                    "Recruitment": {
+                      "ChooseLevel3": false,
+                      "ChooseLevel3Time": 300,
+                      "AutoSetTime": false,
+                      "ShowPotential": false
+                    },
+                    "OperBox": {
+                      "OperBoxExportFormat": "Markdown",
+                      "OperBoxAvatarMode": true
+                    },
+                    "Gacha": {
+                      "GachaShowDisclaimerNoMore": true
+                    },
+                    "Peep": {
+                      "PeepTargetFps": 45
+                    },
+                    "MiniGame": {
+                      "EventShopBlackList": "商品A;商品B",
+                      "EventShopBlackListLmd": true,
+                      "Reclamation": {
+                        "Theme": "RelaunchAnchor",
+                        "Mode": 32,
+                        "IncrementMode": 1,
+                        "MaxCraftCountPerRound": 8,
+                        "ToolToCraft": "荧光棒;工具A",
+                        "ClearStore": false
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var globals = service.CurrentConfig.GlobalValues;
+
+        // Known per-section keys land on the flat keys MAAUnified still reads.
+        Assert.False(globals[LegacyConfigurationKeys.ChooseLevel3]?.GetValue<bool>());
+        Assert.Equal(300, globals[LegacyConfigurationKeys.ToolBoxChooseLevel3Time]?.GetValue<int>());
+        Assert.False(globals[LegacyConfigurationKeys.AutoSetTime]?.GetValue<bool>());
+        Assert.False(globals[LegacyConfigurationKeys.RecruitmentShowPotential]?.GetValue<bool>());
+        Assert.Equal(2, globals[OperBoxSelectedExportValueKey]?.GetValue<int>());
+        Assert.True(globals[LegacyConfigurationKeys.GachaShowDisclaimerNoMore]?.GetValue<bool>());
+        Assert.Equal(45, globals[LegacyConfigurationKeys.PeepTargetFps]?.GetValue<int>());
+
+        // MiniGame keeps dev-v2 names so the toolbox page reads them directly.
+        Assert.Equal("商品A;商品B", globals[ToolboxSettingKeys.EventShopBlackList]?.GetValue<string>());
+        Assert.True(globals[ToolboxSettingKeys.EventShopBlackListLmd]?.GetValue<bool>());
+        Assert.Equal("RelaunchAnchor", globals[ToolboxSettingKeys.ReclamationTheme]?.GetValue<string>());
+        Assert.Equal(32, globals[ToolboxSettingKeys.ReclamationMode]?.GetValue<int>());
+        Assert.Equal(1, globals[ToolboxSettingKeys.ReclamationIncrementMode]?.GetValue<int>());
+        Assert.Equal(8, globals[ToolboxSettingKeys.ReclamationMaxCraftCountPerRound]?.GetValue<int>());
+        Assert.Equal("荧光棒;工具A", globals[ToolboxSettingKeys.ReclamationToolToCraft]?.GetValue<string>());
+        Assert.False(globals[ToolboxSettingKeys.ReclamationClearStore]?.GetValue<bool>());
+
+        // Keys MAAUnified has no consumer for are preserved verbatim (no silent data loss)
+        // and reported as warnings instead of being dropped with the whole Toolbox object.
+        Assert.True(globals["Toolbox.OperBox.OperBoxAvatarMode"]?.GetValue<bool>());
+        Assert.Contains(
+            report.Warnings,
+            warning => warning.Contains("Toolbox.OperBox.OperBoxAvatarMode", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GuiNewImport_ReclamationQueueEntry_ShouldRoundTripIntoToolboxSettings()
     {
         var root = CreateTempRoot();
         Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -2101,24 +2223,14 @@ public sealed class ConfigurationImportTests
                   "TaskQueue": [
                     {
                       "$type": "ReclamationTask",
-                      "Name": "RA1",
+                      "Name": "Reclamation",
                       "IsEnable": true,
-                      "Theme": "RelaunchAnchor",
-                      "Mode": 16
-                    },
-                    {
-                      "$type": "ReclamationTask",
-                      "Name": "RA15",
-                      "IsEnable": true,
-                      "Theme": "RelaunchAnchor",
-                      "Mode": 32
-                    },
-                    {
-                      "$type": "ReclamationTask",
-                      "Name": "RA4",
-                      "IsEnable": true,
-                      "Theme": "RelaunchAnchor",
-                      "Mode": 48
+                      "Theme": "Tales",
+                      "Mode": 0,
+                      "IncrementMode": 1,
+                      "MaxCraftCountPerRound": 6,
+                      "ToolToCraft": "荧光棒;工具A",
+                      "ClearStore": false
                     }
                   ]
                 }
@@ -2130,12 +2242,82 @@ public sealed class ConfigurationImportTests
         var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
 
         Assert.True(report.Success);
-        Assert.DoesNotContain(report.Warnings, warning => warning.Contains("RA/RelaunchAnchor", StringComparison.Ordinal));
-
         var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
-        Assert.Equal(16, AssertRaTask(tasks, "RA1").Params["mode"]?.GetValue<int>());
-        Assert.Equal(32, AssertRaTask(tasks, "RA15").Params["mode"]?.GetValue<int>());
-        Assert.Equal(48, AssertRaTask(tasks, "RA4").Params["mode"]?.GetValue<int>());
+        Assert.DoesNotContain(tasks, task => string.Equals(task.Type, TaskModuleTypes.Reclamation, StringComparison.OrdinalIgnoreCase));
+
+        // Round-trip: migrated settings compile back to the same Reclamation payload.
+        var profile = service.CurrentConfig.Profiles["Default"];
+        var settings = ToolboxReclamationSettingsMigration.ReadSettings(service.CurrentConfig);
+        Assert.Equal("Tales", settings.Theme);
+        Assert.Equal(0, settings.Mode);
+        Assert.Equal(1, settings.IncrementMode);
+        Assert.Equal(6, settings.NumCraftBatches);
+        Assert.Equal(["荧光棒", "工具A"], settings.ToolsToCraft);
+        Assert.False(settings.ClearStore);
+
+        var compiled = TaskParamCompiler.CompileReclamation(settings, profile, service.CurrentConfig);
+        Assert.Equal("Reclamation", compiled.NormalizedType);
+        Assert.Equal("Tales", compiled.Params["theme"]?.GetValue<string>());
+        Assert.Equal(0, compiled.Params["mode"]?.GetValue<int>());
+        Assert.Equal(1, compiled.Params["increment_mode"]?.GetValue<int>());
+        Assert.Equal(6, compiled.Params["num_craft_batches"]?.GetValue<int>());
+        Assert.Equal(
+            ["荧光棒", "工具A"],
+            ReadStringArray(Assert.IsType<JsonArray>(compiled.Params["tools_to_craft"])));
+        Assert.False(compiled.Params["clear_store"]?.GetValue<bool>());
+
+        // The migrated values survive a save/reload cycle and the second import pass.
+        await service.SaveAsync();
+        var reloaded = CreateService(root);
+        await reloaded.LoadOrBootstrapAsync();
+        var reloadedSettings = ToolboxReclamationSettingsMigration.ReadSettings(reloaded.CurrentConfig);
+        Assert.Equal(settings.Theme, reloadedSettings.Theme);
+        Assert.Equal(settings.Mode, reloadedSettings.Mode);
+        Assert.Equal(settings.IncrementMode, reloadedSettings.IncrementMode);
+        Assert.Equal(settings.NumCraftBatches, reloadedSettings.NumCraftBatches);
+        Assert.Equal(settings.ToolsToCraft, reloadedSettings.ToolsToCraft);
+        Assert.Equal(settings.ClearStore, reloadedSettings.ClearStore);
+    }
+
+    [Fact]
+    public async Task GuiImport_FlatReclamationSettings_ShouldMigrateIntoToolboxSettings()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue.Reclamation.IsChecked": true,
+                  "Reclamation.Theme": "Tales",
+                  "Reclamation.Mode": "1",
+                  "Reclamation.ToolToCraft": "荧光棒;工具A",
+                  "Reclamation.ReclamationIncrementMode": "1",
+                  "Reclamation.ReclamationMaxCraftCountPerRound": "5",
+                  "Reclamation.ReclamationClearStore": "False"
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        Assert.DoesNotContain(tasks, task => string.Equals(task.Type, TaskModuleTypes.Reclamation, StringComparison.OrdinalIgnoreCase));
+
+        var settings = ToolboxReclamationSettingsMigration.ReadSettings(service.CurrentConfig);
+        Assert.Equal("Tales", settings.Theme);
+        Assert.Equal(1, settings.Mode);
+        Assert.Equal(1, settings.IncrementMode);
+        Assert.Equal(5, settings.NumCraftBatches);
+        Assert.Equal(["荧光棒", "工具A"], settings.ToolsToCraft);
+        Assert.False(settings.ClearStore);
     }
 
     [Fact]

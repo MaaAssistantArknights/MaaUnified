@@ -29,7 +29,7 @@ public sealed class RemoteControlExecutionSemanticsTests
         {
             "LinkStart", "LinkStart-Base", "LinkStart-WakeUp", "LinkStart-Combat",
             "LinkStart-Recruiting", "LinkStart-Mall", "LinkStart-Mission",
-            "LinkStart-AutoRoguelike", "LinkStart-Reclamation",
+            "LinkStart-AutoRoguelike", "LinkStart-Reclamation", "Toolbox-Reclamation",
             "Toolbox-GachaOnce", "Toolbox-GachaTenTimes",
             "CaptureImage", "Settings-ConnectAddress", "Settings-Stage1",
         })
@@ -152,6 +152,65 @@ public sealed class RemoteControlExecutionSemanticsTests
             catch (OperationCanceledException)
             {
                 // The callback pump exits via cancellation.
+            }
+        }
+        finally
+        {
+            await fixture.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task ToolboxReclamationCommands_ShouldDispatchToolboxEntryAndWaitForIdle()
+    {
+        await using var bridge = new FakeBridge();
+        var fixture = await ExecFixture.CreateAsync(bridge);
+        try
+        {
+            // Migrated toolbox settings feed the remote command; no Reclamation task is queued.
+            var globals = fixture.Config.CurrentConfig.GlobalValues;
+            globals[ToolboxSettingKeys.ReclamationTheme] = JsonValue.Create("RelaunchAnchor");
+            globals[ToolboxSettingKeys.ReclamationMode] = JsonValue.Create(32);
+
+            var connection = new CoreConnectionInfo("127.0.0.1:5555", "General", null);
+            Assert.True((await fixture.Session.ConnectAsync(connection)).Success);
+            var connectFeature = new FakeConnectFeatureService(fixture.Session, [connection]);
+            var toolbox = new FakeToolboxFeatureService(fixture.Session);
+            var dispatcher = new RemoteControlCommandDispatcher(
+                fixture.Config, fixture.Session, connectFeature, null, toolbox, bridge, fixture.Log);
+
+            // dev-v2 66e003377c: `Toolbox-Reclamation` is the protocol name and the legacy
+            // `LinkStart-Reclamation` name stays as an alias of the same toolbox entry.
+            foreach (var command in new[] { "Toolbox-Reclamation", "LinkStart-Reclamation" })
+            {
+                using var pumpCts = new CancellationTokenSource();
+                var pumpTask = fixture.Session.StartCallbackPumpAsync(_ => Task.CompletedTask, pumpCts.Token);
+
+                var dispatchTask = dispatcher.DispatchAsync(
+                    new RemoteControlCommandRequest(command, null, "alice", "pc-1", TaskId: command),
+                    CancellationToken.None);
+                await WaitUntilAsync(() => fixture.Session.CurrentState == SessionState.Running);
+
+                var request = Assert.IsType<ToolboxReclamationRequest>(toolbox.LastRequest?.Reclamation);
+                Assert.Equal("RelaunchAnchor", request.Parameters.Theme);
+                Assert.Equal(32, request.Parameters.Mode);
+                Assert.False(dispatchTask.IsCompleted);
+
+                bridge.PublishCallback(new CoreCallbackEvent(1, "AllTasksCompleted", "{}", DateTimeOffset.Now));
+                var result = await dispatchTask.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.True(result.Success, result.Message);
+                Assert.Equal("Reclamation", result.TaskType);
+                Assert.Equal(SessionState.Connected, fixture.Session.CurrentState);
+
+                pumpCts.Cancel();
+                try
+                {
+                    await pumpTask;
+                }
+                catch (OperationCanceledException)
+                {
+                    // The callback pump exits via cancellation.
+                }
             }
         }
         finally
@@ -395,16 +454,25 @@ public sealed class RemoteControlExecutionSemanticsTests
 
     private sealed class FakeToolboxFeatureService(UnifiedSessionService session) : IToolboxFeatureService
     {
+        public ToolboxDispatchRequest? LastRequest { get; private set; }
+
         public async Task<UiOperationResult<ToolboxDispatchResult>> DispatchToolAsync(
             ToolboxDispatchRequest request,
             CancellationToken cancellationToken = default)
         {
+            LastRequest = request;
             var start = await session.StartAsync(cancellationToken);
-            return start.Success
-                ? UiOperationResult<ToolboxDispatchResult>.Ok(
-                    new ToolboxDispatchResult(request.Tool, "drawCount=1", DateTimeOffset.Now, 1, "Gacha"),
-                    "Tool dispatched.")
-                : UiOperationResult<ToolboxDispatchResult>.Fail(UiErrorCode.ToolboxExecutionFailed, "start failed");
+            if (!start.Success)
+            {
+                return UiOperationResult<ToolboxDispatchResult>.Fail(UiErrorCode.ToolboxExecutionFailed, "start failed");
+            }
+
+            var (taskType, details) = request.Reclamation is not null
+                ? ("Reclamation", $"taskName=Reclamation;theme={request.Reclamation.Parameters.Theme}")
+                : ("Gacha", "drawCount=1");
+            return UiOperationResult<ToolboxDispatchResult>.Ok(
+                new ToolboxDispatchResult(request.Tool, details, DateTimeOffset.Now, 1, taskType),
+                "Tool dispatched.");
         }
 
         public Task<UiOperationResult> StopAsync(CancellationToken cancellationToken = default)
