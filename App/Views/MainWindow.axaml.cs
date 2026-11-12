@@ -212,11 +212,19 @@ public partial class MainWindow : Window
 
     private MainShellViewModel? VM => DataContext as MainShellViewModel;
 
-    private async void OnWindowClosing(object? sender, CancelEventArgs e)
+    private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
         => await App.RunUiTaskAsync("MainWindow.Closing", async () =>
     {
         if (_allowLifecycleClose || VM is null)
         {
+            return;
+        }
+
+        if (!e.IsProgrammatic && e.CloseReason is WindowCloseReason.ApplicationShutdown or WindowCloseReason.OSShutdown)
+        {
+            // Avalonia's X11 lifetime reports OS logout as ApplicationShutdown.
+            // Canceling here also cancels the desktop's original shutdown request.
+            PrepareForSessionShutdown();
             return;
         }
 
@@ -258,6 +266,25 @@ public partial class MainWindow : Window
             }
         }
     });
+
+    private void PrepareForSessionShutdown()
+    {
+        _allowLifecycleClose = true;
+        _closeRequestPending = true;
+        IsEnabled = false;
+        const string scope = "App.Shell.SessionShutdown.ConfigSave";
+        try
+        {
+            var saved = SessionShutdownPreparation.Run(
+                token => CompleteConfigurationSavesBeforeCloseAsync(scope, token, showErrors: false),
+                TimeSpan.FromSeconds(5));
+            Program.RecordStartupStage(scope, $"Session shutdown configuration flush completed. success={saved}");
+        }
+        catch (Exception ex)
+        {
+            Program.RecordStartupStage(scope, "Configuration flush failed or timed out; continuing session shutdown.", ex);
+        }
+    }
 
     private async void OnWindowOpened(object? sender, EventArgs e)
         => await App.RunUiTaskAsync("MainWindow.Opened", async () =>
@@ -2528,7 +2555,8 @@ public partial class MainWindow : Window
 
     private async Task<bool> CompleteConfigurationSavesBeforeCloseAsync(
         string sourceScope,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool showErrors = true)
     {
         var vm = VM;
         if (vm is null)
@@ -2571,12 +2599,15 @@ public partial class MainWindow : Window
         Program.RecordStartupStage(
             $"{sourceScope}.Failed",
             $"Close-time configuration save gate completed with failedCount={failedNames.Count}.");
-        await App.Runtime.DialogFeatureService.ReportErrorAsync(
-            sourceScope,
-            MAAUnified.Application.Models.UiOperationResult.Fail(
-                MAAUnified.Application.Models.UiErrorCode.SettingsSaveFailed,
-                $"{JoinChineseNames(failedNames)}保存失败"),
-            cancellationToken);
+        if (showErrors)
+        {
+            await App.Runtime.DialogFeatureService.ReportErrorAsync(
+                sourceScope,
+                MAAUnified.Application.Models.UiOperationResult.Fail(
+                    MAAUnified.Application.Models.UiErrorCode.SettingsSaveFailed,
+                    $"{JoinChineseNames(failedNames)}保存失败"),
+                cancellationToken);
+        }
         return false;
     }
 
