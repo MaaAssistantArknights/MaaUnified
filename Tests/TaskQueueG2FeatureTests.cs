@@ -1828,6 +1828,76 @@ public sealed class TaskQueueG2FeatureTests
         Assert.Empty(vm.LogCards);
     }
 
+    [Theory]
+    [InlineData("OfflineConfirm", false)]
+    [InlineData("OfflineConfirm", true)]
+    [InlineData("OfflineConfirmAfterBattle", false)]
+    [InlineData("OfflineConfirmAfterBattle", true)]
+    public async Task Callback_OfflineConfirm_ShouldStopQueueAndNotifyRegardlessOfLegacySwitch(
+        string dropTask,
+        bool legacyAutoRestart)
+    {
+        // WPF dev-v2 (AsstProxy.cs, 01184e2484): both drop nodes log, toast and stop the
+        // queue. The removed `Start.AutoRestartOnDrop` switch must no longer gate the stop,
+        // so a legacy persisted `true` still stops.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True(fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile));
+        profile.Values[LegacyConfigurationKeys.AutoRestartOnDrop] = JsonValue.Create(legacyAutoRestart);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        await vm.StartAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10001,
+            "SubTaskStart",
+            $$$"""{"task_chain":"Fight","task_index":0,"sub_task":"ProcessTask","details":{"task":"{{{dropTask}}}"}}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.True(await WaitForConditionAsync(() => fixture.Bridge.StopCallCount > 0, retry: 150));
+        Assert.True(await WaitForConditionAsync(() => fixture.NotificationTracker.NotificationCallCount == 1));
+        Assert.Equal(1, CountTaskQueueLogs(vm, "掉线"));
+        var dropLog = Assert.Single(
+            vm.LogCards.SelectMany(card => card.Items),
+            item => item.Content.Contains("掉线", StringComparison.Ordinal));
+        Assert.Contains("游戏掉线，停止任务", dropLog.Content, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("OfflineConfirm")]
+    [InlineData("OfflineConfirmAfterBattle")]
+    public async Task Callback_OfflineConfirmInStartUpChain_ShouldKeepQueueRunning(string dropTask)
+    {
+        // WPF dev-v2 (e4897cd512): Core strips the `@` prefix, so the StartUp@OfflineConfirm
+        // reconnect node reports as a plain OfflineConfirm. StartUp reconnects as part of its
+        // launch flow and must neither stop the queue nor log/toast the drop.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        await vm.StartAsync();
+
+        await InvokeCallbackAsync(vm, new CoreCallbackEvent(
+            10001,
+            "SubTaskStart",
+            $$$"""{"task_chain":"StartUp","task_index":0,"sub_task":"ProcessTask","details":{"task":"{{{dropTask}}}"}}""",
+            DateTimeOffset.UtcNow));
+        await Task.Delay(150);
+
+        Assert.Equal(0, fixture.Bridge.StopCallCount);
+        Assert.Equal(0, fixture.NotificationTracker.NotificationCallCount);
+        Assert.Equal(0, CountTaskQueueLogs(vm, "掉线"));
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
     [Fact]
     public async Task UiLogService_NonDownloadMessages_ShouldNotLeakIntoTaskQueueLogCards()
     {

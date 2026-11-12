@@ -322,12 +322,6 @@
   <data name="Fight.CustomStageCodeTip" xml:space="preserve">
     <value>支援大多數主線關卡簡稱與原始清單中的關卡名稱。</value>
   </data>
-  <data name="Fight.MultiTasksShareTip" xml:space="preserve">
-    <value>以下選項會在多個刷理智任務之間共用。</value>
-  </data>
-  <data name="Fight.AutoRestartOption" xml:space="preserve">
-    <value>遊戲斷線時自動重開</value>
-  </data>
   <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
     <value>這裡依遊戲內刷新時間計算星期，而不是本地自然日。</value>
   </data>
@@ -4050,10 +4044,7 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
     <value>傢俱</value>
   </data>
   <data name="GameDrop" xml:space="preserve">
-    <value>遊戲斷線，重新連線</value>
-  </data>
-  <data name="GameDropNoRestart" xml:space="preserve">
-    <value>遊戲斷線，不重新連線，停止任務</value>
+    <value>遊戲斷線，停止任務</value>
   </data>
   <data name="GatheringSquad" xml:space="preserve">
     <value>集群分隊</value>

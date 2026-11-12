@@ -346,38 +346,6 @@ public sealed class TaskQueueNotificationTests
     }
 
     [Theory]
-    [InlineData(false, 1)]
-    [InlineData(true, 0)]
-    public async Task OfflineConfirm_OnlySendsWhenAutoRestartIsDisabled(bool autoRestart, int expectedCount)
-    {
-        await using var fixture = await NotificationFixture.CreateAsync(useNotify: true);
-        if (fixture.Config.TryGetCurrentProfile(out var profile))
-        {
-            profile.Values[ConfigurationKeys.AutoRestartOnDrop] = JsonValue.Create(autoRestart);
-        }
-
-        await fixture.ViewModel.InitializeAsync();
-        await NotificationFixture.InvokeCallbackAsync(
-            fixture.ViewModel,
-            new CoreCallbackEvent(
-                10001,
-                "SubTaskStart",
-                """{"task_chain":"Fight","subtask":"ProcessTask","details":{"task":"OfflineConfirm"}}""",
-                DateTimeOffset.UtcNow));
-
-        if (expectedCount > 0)
-        {
-            await WaitForNotificationCountAsync(fixture.NotificationCapability, expectedCount);
-        }
-        else
-        {
-            await Task.Delay(50);
-        }
-
-        Assert.Equal(expectedCount, fixture.NotificationCapability.NotificationCallCount);
-    }
-
-    [Theory]
     [InlineData("RecruitSpecialTag")]
     [InlineData("RecruitPreservedTag")]
     [InlineData("RecruitRobotTag")]

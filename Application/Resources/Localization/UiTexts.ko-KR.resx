@@ -430,12 +430,6 @@
   <data name="Fight.CustomStageCodeTip" xml:space="preserve">
     <value>대부분의 메인 스테이지 약칭과 원본 목록의 스테이지 이름을 지원합니다.</value>
   </data>
-  <data name="Fight.MultiTasksShareTip" xml:space="preserve">
-    <value>아래 옵션은 여러 이성 사용 작업에서 함께 공유됩니다.</value>
-  </data>
-  <data name="Fight.AutoRestartOption" xml:space="preserve">
-    <value>게임 연결이 끊기면 자동 재시작</value>
-  </data>
   <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
     <value>여기의 요일은 로컬 시간이 아니라 게임 내 리셋 시간을 기준으로 합니다.</value>
   </data>
@@ -4099,10 +4093,7 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
     <value>가구</value>
   </data>
   <data name="GameDrop" xml:space="preserve">
-    <value>게임 연결 끊김, 재연결 중</value>
-  </data>
-  <data name="GameDropNoRestart" xml:space="preserve">
-    <value>게임 연결 끊김, 재연결 안 함 (작업 중단)</value>
+    <value>게임 연결 끊김, 작업 중단</value>
   </data>
   <data name="GatheringSquad" xml:space="preserve">
     <value>집합 분대</value>

@@ -430,12 +430,6 @@
   <data name="Fight.CustomStageCodeTip" xml:space="preserve">
     <value>多くのメインステージ略称と元のステージ一覧にある名称に対応します。</value>
   </data>
-  <data name="Fight.MultiTasksShareTip" xml:space="preserve">
-    <value>以下の項目は複数の作戦タスクで共有されます。</value>
-  </data>
-  <data name="Fight.AutoRestartOption" xml:space="preserve">
-    <value>ゲーム切断時に自動で再起動</value>
-  </data>
   <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
     <value>ここでの曜日はローカル時刻ではなく、ゲーム内の更新時刻基準です。</value>
   </data>
@@ -4098,10 +4092,7 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
     <value>家具</value>
   </data>
   <data name="GameDrop" xml:space="preserve">
-    <value>回線が落ちました。再接続を行います</value>
-  </data>
-  <data name="GameDropNoRestart" xml:space="preserve">
-    <value>ゲームが落ちたため、再接続せず任務を停止します</value>
+    <value>回線が落ちたため、タスクを停止します</value>
   </data>
   <data name="GatheringSquad" xml:space="preserve">
     <value>集団分隊</value>

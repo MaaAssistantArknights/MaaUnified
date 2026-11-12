@@ -2234,11 +2234,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private async Task ReloadTaskPanelPersistentConfigAsync(CancellationToken cancellationToken)
     {
-        foreach (var module in EnumeratePanelModules<FightTaskModuleViewModel>())
-        {
-            await module.ReloadPersistentConfigAsync(cancellationToken);
-        }
-
         foreach (var module in EnumeratePanelModules<InfrastModuleViewModel>())
         {
             await module.ReloadPersistentConfigAsync(cancellationToken);
@@ -6528,6 +6523,22 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             && string.Equals(TaskModuleTypes.Normalize(taskChain), "CloseDown", StringComparison.OrdinalIgnoreCase);
     }
 
+    // WPF dev-v2 (AsstProxy.cs, 01184e2484): the post-battle drop node behaves exactly like the
+    // in-battle one, so both stop the queue.
+    private static bool IsOfflineConfirmTask(string? task)
+    {
+        return string.Equals(task, "OfflineConfirm", StringComparison.Ordinal)
+               || string.Equals(task, "OfflineConfirmAfterBattle", StringComparison.Ordinal);
+    }
+
+    // WPF dev-v2 (e4897cd512): Core strips the `@` prefix from callback node names, so the
+    // StartUp@OfflineConfirm reconnect node reports as a plain OfflineConfirm. Only the task
+    // chain tells them apart, and StartUp must keep running instead of stopping the queue.
+    private static bool IsStartUpTaskChain(string? taskChain)
+    {
+        return string.Equals(TaskModuleTypes.Normalize(taskChain), TaskModuleTypes.StartUp, StringComparison.OrdinalIgnoreCase);
+    }
+
     private TaskQueueCallbackUserLog BuildTaskChainStartLog(int? taskIndex, string? taskChain)
     {
         return new(
@@ -6745,11 +6756,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 var text = GetRootText("FightMissionFailedAndStop", "Proxy failed too many times, task stopped");
                 notification = new(text, string.Empty, "TaskQueue.Notification.FightStopped", "fight mission failure");
             }
-            else if (string.Equals(task, "OfflineConfirm", StringComparison.Ordinal)
-                     && !IsAutoRestartOnDropEnabled())
+            else if (IsOfflineConfirmTask(task) && !IsStartUpTaskChain(payload.TaskChain))
             {
-                var text = GetRootText("GameDropNoRestart", "Game disconnected, not restarting, stopping");
-                notification = new(text, string.Empty, "TaskQueue.Notification.Offline", "game disconnect without restart");
+                // WPF dev-v2 (01184e2484, e4897cd512): a dropped connection always stops the
+                // queue; the removed restart-on-drop switch no longer gates the stop. StartUp
+                // is exempt because it reconnects as part of its launch flow.
+                var text = GetRootText("GameDrop", "Game disconnected, stopping tasks");
+                notification = new(text, string.Empty, "TaskQueue.Notification.Offline", "game disconnect");
                 _ = StopAsync(userInitiated: false);
             }
         }
@@ -7248,13 +7261,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             "StageEmergencyOps" => new(GetRootText("EmergencyOps", "Stage: Emergency Operation"), Color: "EmergencyIS"),
             "StageDreadfulFoe" or "StageDreadfulFoe-5" => new(GetRootText("DreadfulFoe", "Stage: Dreadful Foe"), Color: "BossIS"),
             "StageTraderInvestSystemFull" => new(GetRootText("UpperLimit", "Investment limit reached"), Color: "InfoLogBrush"),
-            "OfflineConfirm" => new(
-                GetRootText(
-                    IsAutoRestartOnDropEnabled() ? "GameDrop" : "GameDropNoRestart",
-                    IsAutoRestartOnDropEnabled()
-                        ? "Game disconnected, pending reconnect"
-                        : "Game disconnected, not restarting, stopping"),
-                "WARN"),
+            // WPF dev-v2 (01184e2484, e4897cd512): both drop nodes log the same "stopping"
+            // message; the StartUp chain is exempt so it stays silent like WPF's early break.
+            "OfflineConfirm" or "OfflineConfirmAfterBattle" => IsStartUpTaskChain(payload.TaskChain)
+                ? null
+                : new(GetRootText("GameDrop", "Game disconnected, stopping tasks"), "WARN"),
             "GamePass" => new(GetRootText("RoguelikeGamePass", "Exploration completed! Congratulations!"), Color: "RareOperatorLogBrush"),
             "StageTraderSpecialShoppingAfterRefresh" => new(GetRootText("RoguelikeSpecialItemBought", "Special Item Purchased!"), Color: "RareOperatorLogBrush"),
             "DeepExplorationNotUnlockedComplain" => new(GetRootText("DeepExplorationNotUnlockedComplain", "Deep Investigation not unlocked yet"), "WARN"),
@@ -7857,11 +7868,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
 
         return profile.TaskQueue[index].Params;
-    }
-
-    private bool IsAutoRestartOnDropEnabled()
-    {
-        return TryReadProfileBool(Runtime.ConfigurationService.CurrentConfig, ConfigurationKeys.AutoRestartOnDrop, true);
     }
 
     private string GetRootText(string key, string fallback)

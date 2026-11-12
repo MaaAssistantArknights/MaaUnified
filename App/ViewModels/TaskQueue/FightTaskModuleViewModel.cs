@@ -153,7 +153,6 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     private bool _hideSeries;
     private bool _allowUseStoneSave;
     private bool _allowUseStoneSaveConfirmationPending;
-    private bool _autoRestartOnDrop = true;
     private IReadOnlyList<IntOption> _seriesOptions = [];
     private IReadOnlyList<StringOption> _dropTargetModeOptions = [];
     private IReadOnlyList<StringOption> _stageResetModeOptions = [];
@@ -172,7 +171,6 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
             ?? ((_, _) => Task.FromResult(false));
         _stagePlan.CollectionChanged += (_, e) => OnStagePlanCollectionChanged(e);
         Texts.PropertyChanged += OnTextsChanged;
-        ApplyPersistentAutoRestartOnDrop(ResolveAutoRestartOnDrop());
         EnsureStagePlanInitialized();
         RebuildLocalizedOptions();
         RebuildDropOptions();
@@ -325,14 +323,6 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
     public string CustomStageCodeTipText => Texts.GetOrDefault(
         "Fight.CustomStageCodeTip",
         Texts.GetOrDefault("CustomStageCodeTip", "Support most main stage names and stage names from the original list."));
-
-    public string MultiTasksShareTipText => Texts.GetOrDefault(
-        "Fight.MultiTasksShareTip",
-        Texts.GetOrDefault("MultiTasksShareTip", "The following options are shared across multiple tasks."));
-
-    public string AutoRestartOnDropText => Texts.GetOrDefault(
-        "Fight.AutoRestartOption",
-        Texts.GetOrDefault("AutoRestartOption", "Restart when game disconnects"));
 
     public string UseWeeklyScheduleText => Texts.GetOrDefault("Fight.UseWeeklySchedule", "Enable weekly schedule");
 
@@ -556,20 +546,6 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
 
             OnPropertyChanged(nameof(DropTargetMode));
             OnPropertyChanged(nameof(DropCountLabelText));
-        }
-    }
-
-    public bool AutoRestartOnDrop
-    {
-        get => _autoRestartOnDrop;
-        set
-        {
-            if (!SetProperty(ref _autoRestartOnDrop, value))
-            {
-                return;
-            }
-
-            _ = PersistAutoRestartOnDropAsync(value);
         }
     }
 
@@ -834,12 +810,6 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         }
     }
 
-    public Task ReloadPersistentConfigAsync(CancellationToken cancellationToken = default)
-    {
-        ApplyPersistentAutoRestartOnDrop(ResolveAutoRestartOnDrop());
-        return Task.CompletedTask;
-    }
-
     protected override Task<UiOperationResult<FightTaskParamsDto>> LoadDtoAsync(int index, CancellationToken cancellationToken)
     {
         return Runtime.TaskQueueFeatureService.GetFightParamsAsync(index, cancellationToken);
@@ -998,8 +968,6 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         OnPropertyChanged(nameof(AddStageText));
         OnPropertyChanged(nameof(CustomStageCodeText));
         OnPropertyChanged(nameof(CustomStageCodeTipText));
-        OnPropertyChanged(nameof(MultiTasksShareTipText));
-        OnPropertyChanged(nameof(AutoRestartOnDropText));
         OnPropertyChanged(nameof(UseWeeklyScheduleText));
         OnPropertyChanged(nameof(UseWeeklyScheduleTip));
         OnPropertyChanged(nameof(WeeklyScheduleSundayText));
@@ -2467,72 +2435,6 @@ public sealed class FightTaskModuleViewModel : TypedTaskModuleViewModelBase<Figh
         }
 
         return string.Empty;
-    }
-
-    private bool ResolveAutoRestartOnDrop()
-    {
-        if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile)
-            && profile.Values.TryGetValue(LegacyConfigurationKeys.AutoRestartOnDrop, out var profileNode)
-            && profileNode is JsonValue profileValue)
-        {
-            if (profileValue.TryGetValue(out bool profileFlag))
-            {
-                return profileFlag;
-            }
-
-            if (profileValue.TryGetValue(out string? profileText) && bool.TryParse(profileText, out profileFlag))
-            {
-                return profileFlag;
-            }
-        }
-
-        if (Runtime.ConfigurationService.CurrentConfig.GlobalValues.TryGetValue(LegacyConfigurationKeys.AutoRestartOnDrop, out var globalNode)
-            && globalNode is JsonValue globalValue)
-        {
-            if (globalValue.TryGetValue(out bool globalFlag))
-            {
-                return globalFlag;
-            }
-
-            if (globalValue.TryGetValue(out string? globalText) && bool.TryParse(globalText, out globalFlag))
-            {
-                return globalFlag;
-            }
-        }
-
-        return true;
-    }
-
-    private void ApplyPersistentAutoRestartOnDrop(bool value)
-    {
-        SetProperty(ref _autoRestartOnDrop, value, nameof(AutoRestartOnDrop));
-    }
-
-    private async Task PersistAutoRestartOnDropAsync(bool value)
-    {
-        _ = await ConfigurationSaveTracker.Instance.RunTrackedAsync(
-            "TaskQueue.Fight.AutoRestartOnDrop",
-            Texts.GetOrDefault("Fight.Title", "理智作战"),
-            "Fight.AutoRestartOnDrop.Save",
-            Runtime.DiagnosticsService,
-            async cancellationToken =>
-            {
-                if (Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
-                {
-                    profile.Values[LegacyConfigurationKeys.AutoRestartOnDrop] = JsonValue.Create(value);
-                }
-                else
-                {
-                    Runtime.ConfigurationService.CurrentConfig.GlobalValues[LegacyConfigurationKeys.AutoRestartOnDrop] = JsonValue.Create(value);
-                }
-
-                await Runtime.ConfigurationService.SaveAsync(cancellationToken);
-                return true;
-            });
-        if (ConfigurationSaveTracker.Instance.IsPendingOrFailed("TaskQueue.Fight.AutoRestartOnDrop"))
-        {
-            LastErrorMessage = string.Empty;
-        }
     }
 
     public sealed record IntOption(int Value, string DisplayName);

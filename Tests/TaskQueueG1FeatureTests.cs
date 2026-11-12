@@ -1676,6 +1676,62 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
+    public async Task ConfigLoad_LegacyAutoRestartOnDropKey_ShouldBeReadableThenDropped()
+    {
+        // WPF dev-v2 (01184e2484) removed the restart-on-drop switch. An existing config that
+        // still carries the key must keep loading, and the migration drops the dead value.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True(fixture.Config.TryGetCurrentProfile(out var profile));
+        profile.Values[ConfigurationKeys.AutoRestartOnDrop] = JsonValue.Create(true);
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.AutoRestartOnDrop] = JsonValue.Create(true);
+        await fixture.Config.SaveAsync();
+
+        var reloaded = new UnifiedConfigurationService(
+            new AvaloniaJsonConfigStore(fixture.Root),
+            new GuiNewJsonConfigImporter(),
+            new GuiJsonConfigImporter(),
+            new UiLogService(),
+            fixture.Root);
+        var load = await reloaded.LoadOrBootstrapAsync();
+
+        Assert.True(load.LoadedFromExistingConfig);
+        Assert.True(reloaded.TryGetCurrentProfile(out var reloadedProfile));
+        Assert.False(reloadedProfile.Values.ContainsKey(ConfigurationKeys.AutoRestartOnDrop));
+        Assert.False(reloaded.CurrentConfig.GlobalValues.ContainsKey(ConfigurationKeys.AutoRestartOnDrop));
+        var persisted = await File.ReadAllTextAsync(Path.Combine(fixture.Root, "config", "avalonia.json"));
+        Assert.DoesNotContain(nameof(ConfigurationKeys.AutoRestartOnDrop), persisted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConfigImport_LegacyAutoRestartOnDropKey_ShouldNotSurviveMigration()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        await File.WriteAllTextAsync(
+            Path.Combine(fixture.Root, "config", "gui.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "Start.AutoRestartOnDrop": true,
+                  "ConnectAddress": "127.0.0.1:5555"
+                }
+              }
+            }
+            """);
+
+        var report = await fixture.Config.ImportLegacyAsync(ImportSource.GuiOnly, manualImport: true);
+
+        Assert.True(report.Success);
+        Assert.Contains("gui.json", report.ImportedFiles, StringComparer.OrdinalIgnoreCase);
+        Assert.True(fixture.Config.TryGetCurrentProfile(out var profile));
+        Assert.False(profile.Values.ContainsKey(ConfigurationKeys.AutoRestartOnDrop));
+        Assert.False(fixture.Config.CurrentConfig.GlobalValues.ContainsKey(ConfigurationKeys.AutoRestartOnDrop));
+        var persisted = await File.ReadAllTextAsync(Path.Combine(fixture.Root, "config", "avalonia.json"));
+        Assert.DoesNotContain(nameof(ConfigurationKeys.AutoRestartOnDrop), persisted, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task SelectedTask_RapidSwitch_ShouldNotLoseDirtyData()
     {
         await using var fixture = await TestFixture.CreateAsync();

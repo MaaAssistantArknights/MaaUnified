@@ -672,20 +672,16 @@ public sealed class FightTaskParityTests
     }
 
     [Fact]
-    public async Task FightModule_AutoRestartOnDrop_ShouldReloadAndPersistSharedSetting()
+    public void FightSettingsView_ShouldNotExposeGameDropAutoRestart()
     {
-        await using var fixture = await TestFixture.CreateAsync();
-        fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.AutoRestartOnDrop] = JsonValue.Create(false);
+        // WPF dev-v2 (01184e2484) removed the "restart when game disconnects" switch: a
+        // dropped connection always stops the queue, so the fight settings card that only
+        // hosted that switch (and its shared-options caption) is gone as well.
+        var root = TestRepoLayout.GetMaaUnifiedRoot();
+        var view = File.ReadAllText(Path.Combine(root, "App", "Features", "TaskQueue", "FightSettingsView.axaml"));
 
-        var module = new FightTaskModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "en-us" });
-        await module.ReloadPersistentConfigAsync();
-
-        Assert.False(module.AutoRestartOnDrop);
-
-        module.AutoRestartOnDrop = true;
-
-        Assert.True(module.AutoRestartOnDrop);
-        Assert.True(fixture.Config.CurrentConfig.Profiles["Default"].Values[ConfigurationKeys.AutoRestartOnDrop]?.GetValue<bool>());
+        Assert.DoesNotContain("AutoRestartOnDrop", view, StringComparison.Ordinal);
+        Assert.DoesNotContain("MultiTasksShareTip", view, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -955,12 +955,6 @@
   <data name="Fight.CustomStageCodeTip" xml:space="preserve">
     <value>支持大多数主线关卡简称和原始关卡列表中的关卡名。</value>
   </data>
-  <data name="Fight.MultiTasksShareTip" xml:space="preserve">
-    <value>以下选项会在多个理智作战任务之间共享。</value>
-  </data>
-  <data name="Fight.AutoRestartOption" xml:space="preserve">
-    <value>游戏掉线时自动重开</value>
-  </data>
   <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
     <value>这里按游戏内刷新时间计算星期，而不是本地自然日。</value>
   </data>
@@ -1013,10 +1007,7 @@
     <value>家具</value>
   </data>
   <data name="GameDrop" xml:space="preserve">
-    <value>游戏掉线，重新连接</value>
-  </data>
-  <data name="GameDropNoRestart" xml:space="preserve">
-    <value>游戏掉线，不重新连接，停止任务</value>
+    <value>游戏掉线，停止任务</value>
   </data>
   <data name="GatheringSquad" xml:space="preserve">
     <value>集群分队</value>

@@ -955,12 +955,6 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   <data name="Fight.CustomStageCodeTip" xml:space="preserve">
     <value>Support most main stage names and stage names from the original list.</value>
   </data>
-  <data name="Fight.MultiTasksShareTip" xml:space="preserve">
-    <value>The following options are shared across multiple tasks.</value>
-  </data>
-  <data name="Fight.AutoRestartOption" xml:space="preserve">
-    <value>Restart when game disconnects</value>
-  </data>
   <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
     <value>The day of week here follows in-game reset time rather than local clock time.</value>
   </data>
@@ -1013,10 +1007,7 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
     <value>Furniture</value>
   </data>
   <data name="GameDrop" xml:space="preserve">
-    <value>Game disconnected, pending reconnect</value>
-  </data>
-  <data name="GameDropNoRestart" xml:space="preserve">
-    <value>Game disconnected, not restarting, stopping</value>
+    <value>Game disconnected, stopping tasks</value>
   </data>
   <data name="GatheringSquad" xml:space="preserve">
     <value>Gathering Squad</value>

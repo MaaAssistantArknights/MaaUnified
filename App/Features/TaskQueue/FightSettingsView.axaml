@@ -540,17 +540,6 @@
             </WrapPanel>
           </controls:AdaptiveSpacingStackPanel>
         </Border>
-
-        <Border Classes="app-surface app-card fight-settings-card">
-          <controls:AdaptiveSpacingStackPanel Classes="fight-settings-card-content task-settings-card-content">
-            <TextBlock Classes="app-caption"
-                       Text="{Binding MultiTasksShareTipText}"
-                       TextWrapping="Wrap" />
-            <CheckBox Classes="app-checkbox"
-                      Content="{Binding AutoRestartOnDropText}"
-                      IsChecked="{Binding AutoRestartOnDrop}" />
-          </controls:AdaptiveSpacingStackPanel>
-        </Border>
       </controls:AdaptiveSpacingStackPanel>
 
       <Border Classes="app-surface app-card fight-settings-card"

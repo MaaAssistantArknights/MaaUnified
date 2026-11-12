@@ -254,6 +254,7 @@ public sealed class UnifiedConfigurationService
                     var normalizedFightStageCount = NormalizeFightStageSelections(CurrentConfig);
                     var normalizedTaskParamCount = NormalizeTaskQueueParams(CurrentConfig);
                     var clearedRecruitExpeditedCount = ClearOneShotRecruitExpedited(CurrentConfig);
+                    var clearedObsoleteAutoRestartOnDropCount = ClearObsoleteAutoRestartOnDrop(CurrentConfig);
                     var legacyConversionReport = new ImportReport
                     {
                         Source = ImportSource.Auto,
@@ -283,6 +284,7 @@ public sealed class UnifiedConfigurationService
                     var normalizedConfigChanged = normalizedFightStageCount > 0
                         || normalizedTaskParamCount > 0
                         || clearedRecruitExpeditedCount > 0
+                        || clearedObsoleteAutoRestartOnDropCount > 0
                         || decryptedLegacySensitiveValueCount > 0
                         || normalizedSensitiveScopeCount > 0
                         || repairedNullEntries
@@ -320,6 +322,12 @@ public sealed class UnifiedConfigurationService
                     {
                         LogService.Info(
                             $"Cleared {clearedRecruitExpeditedCount} one-shot Recruit expedited setting(s).");
+                    }
+
+                    if (clearedObsoleteAutoRestartOnDropCount > 0)
+                    {
+                        LogService.Info(
+                            $"Removed {clearedObsoleteAutoRestartOnDropCount} obsolete `{ConfigurationKeys.AutoRestartOnDrop}` value(s).");
                     }
 
                     if (decryptedLegacySensitiveValueCount > 0)
@@ -526,6 +534,9 @@ public sealed class UnifiedConfigurationService
 
             ApplyFallbackGlobalValues(config, request, report);
             PostActionLegacyMigration.MaterializeImportedProfiles(config, report);
+            // WPF dev-v2 (01184e2484) drops the removed restart-on-drop switch during migration
+            // so an imported config never carries the dead key forward.
+            ClearObsoleteAutoRestartOnDrop(config);
 
             config.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
             NormalizeFightStageSelections(config);
@@ -1423,6 +1434,24 @@ public sealed class UnifiedConfigurationService
 
     private void LogConfigBackupSanitizationFailure(string errorCode)
         => LogService.Warn($"Known config backup sanitization skipped: errorCode={errorCode}.");
+
+    // WPF dev-v2 (01184e2484): a dropped connection always stops the queue, so the
+    // `Start.AutoRestartOnDrop` switch no longer exists. The key constant is kept in
+    // LegacyConfigurationKeys so legacy files still import cleanly, but the value is dropped
+    // from the persisted config once imported or loaded.
+    private static int ClearObsoleteAutoRestartOnDrop(UnifiedConfig config)
+    {
+        var cleared = config.GlobalValues.Remove(ConfigurationKeys.AutoRestartOnDrop) ? 1 : 0;
+        foreach (var profile in config.Profiles.Values)
+        {
+            if (profile.Values.Remove(ConfigurationKeys.AutoRestartOnDrop))
+            {
+                cleared += 1;
+            }
+        }
+
+        return cleared;
+    }
 
     private static int ClearOneShotRecruitExpedited(UnifiedConfig config)
     {

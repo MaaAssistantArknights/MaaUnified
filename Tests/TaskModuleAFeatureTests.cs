@@ -1440,8 +1440,6 @@ public sealed class TaskModuleAFeatureTests
             "Fight.AddStage",
             "Fight.CustomStageCode",
             "Fight.CustomStageCodeTip",
-            "Fight.MultiTasksShareTip",
-            "Fight.AutoRestartOption",
             "Fight.UseWeeklySchedule",
             "Fight.UseWeeklyScheduleTip",
             "Fight.WeeklySchedule.Sunday",
