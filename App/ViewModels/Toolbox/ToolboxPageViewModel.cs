@@ -3702,7 +3702,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 owned.Potential,
                 own: true,
                 ownedSubtitleTemplate,
-                notOwnedSubtitleTemplate));
+                notOwnedSubtitleTemplate,
+                owned.MainSkillLevel,
+                owned.Skills,
+                owned.Equips));
         }
 
         foreach (var asset in operators.Values
@@ -7125,6 +7128,23 @@ public sealed record RecruitOperatorCardViewModel(
     public bool HasPotentialText => !string.IsNullOrWhiteSpace(PotentialText);
 }
 
+/// <summary>专精三点徽标（WPF 86e58bda95 MasteryBadge）：1/2/3 级点亮对应圆点。</summary>
+public sealed class OperBoxMasteryBadge
+{
+    public OperBoxMasteryBadge(int level)
+    {
+        TopOn = level >= 1;
+        BottomRightOn = level >= 2;
+        BottomLeftOn = level >= 3;
+    }
+
+    public bool TopOn { get; }
+
+    public bool BottomRightOn { get; }
+
+    public bool BottomLeftOn { get; }
+}
+
 public sealed class OperBoxOperatorItemViewModel : ObservableObject
 {
     private int _elite;
@@ -7144,10 +7164,19 @@ public sealed class OperBoxOperatorItemViewModel : ObservableObject
         int potential,
         bool own,
         string ownedSubtitleTemplate,
-        string notOwnedSubtitleTemplate)
+        string notOwnedSubtitleTemplate,
+        int mainSkillLevel = 0,
+        IReadOnlyList<PersistedOperBoxSkill>? skills = null,
+        IReadOnlyList<PersistedOperBoxEquip>? equips = null)
     {
         Id = id;
         Name = name;
+        MainSkillLevel = mainSkillLevel;
+        SkillLevels = (skills ?? []).Select(skill => skill.Level).ToList();
+        ModBadges = (equips ?? [])
+            .Where(equip => equip.Level > 0)
+            .Select(equip => $"{ResolveModTypeGlyph(equip.Type)}{equip.Level}")
+            .ToList();
         Rarity = rarity;
         RarityBrush = ResolveRarityBrush(rarity);
         ProfessionText = professionText;
@@ -7218,6 +7247,48 @@ public sealed class OperBoxOperatorItemViewModel : ObservableObject
             }
         }
     }
+
+
+    /// <summary>Gets 主技能等级（一图流数据源；0 表示无数据）。WPF 86e58bda95。</summary>
+    public int MainSkillLevel { get; }
+
+    /// <summary>Gets 技能专精等级列表。</summary>
+    public IReadOnlyList<int> SkillLevels { get; }
+
+    /// <summary>Gets 模组徽标文本（已含类型与等级）。</summary>
+    public IReadOnlyList<string> ModBadges { get; }
+
+    /// <summary>Gets a value indicating whether 有主技能等级可展示。</summary>
+    public bool ShowSkillDetails => MainSkillLevel > 0;
+
+    /// <summary>Gets a value indicating whether 没有任何专精，展示 RANK 徽标。</summary>
+    public bool ShowRankBadge => ShowSkillDetails && !HasAnyMastery;
+
+    /// <summary>Gets RANK 徽标文本。</summary>
+    public string RankText => $"RANK {MainSkillLevel}";
+
+    /// <summary>Gets a value indicating whether 至少有一个技能专精等级。</summary>
+    public bool HasAnyMastery => SkillLevels.Any(level => level >= 1);
+
+    /// <summary>Gets 专精三点徽标。</summary>
+    public IReadOnlyList<OperBoxMasteryBadge> MasteryBadges =>
+        SkillLevels.Select(level => new OperBoxMasteryBadge(level)).ToList();
+
+    /// <summary>Gets a value indicating whether 有已解锁模组。</summary>
+    public bool HasMods => ModBadges.Count > 0;
+
+    /// <summary>Gets a value indicating whether 卡片需要展示技能/模组徽标行。</summary>
+    public bool HasProgressionBadges => ShowSkillDetails || HasMods;
+
+    private static string ResolveModTypeGlyph(string? type) => type?.ToUpperInvariant() switch
+    {
+        "A" => "α",
+        "B" => "β",
+        "X" => "χ",
+        "Y" => "γ",
+        "D" => "Δ",
+        _ => type ?? string.Empty,
+    };
 
     public string RarityStars => Rarity <= 0 ? string.Empty : new string('★', Rarity);
 
@@ -7375,9 +7446,9 @@ internal sealed record PersistedOperBoxOwnedOperator(
     IReadOnlyList<PersistedOperBoxSkill>? Skills = null,
     IReadOnlyList<PersistedOperBoxEquip>? Equips = null);
 
-internal sealed record PersistedOperBoxSkill(string Id, int Level);
+public sealed record PersistedOperBoxSkill(string Id, int Level);
 
-internal sealed record PersistedOperBoxEquip(string Id, string Type, int Level);
+public sealed record PersistedOperBoxEquip(string Id, string Type, int Level);
 
 internal static class ToolboxUiOperationResultExtensions
 {

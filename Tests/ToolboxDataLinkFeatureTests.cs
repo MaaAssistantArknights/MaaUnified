@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Avalonia.Threading;
 using MAAUnified.App.ViewModels.Toolbox;
 using MAAUnified.Application.Models;
 using MAAUnified.CoreBridge;
@@ -281,6 +282,102 @@ public sealed class ToolboxDataLinkFeatureTests
         Assert.DoesNotContain("MainSkillLevel", json, StringComparison.Ordinal);
         Assert.DoesNotContain("Skills", json, StringComparison.Ordinal);
         Assert.DoesNotContain("Equips", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task OperBoxCards_ShouldExposeSkillMasteryAndModuleBadges()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [LegacyConfigurationKeys.OperBoxData] = """
+                    {
+                      "done": true,
+                      "source": "yituliu",
+                      "own_opers": [
+                        {
+                          "id": "char_102_texas",
+                          "name": "德克萨斯",
+                          "rarity": 5,
+                          "elite": 2,
+                          "level": 80,
+                          "own": true,
+                          "potential": 2,
+                          "mainSkillLevel": 7,
+                          "skills": [
+                            { "id": "sk_texas_1", "level": 3 },
+                            { "id": "sk_texas_2", "level": 0 }
+                          ],
+                          "equips": [
+                            { "id": "uniequip_001", "type": "X", "level": 3 },
+                            { "id": "uniequip_002", "type": "Y", "level": 0 }
+                          ]
+                        },
+                        {
+                          "id": "char_002_amiya",
+                          "name": "阿米娅",
+                          "rarity": 5,
+                          "elite": 2,
+                          "level": 80,
+                          "own": true,
+                          "potential": 6,
+                          "mainSkillLevel": 7
+                        }
+                      ]
+                    }
+                    """,
+            });
+        using var catalogScope = PushOperBoxCatalog(fixture.Root);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+        vm.SelectedTabIndex = 1;
+        Dispatcher.UIThread.RunJobs(null);
+
+        var texas = Assert.Single(vm.OperBoxHaveList.Where(item => item.Id == "char_102_texas"));
+        Assert.True(texas.ShowSkillDetails);
+        Assert.True(texas.HasAnyMastery);
+        Assert.False(texas.ShowRankBadge);
+        Assert.Equal("RANK 7", texas.RankText);
+        Assert.Equal(2, texas.MasteryBadges.Count);
+        Assert.True(texas.MasteryBadges[0].TopOn);
+        Assert.True(texas.MasteryBadges[0].BottomRightOn);
+        Assert.True(texas.MasteryBadges[0].BottomLeftOn);
+        Assert.False(texas.MasteryBadges[1].TopOn);
+        Assert.True(texas.HasMods);
+        Assert.Equal(["χ3"], texas.ModBadges);
+        Assert.True(texas.HasProgressionBadges);
+
+        // 没有专精与模组数据时：只有 RANK 徽标，不出现空徽标行。
+        var amiya = Assert.Single(vm.OperBoxHaveList.Where(item => item.Id == "char_002_amiya"));
+        Assert.True(amiya.ShowSkillDetails);
+        Assert.False(amiya.HasAnyMastery);
+        Assert.True(amiya.ShowRankBadge);
+        Assert.Empty(amiya.ModBadges);
+        Assert.False(amiya.HasMods);
+        Assert.True(amiya.HasProgressionBadges);
+    }
+
+    [Fact]
+    public async Task OperBoxCards_WithoutProgressionData_ShouldHideBadgeRow()
+    {
+        await using var fixture = await ToolboxTestFixture.CreateAsync(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [LegacyConfigurationKeys.OperBoxData] = BuildSeededOperBoxPayload(),
+            });
+        using var catalogScope = PushOperBoxCatalog(fixture.Root);
+        var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
+        await vm.InitializeAsync();
+        vm.SelectedTabIndex = 1;
+        Dispatcher.UIThread.RunJobs(null);
+
+        var texas = Assert.Single(vm.OperBoxHaveList.Where(item => item.Id == "char_102_texas"));
+        Assert.False(texas.ShowSkillDetails);
+        Assert.False(texas.ShowRankBadge);
+        Assert.False(texas.HasAnyMastery);
+        Assert.False(texas.HasMods);
+        Assert.Empty(texas.ModBadges);
+        Assert.False(texas.HasProgressionBadges);
     }
 
     [Fact]

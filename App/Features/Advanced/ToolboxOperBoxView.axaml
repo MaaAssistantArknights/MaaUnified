@@ -136,6 +136,32 @@
         <TranslateTransform Y="4" />
       </Setter>
     </Style>
+
+    <Style Selector="Border.toolbox-operbox-rank-badge, Border.toolbox-operbox-mod-badge">
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.Toolbox.OperBoxBadgeBackground}" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="4,0" />
+      <Setter Property="MinHeight" Value="13" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-operbox-rank-text, TextBlock.toolbox-operbox-mod-text">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Toolbox.OperBoxBadgeForeground}" />
+      <Setter Property="LineHeight" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Ellipse.toolbox-operbox-mastery-dot">
+      <Setter Property="Width" Value="4" />
+      <Setter Property="Height" Value="4" />
+      <Setter Property="Fill" Value="{DynamicResource MAA.Brush.Toolbox.OperBoxMasteryOff}" />
+    </Style>
+
+    <Style Selector="Ellipse.toolbox-operbox-mastery-dot.on">
+      <Setter Property="Fill" Value="{DynamicResource MAA.Brush.Toolbox.OperBoxMasteryOn}" />
+    </Style>
   </UserControl.Styles>
 
   <Grid Margin="4,0,4,4"
@@ -312,6 +338,60 @@
                                              Text="{Binding LevelDisplay}" />
                                   <Image Classes="toolbox-operbox-potential-icon"
                                          Source="{Binding PotentialIconImage}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal"
+                                            Spacing="4"
+                                            IsVisible="{Binding HasProgressionBadges}">
+                                  <Border Classes="toolbox-operbox-rank-badge"
+                                          IsVisible="{Binding ShowRankBadge}">
+                                    <TextBlock Classes="toolbox-operbox-rank-text"
+                                               Text="{Binding RankText}" />
+                                  </Border>
+                                  <ItemsControl ItemsSource="{Binding MasteryBadges}"
+                                                IsVisible="{Binding HasAnyMastery}">
+                                    <ItemsControl.ItemsPanel>
+                                      <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="3" />
+                                      </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                      <DataTemplate>
+                                        <Canvas Width="11"
+                                                Height="11">
+                                          <Ellipse Classes="toolbox-operbox-mastery-dot"
+                                                   Classes.on="{Binding TopOn}"
+                                                   Canvas.Left="3.5"
+                                                   Canvas.Top="1" />
+                                          <Ellipse Classes="toolbox-operbox-mastery-dot"
+                                                   Classes.on="{Binding BottomRightOn}"
+                                                   Canvas.Left="6.5"
+                                                   Canvas.Top="6" />
+                                          <Ellipse Classes="toolbox-operbox-mastery-dot"
+                                                   Classes.on="{Binding BottomLeftOn}"
+                                                   Canvas.Left="0.5"
+                                                   Canvas.Top="6" />
+                                        </Canvas>
+                                      </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                  </ItemsControl>
+                                  <ItemsControl ItemsSource="{Binding ModBadges}"
+                                                IsVisible="{Binding HasMods}">
+                                    <ItemsControl.ItemsPanel>
+                                      <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="3" />
+                                      </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                      <DataTemplate>
+                                        <Border Classes="toolbox-operbox-mod-badge">
+                                          <TextBlock Classes="toolbox-operbox-mod-text"
+                                                     Text="{Binding}" />
+                                        </Border>
+                                      </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                  </ItemsControl>
                                 </StackPanel>
                               </StackPanel>
                             </Grid>

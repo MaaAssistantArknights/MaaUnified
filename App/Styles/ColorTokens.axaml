@@ -104,6 +104,10 @@
           <Color x:Key="MAA.Color.Toolbox.PreviewBadgeBackground">#EE404040</Color>
           <Color x:Key="MAA.Color.Toolbox.PreviewBadgeForeground">#FF7FFFD4</Color>
           <Color x:Key="MAA.Color.Toolbox.OperatorCardBackground">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.Toolbox.OperBoxBadgeBackground">#AA1F1F1F</Color>
+          <Color x:Key="MAA.Color.Toolbox.OperBoxBadgeForeground">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.Toolbox.OperBoxMasteryOn">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.Toolbox.OperBoxMasteryOff">#FF777777</Color>
           <Color x:Key="MAA.Color.Toolbox.OperatorGlyphForeground">#FF1E2228</Color>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
@@ -207,6 +211,10 @@
           <Color x:Key="MAA.Color.Toolbox.PreviewBadgeBackground">#EE101317</Color>
           <Color x:Key="MAA.Color.Toolbox.PreviewBadgeForeground">#FF89F0D2</Color>
           <Color x:Key="MAA.Color.Toolbox.OperatorCardBackground">#FF354150</Color>
+          <Color x:Key="MAA.Color.Toolbox.OperBoxBadgeBackground">#AA1F1F1F</Color>
+          <Color x:Key="MAA.Color.Toolbox.OperBoxBadgeForeground">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.Toolbox.OperBoxMasteryOn">#FFFFFFFF</Color>
+          <Color x:Key="MAA.Color.Toolbox.OperBoxMasteryOff">#FF777777</Color>
           <Color x:Key="MAA.Color.Toolbox.OperatorGlyphForeground">#FFFFFFFF</Color>
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
@@ -297,6 +305,10 @@
       <SolidColorBrush x:Key="MAA.Brush.Toolbox.PreviewBadgeBackground" Color="{DynamicResource MAA.Color.Toolbox.PreviewBadgeBackground}" />
       <SolidColorBrush x:Key="MAA.Brush.Toolbox.PreviewBadgeForeground" Color="{DynamicResource MAA.Color.Toolbox.PreviewBadgeForeground}" />
       <SolidColorBrush x:Key="MAA.Brush.Toolbox.OperatorCardBackground" Color="{DynamicResource MAA.Color.Toolbox.OperatorCardBackground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toolbox.OperBoxBadgeBackground" Color="{DynamicResource MAA.Color.Toolbox.OperBoxBadgeBackground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toolbox.OperBoxBadgeForeground" Color="{DynamicResource MAA.Color.Toolbox.OperBoxBadgeForeground}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toolbox.OperBoxMasteryOn" Color="{DynamicResource MAA.Color.Toolbox.OperBoxMasteryOn}" />
+      <SolidColorBrush x:Key="MAA.Brush.Toolbox.OperBoxMasteryOff" Color="{DynamicResource MAA.Color.Toolbox.OperBoxMasteryOff}" />
 
       <SolidColorBrush x:Key="MAA.BackgroundBrush" Color="{DynamicResource MAA.Color.Surface.Window}" />
       <SolidColorBrush x:Key="MAA.RegionBrush" Color="{DynamicResource MAA.Color.Surface.Section}" />
