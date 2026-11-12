@@ -311,3 +311,8 @@ P1-07 渠道实例化仍未做：WPF dev-v2 的 `ExternalNotification.Configs` �
 
 - P1-07 读侧落地：`ExternalNotificationChannels.ResolveEnabled` 优先解析 WPF `Gui.ExternalNotification.Configs` 的多态 `$type` 数组（Smtp/ServerChan/Bark/Discord/DingTalk/Telegram/Qmsg/Gotify/CustomWebhook，PascalCase 字段映射），支持同类型多实例发送；数组未知或损坏时回退 `Enabled` CSV + 扁平键。WPF 写入的加密凭据不做解密，发送失败会显式暴露。写侧（MAAUnified 自己的多实例编辑/保存）仍未做，UI 仍按 provider 单实例编辑。
 - P1-33 收尾：`SettingsGuideDemoAction` 补 `ReorderTheme`、`AddNightTheme` 两个 gate（与 WPF dev-v2 的 9 个 gate 对齐），五语言文案同步。
+
+## 第五轮补缺（2026-11-12）
+
+- P1-07 写侧完成：外部通知设置新增"渠道实例"区块，可添加/删除实例、编辑 `key=value` 参数；配置数组只写 `$type` 与 `Id`，参数值写入动态注册的敏感键（`ExternalNotification.Instance.<id>.<param>`，随 `SensitiveSettingKeyRegistry` 提取进敏感存储）；保存后重载可恢复，旧扁平键与 `Enabled` CSV 继续双写，单实例链路不变。
+- 至此 P1 执行清单中 P1-07 读、写两侧均闭环；仅剩平台/环境性限制（Windows 真实 updater 端到端、macOS 锁屏依赖系统 CGSession、WPF 加密凭据在非 Windows 无法解密）。
