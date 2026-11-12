@@ -145,6 +145,7 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
     private string _coreChar = string.Empty;
     private string _coreCharDisplayText = string.Empty;
     private bool _useSupport;
+    private List<RoguelikeStartingOperDto> _startingOpers = [];
     private bool _useNonfriendSupport;
     private bool _refreshTraderWithDice;
     private bool _stopAtFinalBoss;
@@ -877,6 +878,14 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             StopWhenInvestmentFull = dto.StopWhenInvestmentFull;
             Squad = dto.Squad;
             Roles = dto.Roles;
+            _startingOpers = dto.CoreCharList
+                .Take(3)
+                .Select(oper => new RoguelikeStartingOperDto
+                {
+                    Name = oper.Name,
+                    UseSupport = oper.UseSupport,
+                })
+                .ToList();
             CoreChar = dto.CoreChar;
             UseSupport = dto.UseSupport;
             UseNonfriendSupport = dto.UseNonfriendSupport;
@@ -920,6 +929,31 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
         ClearUnavailableCollectibleRewards();
     }
 
+    private List<RoguelikeStartingOperDto> BuildStartingOperList(string normalizedCoreChar)
+    {
+        var opers = _startingOpers
+            .Take(3)
+            .Select(oper => new RoguelikeStartingOperDto
+            {
+                Name = oper.Name,
+                UseSupport = oper.UseSupport,
+            })
+            .ToList();
+        if (opers.Count == 0)
+        {
+            opers.Add(new RoguelikeStartingOperDto
+            {
+                Name = normalizedCoreChar,
+                UseSupport = UseSupport,
+            });
+            return opers;
+        }
+
+        opers[0].Name = normalizedCoreChar;
+        opers[0].UseSupport = UseSupport;
+        return opers;
+    }
+
     protected override RoguelikeTaskParamsDto BuildDto()
     {
         // Frozen WPF keeps foldartal text in config while the control is hidden or
@@ -952,6 +986,9 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             Roles = Roles.Trim(),
             CoreChar = normalizedCoreChar,
             UseSupport = UseSupport,
+            // The single-value panel edits position 1 only; positions 2 and 3
+            // imported from dev-v2 StartingOpers are carried through a save.
+            CoreCharList = BuildStartingOperList(normalizedCoreChar),
             UseNonfriendSupport = UseNonfriendSupport,
             RefreshTraderWithDice = RefreshTraderWithDice,
             StopAtFinalBoss = StopAtFinalBoss,

@@ -49,7 +49,8 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
     private bool _refresh = true;
     private bool _forceRefresh = true;
     private bool? _useExpedited = false;
-    private bool _skipRobot = true;
+    private bool _skipRobot;
+    private List<string> _preserveTags = ["支援机械"];
     private int _extraTagsMode;
     private bool _chooseLevel3 = true;
     private bool _chooseLevel4 = true;
@@ -293,7 +294,8 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
         Refresh = dto.Refresh;
         ForceRefresh = dto.ForceRefresh;
         UseExpedited = dto.UseExpedited;
-        SkipRobot = dto.SkipRobot;
+        _preserveTags = dto.PreserveTags.ToList();
+        SkipRobot = dto.PreserveTagEnabled;
         ExtraTagsMode = dto.ExtraTagsMode;
         ChooseLevel3 = dto.ChooseLevel3;
         ChooseLevel4 = dto.ChooseLevel4;
@@ -317,13 +319,20 @@ public sealed class RecruitTaskModuleViewModel : TypedTaskModuleViewModelBase<Re
             Refresh = Refresh,
             ForceRefresh = ForceRefresh,
             UseExpedited = UseExpedited,
+            // The legacy single-value toggle maps to dev-v2's PreserveTagEnabled;
+            // the stored tag list is carried through untouched because the panel
+            // has no editor for it yet.
             SkipRobot = SkipRobot,
+            PreserveTagEnabled = SkipRobot,
+            PreserveTags = _preserveTags.ToList(),
             ExtraTagsMode = ExtraTagsMode,
             FirstTags = firstTags,
             ChooseLevel3 = ChooseLevel3,
             ChooseLevel4 = ChooseLevel4,
             ChooseLevel5 = ChooseLevel5,
-            ChooseLevel6 = false,
+            // 6-star auto-confirm is config-only; preserve the loaded value instead
+            // of silently clearing it when the panel saves.
+            ChooseLevel6 = ChooseLevel6,
             Level3Time = Level3Time,
             Level4Time = Level4Time,
             Level5Time = Level5Time,

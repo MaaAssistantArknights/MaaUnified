@@ -22,9 +22,16 @@ public sealed class RoguelikeTaskParamsDto
 
     public string Roles { get; set; } = string.Empty;
 
+    // Legacy single-value view of the first starting position. Read populates it
+    // from CoreCharList[0]; compile prefers CoreCharList and falls back to these
+    // fields so pre-dev-v2 callers keep working.
     public string CoreChar { get; set; } = string.Empty;
 
     public bool UseSupport { get; set; }
+
+    // WPF dev-v2 RoguelikeTask.StartingOpers -> Core core_char_list, at most 3
+    // entries, each with its own use_support flag.
+    public List<RoguelikeStartingOperDto> CoreCharList { get; set; } = [];
 
     public bool UseNonfriendSupport { get; set; }
 
@@ -89,4 +96,11 @@ public sealed class RoguelikeCollectibleStartListDto
     public bool Ideas { get; set; } = true;
 
     public bool Ticket { get; set; }
+}
+
+public sealed class RoguelikeStartingOperDto
+{
+    public string Name { get; set; } = string.Empty;
+
+    public bool UseSupport { get; set; }
 }

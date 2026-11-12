@@ -732,7 +732,10 @@ public sealed class TaskQueueG1FeatureTests
         Assert.True(await vm.RoguelikeModule.SaveAsync());
 
         var persisted = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
-        Assert.Equal(stableCoreChar, persisted["core_char"]?.GetValue<string>());
+        var opers = Assert.IsType<JsonArray>(persisted["core_char_list"]);
+        var first = Assert.IsType<JsonObject>(Assert.Single(opers));
+        Assert.Equal(stableCoreChar, first["name"]?.GetValue<string>());
+        Assert.DoesNotContain("core_char", persisted.Select(pair => pair.Key), StringComparer.Ordinal);
     }
 
     [HostRepoFact]

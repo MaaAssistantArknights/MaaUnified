@@ -1029,10 +1029,14 @@ public sealed class ConfigurationImportTests
         Assert.DoesNotContain(report.Warnings, warning => warning.Contains("RA/RelaunchAnchor", StringComparison.Ordinal));
 
         var recruit = tasks.Single(task => task.Name == "Recruit");
-        Assert.DoesNotContain(6, ((JsonArray)recruit.Params["select"]!).Select(item => item?.GetValue<int>()));
-        Assert.DoesNotContain(6, ((JsonArray)recruit.Params["confirm"]!).Select(item => item?.GetValue<int>()));
-        Assert.DoesNotContain("preserve_tags", recruit.Params.Select(pair => pair.Key), StringComparer.Ordinal);
-        Assert.DoesNotContain("_ui_preserve_tags_enabled", recruit.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+        // WPF dev-v2 exposes level-6 auto-confirm as a config-only flag.
+        Assert.Contains(6, ((JsonArray)recruit.Params["select"]!).Select(item => item?.GetValue<int>()));
+        Assert.Contains(6, ((JsonArray)recruit.Params["confirm"]!).Select(item => item?.GetValue<int>()));
+        Assert.True(recruit.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
+        Assert.Equal(
+            ["支援机械", "高级资深干员"],
+            ReadStringArray((JsonArray)recruit.Params["preserve_tags"]!));
+        Assert.DoesNotContain("skip_robot", recruit.Params.Select(pair => pair.Key), StringComparer.Ordinal);
 
         var custom = tasks.Single(task => task.Name == "Custom");
         Assert.Equal(
@@ -1775,8 +1779,10 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
-    public async Task GuiNewImport_RecruitSkipsRobotAndIgnoresLegacyPreserveTags()
+    public async Task GuiNewImport_RecruitLevel1NotChoose_MigratesToPreserveTagEnabled_LikeDevV2Converter()
     {
+        // WPF dev-v2 RecruitTaskHoldTagsConverter turns a stale Level1NotChoose=true
+        // into PreserveTagEnabled=true while keeping the stored tag list.
         var root = CreateTempRoot();
         Directory.CreateDirectory(Path.Combine(root, "config"));
 
@@ -1807,9 +1813,12 @@ public sealed class ConfigurationImportTests
 
         Assert.True(report.Success);
         var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Recruit);
-        Assert.True(task.Params["skip_robot"]?.GetValue<bool>());
-        Assert.DoesNotContain("preserve_tags", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
-        Assert.DoesNotContain("_ui_preserve_tags_enabled", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.True(task.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
+        Assert.Equal(
+            ["支援机械", "高级资深干员"],
+            ReadStringArray((JsonArray)task.Params["preserve_tags"]!));
+        Assert.DoesNotContain("skip_robot", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain(1, ((JsonArray)task.Params["confirm"]!).Select(item => item?.GetValue<int>()));
     }
 
     [Fact]
@@ -1968,8 +1977,10 @@ public sealed class ConfigurationImportTests
         Assert.Equal(2, recruit.Params["times"]?.GetValue<int>());
         Assert.Contains(5, ((JsonArray)recruit.Params["select"]!).Select(item => item?.GetValue<int>()));
         Assert.Equal(["资深干员", "高级资深干员"], ReadStringArray((JsonArray)recruit.Params["first_tags"]!));
-        Assert.DoesNotContain("preserve_tags", recruit.Params.Select(pair => pair.Key), StringComparer.Ordinal);
-        Assert.DoesNotContain("_ui_preserve_tags_enabled", recruit.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+        // Level1NotChoose=true migrates to preserving the default 支援机械 tag.
+        Assert.True(recruit.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
+        Assert.Equal(["支援机械"], ReadStringArray((JsonArray)recruit.Params["preserve_tags"]!));
+        Assert.DoesNotContain("skip_robot", recruit.Params.Select(pair => pair.Key), StringComparer.Ordinal);
 
         var infrast = tasks.Single(task => task.Type == TaskModuleTypes.Infrast);
         Assert.True(infrast.IsEnabled);
@@ -2213,7 +2224,7 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
-    public async Task GuiImport_FlatRecruitNotChooseLevel1_ShouldControlSkipRobotOnly()
+    public async Task GuiImport_FlatRecruitNotChooseLevel1_ShouldControlPreserveTagEnabled()
     {
         var root = CreateTempRoot();
         Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -2240,9 +2251,9 @@ public sealed class ConfigurationImportTests
 
         Assert.True(report.Success);
         var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Recruit);
-        Assert.False(task.Params["skip_robot"]?.GetValue<bool>());
-        Assert.DoesNotContain("preserve_tags", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
-        Assert.DoesNotContain("_ui_preserve_tags_enabled", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.False(task.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
+        Assert.Equal(["支援机械"], ReadStringArray((JsonArray)task.Params["preserve_tags"]!));
+        Assert.DoesNotContain("skip_robot", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
     }
 
     [Fact]
@@ -3943,7 +3954,7 @@ public sealed class ConfigurationImportTests
 
 
     [Fact]
-    public async Task GuiNewImport_RecruitSkipRobotDoesNotEnablePreserveTagsWhenPreserveDisabled()
+    public async Task GuiNewImport_RecruitPreserveEnabledWithoutLevel1NotChoose_KeepsStoredTagList()
     {
         var root = CreateTempRoot();
         Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -3960,9 +3971,11 @@ public sealed class ConfigurationImportTests
                       "$type": "RecruitTask",
                       "Name": "Recruit",
                       "IsEnable": true,
-                      "Level1NotChoose": true,
-                      "PreserveTagEnabled": false,
-                      "PreserveTagList": ["支援机械", "高级资深干员"]
+                      "PreserveTagEnabled": true,
+                      "PreserveTagList": ["支援机械", "高级资深干员"],
+                      "Level3RecruitmentPermitReserveEnabled": true,
+                      "Level3RecruitmentPermitReserve": 12,
+                      "Level6Choose": true
                     }
                   ]
                 }
@@ -3975,10 +3988,55 @@ public sealed class ConfigurationImportTests
 
         Assert.True(report.Success);
         var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Recruit);
-        Assert.True(task.Params["skip_robot"]?.GetValue<bool>());
-        Assert.NotEqual(true, task.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
-        var preserveTags = task.Params["preserve_tags"] as JsonArray;
-        Assert.True(preserveTags is null || preserveTags.Count == 0);
+        Assert.True(task.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
+        Assert.Equal(
+            ["支援机械", "高级资深干员"],
+            ReadStringArray((JsonArray)task.Params["preserve_tags"]!));
+        Assert.Equal(12, task.Params["level3_recruitment_permit_reserve"]?.GetValue<int>());
+        Assert.Contains(6, ((JsonArray)task.Params["select"]!).Select(item => item?.GetValue<int>()));
+        Assert.Contains(6, ((JsonArray)task.Params["confirm"]!).Select(item => item?.GetValue<int>()));
+        var recruitmentTime = Assert.IsType<JsonObject>(task.Params["recruitment_time"]);
+        Assert.Equal(540, recruitmentTime["5"]?.GetValue<int>());
+        Assert.Equal(540, recruitmentTime["6"]?.GetValue<int>());
+        Assert.DoesNotContain("skip_robot", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task GuiNewImport_RecruitDisabledPreserveTags_KeepsEmptyCoreList()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "RecruitTask",
+                      "Name": "Recruit",
+                      "IsEnable": true,
+                      "PreserveTagEnabled": false,
+                      "PreserveTagList": []
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Recruit);
+        Assert.False(task.Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
+        Assert.Empty(ReadStringArray((JsonArray)task.Params["preserve_tags"]!));
+        Assert.Equal(0, task.Params["level3_recruitment_permit_reserve"]?.GetValue<int>());
+        Assert.DoesNotContain("skip_robot", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
     }
 
     [Fact]
@@ -4441,6 +4499,114 @@ public sealed class ConfigurationImportTests
 
     private static DateTime Utc(string text)
         => DateTime.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+
+    [Fact]
+    public async Task GuiNewImport_RoguelikeStartingOpers_ImportsFirstThreePositions()
+    {
+        // WPF dev-v2 RoguelikeStartingOpersConverter keeps StartingOpers as-is;
+        // Core only consumes name/use_support, and the UI exposes three positions.
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "RoguelikeTask",
+                      "Name": "Roguelike",
+                      "IsEnable": true,
+                      "Theme": "Sarkaz",
+                      "Mode": "Exp",
+                      "StartingOpers": [
+                        { "Name": "Amiya", "UseSupport": true },
+                        { "Name": "Kal'tsit", "UseSupport": false },
+                        { "Name": "Exusiai", "UseSupport": true },
+                        { "Name": "FourthOper", "UseSupport": true }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var task = service.CurrentConfig.Profiles["Default"].TaskQueue.Single(task => task.Type == TaskModuleTypes.Roguelike);
+        var opers = Assert.IsType<JsonArray>(task.Params["core_char_list"]);
+        Assert.Equal(3, opers.Count);
+        var first = Assert.IsType<JsonObject>(opers[0]);
+        Assert.Equal("Amiya", first["name"]?.GetValue<string>());
+        Assert.True(first["use_support"]?.GetValue<bool>());
+        var second = Assert.IsType<JsonObject>(opers[1]);
+        Assert.Equal("Kal'tsit", second["name"]?.GetValue<string>());
+        Assert.False(second["use_support"]?.GetValue<bool>());
+        Assert.Equal("Exusiai", Assert.IsType<JsonObject>(opers[2])["name"]?.GetValue<string>());
+        Assert.DoesNotContain("core_char", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain("use_support", task.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task GuiNewImport_RoguelikeLegacyCoreChar_MigratesToFirstStartingOper()
+    {
+        // v6.3.7 entries only carry CoreChar/UseSupport; they become position 1.
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [
+                    {
+                      "$type": "RoguelikeTask",
+                      "Name": "Roguelike",
+                      "IsEnable": true,
+                      "Theme": "Mizuki",
+                      "Mode": "Exp",
+                      "CoreChar": "Amiya",
+                      "UseSupport": true
+                    },
+                    {
+                      "$type": "RoguelikeTask",
+                      "Name": "RoguelikeEmpty",
+                      "IsEnable": true,
+                      "Theme": "Mizuki",
+                      "Mode": "Exp",
+                      "CoreChar": "",
+                      "UseSupport": false
+                    }
+                  ]
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var tasks = service.CurrentConfig.Profiles["Default"].TaskQueue;
+        var migrated = tasks.Single(task => task.Name == "Roguelike");
+        var opers = Assert.IsType<JsonArray>(migrated.Params["core_char_list"]);
+        var first = Assert.IsType<JsonObject>(Assert.Single(opers));
+        Assert.Equal("Amiya", first["name"]?.GetValue<string>());
+        Assert.True(first["use_support"]?.GetValue<bool>());
+
+        var empty = tasks.Single(task => task.Name == "RoguelikeEmpty");
+        Assert.Null(empty.Params["core_char_list"]);
+        Assert.DoesNotContain("core_char", empty.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+    }
 
     private static void SetClientType(UnifiedConfigurationService service, string clientType)
     {

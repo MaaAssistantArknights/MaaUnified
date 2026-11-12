@@ -10,7 +10,20 @@ public sealed class RecruitTaskParamsDto
 
     public bool? UseExpedited { get; set; } = false;
 
-    public bool SkipRobot { get; set; } = true;
+    // Legacy v6.3.7 alias of PreserveTagEnabled (skip_robot). New configs store
+    // the preserve-tag fields; reads keep accepting skip_robot and mirror it here.
+    public bool SkipRobot { get; set; }
+
+    // WPF dev-v2 RecruitTask.PreserveTagEnabled / PreserveTagList.
+    public bool PreserveTagEnabled { get; set; }
+
+    public List<string> PreserveTags { get; set; } = ["支援机械"];
+
+    // WPF dev-v2 RecruitTask.Level3RecruitmentPermitReserveEnabled /
+    // Level3RecruitmentPermitReserve. 0 is serialized when the toggle is off.
+    public bool Level3RecruitmentPermitReserveEnabled { get; set; }
+
+    public int Level3RecruitmentPermitReserve { get; set; } = 8;
 
     public int ExtraTagsMode { get; set; }
 

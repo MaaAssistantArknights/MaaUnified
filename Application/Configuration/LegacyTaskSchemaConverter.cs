@@ -341,21 +341,40 @@ internal static class LegacyTaskSchemaConverter
     private static JsonObject ConvertRecruit(JsonObject task, UnifiedProfile profile, UnifiedConfig config)
     {
         var maxTimes = GetInt(task, "MaxTimes", 4);
-        var level1NotChoose = GetBool(task, "Level1NotChoose", true);
         var level3Choose = GetBool(task, "Level3Choose", true);
         var level4Choose = GetBool(task, "Level4Choose", true);
         var level5Choose = GetBool(task, "Level5Choose", false);
-        // WPF task queue has no selectable six-star recruit option; legacy values are ignored.
-        var level6Choose = false;
+        // WPF dev-v2 exposes six-star auto-confirm as a config-only flag
+        // (RecruitTask.Level6Choose); the task panel keeps it disabled.
+        var level6Choose = GetBool(task, "Level6Choose", false) || GetBool(task, "ChooseLevel6", false);
         var useExpedited = GetBool(task, "UseExpedited", false);
+
+        // WPF dev-v2 (0289fa0381) replaces skip_robot with preserve_tags. A v6.3.7
+        // entry has no PreserveTag* fields and Level1NotChoose defaults to true, so
+        // it migrates to preserving 支援机械. A dev-v2 entry keeps its stored
+        // PreserveTagList, and the Root-level RecruitTaskHoldTagsConverter forces
+        // PreserveTagEnabled=true when a stale Level1NotChoose=true is present.
+        var hasPreserveFields = task.ContainsKey("PreserveTagEnabled") || task.ContainsKey("PreserveTagList");
+        var preserveTagEnabled = GetBool(task, "PreserveTagEnabled", false);
+        List<string> preserveTagList = task.ContainsKey("PreserveTagList")
+            ? ReadStringArray(task, "PreserveTagList")
+            : ["支援机械"];
+        if (!hasPreserveFields)
+        {
+            preserveTagEnabled = GetBool(task, "Level1NotChoose", true);
+        }
+        else if (GetBool(task, "Level1NotChoose", false))
+        {
+            preserveTagEnabled = true;
+        }
+
+        var permitReserveEnabled = GetBool(task, "Level3RecruitmentPermitReserveEnabled", false);
+        var permitReserve = permitReserveEnabled
+            ? Math.Clamp(GetInt(task, "Level3RecruitmentPermitReserve", 8), 1, 999)
+            : 0;
 
         var selectList = new JsonArray();
         var confirmList = new JsonArray();
-
-        if (level1NotChoose)
-        {
-            confirmList.Add(1);
-        }
 
         if (level3Choose)
         {
@@ -391,14 +410,18 @@ internal static class LegacyTaskSchemaConverter
             ["times"] = maxTimes,
             ["set_time"] = true,
             ["expedite"] = useExpedited,
-            ["skip_robot"] = level1NotChoose,
+            ["_ui_preserve_tags_enabled"] = preserveTagEnabled,
+            ["preserve_tags"] = ToJsonArray(preserveTagList),
+            ["level3_recruitment_permit_reserve"] = permitReserve,
             ["extra_tags_mode"] = GetInt(task, "ExtraTagMode", 0),
             ["first_tags"] = firstTags,
             ["recruitment_time"] = new JsonObject
             {
                 ["3"] = GetInt(task, "Level3Time", 540),
                 ["4"] = GetInt(task, "Level4Time", 540),
-                ["5"] = GetInt(task, "Level5Time", 540),
+                // WPF dev-v2 fixes the 5-star and 6-star recruit time at 9:00.
+                ["5"] = 540,
+                ["6"] = 540,
             },
             ["report_to_penguin"] = ResolveBooleanSetting(profile, config, true, "Penguin.EnablePenguin", "EnablePenguin"),
             ["report_to_yituliu"] = ResolveBooleanSetting(profile, config, true, "Yituliu.EnableYituliu", "EnableYituliu"),
@@ -431,6 +454,38 @@ internal static class LegacyTaskSchemaConverter
             {
                 result.Add(tagText.Trim());
             }
+        }
+
+        return result;
+    }
+
+    private static JsonArray? ReadLegacyRoguelikeStartingOpers(JsonObject task)
+    {
+        if (!task.TryGetPropertyValue("StartingOpers", out var node) || node is null)
+        {
+            return null;
+        }
+
+        if (node is not JsonArray array)
+        {
+            return null;
+        }
+
+        var result = new JsonArray();
+        foreach (var item in array.Take(3))
+        {
+            if (item is not JsonObject oper)
+            {
+                continue;
+            }
+
+            var name = GetString(oper, "Name") ?? GetString(oper, "name") ?? string.Empty;
+            var useSupport = GetBool(oper, "UseSupport", false) || GetBool(oper, "use_support", false);
+            result.Add(new JsonObject
+            {
+                ["name"] = name.Trim(),
+                ["use_support"] = useSupport,
+            });
         }
 
         return result;
@@ -603,7 +658,6 @@ internal static class LegacyTaskSchemaConverter
             ["difficulty"] = GetInt(task, "Difficulty", int.MaxValue),
             ["starts_count"] = GetInt(task, "StartCount", 999999),
             ["investment_enabled"] = GetBool(task, "Investment", true),
-            ["use_support"] = GetBool(task, "UseSupport", false),
             ["use_nonfriend_support"] = GetBool(task, "UseSupportNonFriend", false),
             ["refresh_trader_with_dice"] = GetBool(task, "RefreshTraderWithDice", false),
             ["investment_with_more_score"] = GetBool(task, "InvestWithMoreScore", false),
@@ -634,10 +688,32 @@ internal static class LegacyTaskSchemaConverter
             result["roles"] = roles;
         }
 
-        var coreChar = GetString(task, "CoreChar");
-        if (!string.IsNullOrWhiteSpace(coreChar))
+        // WPF dev-v2 (f04fb1645b) stores StartingOpers and sends core_char_list.
+        // v6.3.7 entries only have CoreChar/UseSupport, which migrate to the first
+        // position exactly like RoguelikeStartingOpersConverter.
+        var startingOpers = ReadLegacyRoguelikeStartingOpers(task);
+        if (startingOpers is not null)
         {
-            result["core_char"] = coreChar;
+            if (startingOpers.Count > 0)
+            {
+                result["core_char_list"] = startingOpers;
+            }
+        }
+        else
+        {
+            var coreChar = GetString(task, "CoreChar");
+            var useSupport = GetBool(task, "UseSupport", false);
+            if (!string.IsNullOrWhiteSpace(coreChar) || useSupport)
+            {
+                result["core_char_list"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["name"] = coreChar?.Trim() ?? string.Empty,
+                        ["use_support"] = useSupport,
+                    },
+                };
+            }
         }
 
         // Frozen WPF persists each foldartal/seed toggle independently of its

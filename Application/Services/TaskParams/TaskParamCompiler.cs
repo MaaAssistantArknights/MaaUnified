@@ -55,6 +55,9 @@ public static class TaskParamCompiler
     private const string UserDataUpdateDepot = "update_depot";
     private const string UserDataUpdateTriggerInterval = "trigger_interval";
     private const string UiRecruitPreserveTagsEnabled = "_ui_preserve_tags_enabled";
+    private const string RecruitRobotTag = "支援机械";
+    private const int FixedRecruitNineHourMinutes = 540;
+    private const int DefaultLevel3RecruitmentPermitReserve = 8;
     private const string UiInfrastFacilityOrder = "_ui_facility_order";
     private const string SkipAppendIssueCode = "TaskCompileSkipAppend";
     private static readonly Regex ExpiredActivityStageCodeRegex = new("^[A-Za-z]{2}-\\d{1,2}$", RegexOptions.Compiled);
@@ -1030,6 +1033,33 @@ public static class TaskParamCompiler
         var select = ReadIntArray(parameters, "select");
 
         var recruitmentTime = parameters["recruitment_time"] as JsonObject ?? new JsonObject();
+
+        // WPF dev-v2 stores PreserveTagEnabled/PreserveTagList; the flattened Core
+        // form keeps the list plus an explicit _ui_preserve_tags_enabled marker so
+        // an empty enabled list stays distinguishable from a disabled one.
+        // v6.3.7 configs only carry skip_robot (and confirm [1]); those are read as
+        // the legacy equivalent of preserving 支援机械, but an explicit dev-v2
+        // marker always wins over the legacy keys.
+        var legacySkipRobot = ReadBool(parameters, "skip_robot", false, issues, "recruit.skip_robot", true);
+        var hasPreserveMarker = parameters.TryGetPropertyValue(UiRecruitPreserveTagsEnabled, out var preserveMarkerNode);
+        var hasPreserveTagsKey = parameters.ContainsKey("preserve_tags");
+        List<string> preserveTags = hasPreserveTagsKey ? ReadStringArray(parameters, "preserve_tags") : [RecruitRobotTag];
+        bool preserveEnabled;
+        if (hasPreserveMarker)
+        {
+            preserveEnabled = TryReadBooleanNode(preserveMarkerNode, out var preserveMarker) && preserveMarker;
+        }
+        else if (hasPreserveTagsKey)
+        {
+            preserveEnabled = preserveTags.Count > 0;
+        }
+        else
+        {
+            preserveEnabled = legacySkipRobot || confirm.Contains(1);
+        }
+
+        var permitReserve = ReadInt(parameters, "level3_recruitment_permit_reserve", false, issues, "recruit.level3_recruitment_permit_reserve", 0);
+
         var dto = new RecruitTaskParamsDto
         {
             Refresh = ReadBool(parameters, "refresh", strict, issues, "recruit.refresh", true),
@@ -1037,22 +1067,25 @@ public static class TaskParamCompiler
             Times = ReadInt(parameters, "times", strict, issues, "recruit.times", 4),
             SetTime = ReadBool(parameters, "set_time", strict, issues, "recruit.set_time", true),
             UseExpedited = ReadBool(parameters, "expedite", false),
-            SkipRobot = ReadBool(parameters, "skip_robot", false, issues, "recruit.skip_robot", true),
+            SkipRobot = preserveEnabled,
+            PreserveTagEnabled = preserveEnabled,
+            PreserveTags = preserveTags,
+            Level3RecruitmentPermitReserveEnabled = permitReserve > 0,
+            Level3RecruitmentPermitReserve = permitReserve > 0
+                ? Math.Clamp(permitReserve, 1, 999)
+                : DefaultLevel3RecruitmentPermitReserve,
             ExtraTagsMode = ReadInt(parameters, "extra_tags_mode", false, issues, "recruit.extra_tags_mode", 0),
             FirstTags = ReadStringArray(parameters, "first_tags"),
             ChooseLevel3 = confirm.Contains(3),
             ChooseLevel4 = confirm.Contains(4),
             ChooseLevel5 = confirm.Contains(5),
-            ChooseLevel6 = false,
-            Level3Time = ReadInt(recruitmentTime, "3", strict, issues, "recruit.time.3", 540),
-            Level4Time = ReadInt(recruitmentTime, "4", strict, issues, "recruit.time.4", 540),
-            Level5Time = ReadInt(recruitmentTime, "5", strict, issues, "recruit.time.5", 540),
+            ChooseLevel6 = confirm.Contains(6),
+            Level3Time = ReadInt(recruitmentTime, "3", strict, issues, "recruit.time.3", FixedRecruitNineHourMinutes),
+            Level4Time = ReadInt(recruitmentTime, "4", strict, issues, "recruit.time.4", FixedRecruitNineHourMinutes),
+            // 5-star recruit time is fixed at 9:00 in WPF dev-v2 (AsstRecruitTask
+            // ChooseLevel5Time has no setter); stored legacy values are ignored.
+            Level5Time = FixedRecruitNineHourMinutes,
         };
-
-        if (confirm.Contains(1))
-        {
-            dto.SkipRobot = true;
-        }
 
         if (select.Count == 0 && !confirm.Contains(4) && !confirm.Contains(5))
         {
@@ -1077,17 +1110,11 @@ public static class TaskParamCompiler
 
         ValidateRecruitTime(dto.Level3Time, "recruit.time.3", issues);
         ValidateRecruitTime(dto.Level4Time, "recruit.time.4", issues);
-        ValidateRecruitTime(dto.Level5Time, "recruit.time.5", issues);
 
         var refresh = dto.Refresh;
         var forceRefresh = dto.ForceRefresh;
         var select = new JsonArray();
         var confirm = new JsonArray();
-
-        if (dto.SkipRobot)
-        {
-            confirm.Add(1);
-        }
 
         if (dto.ChooseLevel3)
         {
@@ -1106,6 +1133,20 @@ public static class TaskParamCompiler
             confirm.Add(5);
         }
 
+        // 6-star auto-confirm is config-only in WPF dev-v2 (RecruitTask.Level6Choose);
+        // the recruit panel keeps the control disabled. It participates in both
+        // select and confirm, and its time is fixed at 9:00.
+        if (dto.ChooseLevel6)
+        {
+            select.Add(6);
+            confirm.Add(6);
+        }
+
+        var preserveTags = NormalizeRecruitTags(dto.PreserveTags);
+        var permitReserve = dto.Level3RecruitmentPermitReserveEnabled
+            ? Math.Clamp(dto.Level3RecruitmentPermitReserve, 1, 999)
+            : 0;
+
         var parameters = new JsonObject
         {
             ["refresh"] = refresh,
@@ -1115,14 +1156,21 @@ public static class TaskParamCompiler
             ["times"] = Math.Max(0, dto.Times),
             ["set_time"] = dto.SetTime,
             ["expedite"] = dto.UseExpedited != false,
-            ["skip_robot"] = dto.SkipRobot,
+            // WPF dev-v2 no longer emits skip_robot: preserved tags replace it. The
+            // enable flag is kept alongside the list so an empty enabled list stays
+            // distinguishable from a disabled one; BuildCoreParams strips the marker
+            // and blanks preserve_tags when disabled.
+            [UiRecruitPreserveTagsEnabled] = dto.PreserveTagEnabled,
+            ["preserve_tags"] = ToJsonArray(preserveTags),
+            ["level3_recruitment_permit_reserve"] = permitReserve,
             ["extra_tags_mode"] = dto.ExtraTagsMode,
             ["first_tags"] = ToJsonArray(dto.FirstTags),
             ["recruitment_time"] = new JsonObject
             {
                 ["3"] = ClampRecruitTime(dto.Level3Time),
                 ["4"] = ClampRecruitTime(dto.Level4Time),
-                ["5"] = ClampRecruitTime(dto.Level5Time),
+                ["5"] = FixedRecruitNineHourMinutes,
+                ["6"] = FixedRecruitNineHourMinutes,
             },
             // Frozen WPF defaults both reporting switches to true when the key is absent
             // (GameSettingsUserControlModel reads GetValue(..., bool.TrueString)); an explicit
@@ -1161,6 +1209,31 @@ public static class TaskParamCompiler
 
         var mode = ReadInt(parameters, "mode", strict, issues, "roguelike.mode", 0);
 
+        // WPF dev-v2 replaces the single core_char/top-level use_support pair with
+        // core_char_list[{name,use_support}] (RoguelikeTask.StartingOpers). Reads
+        // still accept the old single pair as the first position so pre-dev-v2
+        // avalonia.json keeps working.
+        var hasCoreCharList = parameters.ContainsKey("core_char_list");
+        List<RoguelikeStartingOperDto> coreCharList = hasCoreCharList
+            ? ReadRoguelikeStartingOpers(parameters, issues)
+            : [];
+        if (!hasCoreCharList)
+        {
+            var legacyCoreChar = ReadString(parameters, "core_char", false, issues, "roguelike.core_char", string.Empty);
+            var legacyUseSupport = ReadBool(parameters, "use_support", false, issues, "roguelike.use_support", false);
+            if (!string.IsNullOrWhiteSpace(legacyCoreChar) || legacyUseSupport)
+            {
+                coreCharList =
+                [
+                    new RoguelikeStartingOperDto
+                    {
+                        Name = legacyCoreChar.Trim(),
+                        UseSupport = legacyUseSupport,
+                    },
+                ];
+            }
+        }
+
         var firstFloorFoldartal = ReadString(parameters, "first_floor_foldartal", false, issues, "roguelike.first_floor_foldartal", string.Empty);
         var startFoldartalList = ReadWpfSemicolonListCompat(parameters, "start_foldartal_list", issues, "roguelike.start_foldartal_list", trimEntries: false);
         var startWithSeed = ReadString(parameters, "start_with_seed", false, issues, "roguelike.start_with_seed", string.Empty);
@@ -1177,8 +1250,9 @@ public static class TaskParamCompiler
             StopWhenInvestmentFull = ReadBool(parameters, "stop_when_investment_full", false, issues, "roguelike.stop_when_investment_full", false),
             Squad = ReadString(parameters, "squad", false, issues, "roguelike.squad", string.Empty),
             Roles = ReadString(parameters, "roles", false, issues, "roguelike.roles", string.Empty),
-            CoreChar = ReadString(parameters, "core_char", false, issues, "roguelike.core_char", string.Empty),
-            UseSupport = ReadBool(parameters, "use_support", strict, issues, "roguelike.use_support", false),
+            CoreChar = coreCharList.Count > 0 ? coreCharList[0].Name : string.Empty,
+            UseSupport = coreCharList.Count > 0 && coreCharList[0].UseSupport,
+            CoreCharList = coreCharList,
             UseNonfriendSupport = ReadBool(parameters, "use_nonfriend_support", strict, issues, "roguelike.use_nonfriend_support", false),
             RefreshTraderWithDice = ReadBool(parameters, "refresh_trader_with_dice", strict, issues, "roguelike.refresh_trader_with_dice", false),
             StopAtFinalBoss = ReadBool(parameters, "stop_at_final_boss", false, issues, "roguelike.stop_at_final_boss", false),
@@ -1277,6 +1351,7 @@ public static class TaskParamCompiler
             findPlayTimeTarget = 1;
         }
 
+        var startingOpers = ResolveRoguelikeStartingOpers(dto);
         var startWithEliteTwo = dto.StartWithEliteTwo;
         var onlyStartWithEliteTwo = dto.OnlyStartWithEliteTwo;
         var squad = (dto.Squad ?? string.Empty).Trim();
@@ -1304,7 +1379,8 @@ public static class TaskParamCompiler
             onlyStartWithEliteTwo = false;
         }
 
-        if (dto.UseSupport && startWithEliteTwo)
+        var firstOperUsesSupport = startingOpers.Count > 0 && startingOpers[0].UseSupport;
+        if (firstOperUsesSupport && startWithEliteTwo)
         {
             issues.Add(new TaskValidationIssue("RoguelikeEliteTwoSupportConflict", "roguelike.use_support", "UseSupport conflicts with StartWithEliteTwo under current strategy.", Blocking: false));
             startWithEliteTwo = false;
@@ -1333,7 +1409,6 @@ public static class TaskParamCompiler
             ["difficulty"] = difficulty,
             ["starts_count"] = Math.Max(0, dto.StartsCount),
             ["investment_enabled"] = dto.InvestmentEnabled,
-            ["use_support"] = dto.UseSupport,
             ["use_nonfriend_support"] = dto.UseNonfriendSupport,
             ["refresh_trader_with_dice"] = string.Equals(theme, "Mizuki", StringComparison.OrdinalIgnoreCase) && dto.RefreshTraderWithDice,
         };
@@ -1355,9 +1430,9 @@ public static class TaskParamCompiler
             parameters["roles"] = dto.Roles.Trim();
         }
 
-        if (!string.IsNullOrWhiteSpace(dto.CoreChar))
+        if (startingOpers.Count > 0)
         {
-            parameters["core_char"] = dto.CoreChar.Trim();
+            parameters["core_char_list"] = CompileRoguelikeCoreCharList(startingOpers);
         }
 
         if (mode == 0)
@@ -1432,6 +1507,108 @@ public static class TaskParamCompiler
         };
     }
 
+    private static List<RoguelikeStartingOperDto> ReadRoguelikeStartingOpers(
+        JsonObject parameters,
+        ICollection<TaskValidationIssue> issues)
+    {
+        var result = new List<RoguelikeStartingOperDto>();
+        if (parameters["core_char_list"] is not JsonArray array)
+        {
+            if (parameters.ContainsKey("core_char_list"))
+            {
+                issues.Add(new TaskValidationIssue(
+                    "TaskFieldTypeInvalid",
+                    "roguelike.core_char_list",
+                    "Task field `core_char_list` has incompatible type."));
+            }
+
+            return result;
+        }
+
+        foreach (var item in array)
+        {
+            if (item is not JsonObject oper)
+            {
+                issues.Add(new TaskValidationIssue(
+                    "TaskFieldTypeInvalid",
+                    "roguelike.core_char_list",
+                    "Task field `core_char_list` contains an entry with incompatible type."));
+                continue;
+            }
+
+            var name = oper["name"] is JsonValue nameNode && nameNode.TryGetValue(out string? parsedName)
+                ? parsedName.Trim()
+                : string.Empty;
+            var useSupport = oper["use_support"] is JsonValue supportNode
+                && TryReadBooleanNode(supportNode, out var parsedSupport)
+                && parsedSupport;
+            result.Add(new RoguelikeStartingOperDto
+            {
+                Name = name,
+                UseSupport = useSupport,
+            });
+        }
+
+        if (result.Count > 3)
+        {
+            issues.Add(new TaskValidationIssue(
+                "RoguelikeStartingOpersTrimmed",
+                "roguelike.core_char_list",
+                "Starting oper list exceeds max size and will be trimmed to 3.",
+                Blocking: false));
+            result = result.Take(3).ToList();
+        }
+
+        return result;
+    }
+
+    private static List<RoguelikeStartingOperDto> ResolveRoguelikeStartingOpers(
+        RoguelikeTaskParamsDto dto,
+        bool keepEmptyEntries = false)
+    {
+        IEnumerable<RoguelikeStartingOperDto> source = dto.CoreCharList;
+        if (!source.Any() && (!string.IsNullOrWhiteSpace(dto.CoreChar) || dto.UseSupport))
+        {
+            source =
+            [
+                new RoguelikeStartingOperDto
+                {
+                    Name = dto.CoreChar,
+                    UseSupport = dto.UseSupport,
+                },
+            ];
+        }
+
+        var opers = source
+            .Take(3)
+            .Select(oper => new RoguelikeStartingOperDto
+            {
+                Name = (oper.Name ?? string.Empty).Trim(),
+                UseSupport = oper.UseSupport,
+            });
+        if (!keepEmptyEntries)
+        {
+            opers = opers.Where(oper => oper.Name.Length > 0);
+        }
+
+        return opers.ToList();
+    }
+
+    private static JsonArray CompileRoguelikeCoreCharList(IEnumerable<RoguelikeStartingOperDto> opers)
+    {
+        var list = new JsonArray();
+        foreach (var oper in opers)
+        {
+            list.Add(new JsonObject
+            {
+                ["name"] = oper.Name,
+                ["use_support"] = oper.UseSupport,
+            });
+        }
+
+        return list;
+    }
+
     public static TaskCompileOutput CompileRoguelikeForPersistence(
         UnifiedTaskItem task,
         UnifiedProfile profile,
@@ -1480,6 +1657,29 @@ public static class TaskParamCompiler
         parameters["first_floor_foldartal_enabled"] = dto.FirstFloorFoldartalEnabled;
         parameters["start_foldartal_list_enabled"] = dto.StartFoldartalListEnabled;
         parameters["start_with_seed_enabled"] = dto.StartWithSeedEnabled;
+
+        // Persist the full starting-oper list (including intentionally empty later
+        // positions) so a dev-v2 StartingOpers import survives a single-value UI save.
+        parameters.Remove("core_char");
+        parameters.Remove("use_support");
+        var persistedStartingOpers = ResolveRoguelikeStartingOpers(dto, keepEmptyEntries: true);
+        // Drop trailing placeholders so a fresh task does not persist a single empty
+        // position, while interior/trailing filled slots keep their configured order.
+        while (persistedStartingOpers.Count > 0
+            && persistedStartingOpers[^1].Name.Length == 0
+            && !persistedStartingOpers[^1].UseSupport)
+        {
+            persistedStartingOpers.RemoveAt(persistedStartingOpers.Count - 1);
+        }
+
+        if (persistedStartingOpers.Count > 0)
+        {
+            parameters["core_char_list"] = CompileRoguelikeCoreCharList(persistedStartingOpers);
+        }
+        else
+        {
+            parameters.Remove("core_char_list");
+        }
 
         var firstFloorFoldartal = dto.FirstFloorFoldartal.Trim();
         if (firstFloorFoldartal.Length > 0)
@@ -1939,6 +2139,19 @@ public static class TaskParamCompiler
         var normalizedType = NormalizeTaskType(taskType);
         if (string.Equals(normalizedType, TaskModuleTypes.Recruit, StringComparison.OrdinalIgnoreCase))
         {
+            // The preserve-tag enable flag is MAAUnified UI state; Core only takes
+            // preserve_tags. WPF dev-v2 serializes an empty array when the toggle is
+            // off, so mirror that instead of leaking the marker key.
+            if (runtimeParams.ContainsKey(UiRecruitPreserveTagsEnabled))
+            {
+                if (!ReadBooleanNode(runtimeParams, UiRecruitPreserveTagsEnabled))
+                {
+                    runtimeParams["preserve_tags"] = new JsonArray();
+                }
+
+                runtimeParams.Remove(UiRecruitPreserveTagsEnabled);
+            }
+
             if (!ReadBooleanNode(runtimeParams, "report_to_penguin"))
             {
                 runtimeParams.Remove("penguin_id");
@@ -2373,6 +2586,20 @@ public static class TaskParamCompiler
                 field,
                 "Recruit time must be between 60 and 540 minutes and aligned to 10-minute steps."));
         }
+    }
+
+    private static List<string> NormalizeRecruitTags(IEnumerable<string>? tags)
+    {
+        if (tags is null)
+        {
+            return [];
+        }
+
+        return tags
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(tag => tag.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
     }
 
     private static int ClampRecruitTime(int value)

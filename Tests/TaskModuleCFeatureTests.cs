@@ -534,6 +534,122 @@ public sealed class TaskModuleCFeatureTests
     }
 
     [Fact]
+    public async Task Roguelike_CompileEmitsCoreCharListAndDropsLegacySingleFields()
+    {
+        // WPF dev-v2 (f04fb1645b) sends core_char_list[{name,use_support}] and no
+        // longer emits core_char / top-level use_support.
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+
+        var compiled = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto
+            {
+                Mode = 4,
+                Theme = "JieGarden",
+                CoreCharList =
+                [
+                    new RoguelikeStartingOperDto { Name = "Amiya", UseSupport = true },
+                    new RoguelikeStartingOperDto { Name = "Kal'tsit", UseSupport = false },
+                    new RoguelikeStartingOperDto { Name = "Exusiai", UseSupport = true },
+                ],
+            },
+            profile,
+            fixture.Config.CurrentConfig);
+
+        Assert.DoesNotContain("core_char", compiled.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain("use_support", compiled.Params.Select(pair => pair.Key), StringComparer.Ordinal);
+        var opers = Assert.IsType<JsonArray>(compiled.Params["core_char_list"]);
+        Assert.Equal(3, opers.Count);
+        Assert.Equal("Amiya", Assert.IsType<JsonObject>(opers[0])["name"]?.GetValue<string>());
+        Assert.True(Assert.IsType<JsonObject>(opers[0])["use_support"]?.GetValue<bool>());
+        Assert.Equal("Kal'tsit", Assert.IsType<JsonObject>(opers[1])["name"]?.GetValue<string>());
+        Assert.False(Assert.IsType<JsonObject>(opers[1])["use_support"]?.GetValue<bool>());
+        Assert.Equal("Exusiai", Assert.IsType<JsonObject>(opers[2])["name"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Roguelike_CompileFallsBackToLegacySingleCoreCharAsFirstPosition()
+    {
+        // DTO callers that only fill the pre-dev-v2 CoreChar/UseSupport pair still
+        // map to the first starting position.
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+
+        var compiled = TaskParamCompiler.CompileRoguelike(
+            new RoguelikeTaskParamsDto
+            {
+                Mode = 0,
+                Theme = "JieGarden",
+                CoreChar = "Amiya",
+                UseSupport = true,
+            },
+            profile,
+            fixture.Config.CurrentConfig);
+
+        var opers = Assert.IsType<JsonArray>(compiled.Params["core_char_list"]);
+        var first = Assert.IsType<JsonObject>(Assert.Single(opers));
+        Assert.Equal("Amiya", first["name"]?.GetValue<string>());
+        Assert.True(first["use_support"]?.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Roguelike_ReadKeepsAllPositions_AndExposesFirstAsLegacyAlias()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var task = new UnifiedTaskItem
+        {
+            Type = "Roguelike",
+            Name = "Roguelike",
+            IsEnabled = true,
+            Params = new JsonObject
+            {
+                ["mode"] = 0,
+                ["theme"] = "JieGarden",
+                ["core_char_list"] = new JsonArray
+                {
+                    new JsonObject { ["name"] = "Amiya", ["use_support"] = true },
+                    new JsonObject { ["name"] = "Kal'tsit", ["use_support"] = false },
+                    new JsonObject { ["name"] = "Exusiai", ["use_support"] = true },
+                },
+            },
+        };
+
+        var (dto, _) = TaskParamCompiler.ReadRoguelike(task, strict: false);
+
+        Assert.Equal(3, dto.CoreCharList.Count);
+        Assert.Equal("Amiya", dto.CoreChar);
+        Assert.True(dto.UseSupport);
+        Assert.Equal("Kal'tsit", dto.CoreCharList[1].Name);
+        Assert.True(dto.CoreCharList[2].UseSupport);
+    }
+
+    [Fact]
+    public async Task Roguelike_PersistenceKeepsImportedStartingPositions()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Config.CurrentConfig.Profiles["Default"];
+        var dto = new RoguelikeTaskParamsDto
+        {
+            Mode = 0,
+            Theme = "JieGarden",
+            CoreCharList =
+            [
+                new RoguelikeStartingOperDto { Name = "Amiya", UseSupport = true },
+                new RoguelikeStartingOperDto { Name = "Kal'tsit", UseSupport = false },
+                new RoguelikeStartingOperDto { Name = "Exusiai", UseSupport = true },
+            ],
+        };
+
+        var compiled = TaskParamCompiler.CompileRoguelike(dto, profile, fixture.Config.CurrentConfig);
+        var persisted = TaskParamCompiler.BuildRoguelikePersistenceParams(dto, compiled.Params);
+
+        var opers = Assert.IsType<JsonArray>(persisted["core_char_list"]);
+        Assert.Equal(3, opers.Count);
+        Assert.DoesNotContain("core_char", persisted.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain("use_support", persisted.Select(pair => pair.Key), StringComparer.Ordinal);
+    }
+
+    [Fact]
     public async Task Roguelike_CollapseModeWithoutSami_FallsBackToExpLikeFrozenWpf()
     {
         await using var fixture = await TestFixture.CreateAsync();

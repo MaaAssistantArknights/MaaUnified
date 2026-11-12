@@ -174,8 +174,9 @@
                 <CheckBox Classes="app-checkbox"
                           Content="{Binding Texts[Recruit.ChooseLevel5]}"
                           IsChecked="{Binding ChooseLevel5}" />
+                <!-- WPF dev-v2 fixes the 5-star recruit time at 9:00 (540 min). -->
                 <Grid Grid.Column="2"
-                      IsEnabled="{Binding ChooseLevel5}"
+                      IsEnabled="False"
                       ColumnDefinitions="Auto,Auto,Auto">
                   <controls:AppNumberInput Classes="recruit-time-picker"
                                            Minimum="1"

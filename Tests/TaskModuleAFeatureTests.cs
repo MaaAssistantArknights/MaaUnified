@@ -46,7 +46,15 @@ public sealed class TaskModuleAFeatureTests
         Assert.Equal(4, tasks[2].Params["times"]?.GetValue<int>());
         Assert.True(tasks[2].Params["refresh"]?.GetValue<bool>());
         Assert.True(tasks[2].Params["force_refresh"]?.GetValue<bool>());
-        Assert.True(tasks[2].Params["skip_robot"]?.GetValue<bool>());
+        // WPF dev-v2 replaced skip_robot with preserve_tags; a fresh task keeps the
+        // default (disabled) preserve toggle and no longer confirms level 1.
+        Assert.DoesNotContain("skip_robot", tasks[2].Params.Select(pair => pair.Key), StringComparer.Ordinal);
+        // The stored list keeps WPF's default 支援机械 entry but the toggle is off;
+        // BuildCoreParams blanks it before the payload reaches Core.
+        Assert.Equal(
+            ["支援机械"],
+            ((JsonArray)tasks[2].Params["preserve_tags"]!).Select(tag => tag?.GetValue<string>()).ToArray());
+        Assert.False(tasks[2].Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
 
         Assert.Equal(TaskModuleTypes.SingleStep, tasks[3].Type);
         Assert.Empty(tasks[3].Params);
@@ -410,7 +418,7 @@ public sealed class TaskModuleAFeatureTests
     }
 
     [Fact]
-    public async Task GetRecruitParamsAsync_IgnoresUnsupportedLevel6_AndKeepsLegacyEntriesCompatible()
+    public async Task GetRecruitParamsAsync_ReadsConfigOnlyLevel6_AndKeepsLegacyEntriesCompatible()
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -493,9 +501,14 @@ public sealed class TaskModuleAFeatureTests
         var withLevel6 = await queue.GetRecruitParamsAsync(0);
         Assert.True(withLevel6.Success);
         Assert.NotNull(withLevel6.Value);
-        Assert.False(withLevel6.Value!.ChooseLevel6);
+        Assert.True(withLevel6.Value!.ChooseLevel6);
         Assert.True(withLevel6.Value.ChooseLevel4);
         Assert.Equal(530, withLevel6.Value.Level4Time);
+        // 5-star time is fixed at 9:00 regardless of the stored legacy value.
+        Assert.Equal(540, withLevel6.Value.Level5Time);
+        // Legacy skip_robot/confirm [1] still migrate to preserving 支援机械.
+        Assert.True(withLevel6.Value.PreserveTagEnabled);
+        Assert.Equal(["支援机械"], withLevel6.Value.PreserveTags);
 
         var legacy = await queue.GetRecruitParamsAsync(1);
         Assert.True(legacy.Success);
@@ -504,6 +517,8 @@ public sealed class TaskModuleAFeatureTests
         Assert.True(legacy.Value.ChooseLevel4);
         Assert.False(legacy.Value.Refresh);
         Assert.False(legacy.Value.UseExpedited);
+        Assert.True(legacy.Value.PreserveTagEnabled);
+        Assert.Equal(540, legacy.Value.Level5Time);
         Assert.False(service.CurrentConfig.Profiles["Default"].TaskQueue[1].Params.ContainsKey("expedite"));
     }
 
@@ -627,7 +642,10 @@ public sealed class TaskModuleAFeatureTests
             Refresh = false,
             ForceRefresh = true,
             UseExpedited = true,
-            SkipRobot = true,
+            PreserveTagEnabled = true,
+            PreserveTags = ["支援机械", "高级资深干员"],
+            Level3RecruitmentPermitReserveEnabled = true,
+            Level3RecruitmentPermitReserve = 8,
             ChooseLevel3 = true,
             ChooseLevel4 = true,
             ChooseLevel5 = false,
@@ -649,25 +667,31 @@ public sealed class TaskModuleAFeatureTests
         Assert.True(json["expedite"]?.GetValue<bool>());
         Assert.Equal(4, json["times"]?.GetValue<int>());
         Assert.Equal(4, json["expedite_times"]?.GetValue<int>());
-        Assert.True(json["skip_robot"]?.GetValue<bool>());
+        Assert.DoesNotContain("skip_robot", json.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain("_ui_preserve_tags_enabled", json.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.Equal(
+            ["支援机械", "高级资深干员"],
+            ((JsonArray)json["preserve_tags"]!).Select(tag => tag?.GetValue<string>()).ToArray());
+        Assert.Equal(8, json["level3_recruitment_permit_reserve"]?.GetValue<int>());
 
         var confirm = Assert.IsType<JsonArray>(json["confirm"]);
-        Assert.Contains(confirm, item => item?.GetValue<int>() == 1);
+        Assert.DoesNotContain(confirm, item => item?.GetValue<int>() == 1);
         Assert.Contains(confirm, item => item?.GetValue<int>() == 3);
         Assert.Contains(confirm, item => item?.GetValue<int>() == 4);
-        Assert.DoesNotContain(confirm, item => item?.GetValue<int>() == 6);
+        Assert.Contains(confirm, item => item?.GetValue<int>() == 6);
         Assert.DoesNotContain(confirm, item => item?.GetValue<int>() == 5);
 
         var select = Assert.IsType<JsonArray>(json["select"]);
         Assert.Contains(select, item => item?.GetValue<int>() == 4);
-        Assert.DoesNotContain(select, item => item?.GetValue<int>() == 6);
+        Assert.Contains(select, item => item?.GetValue<int>() == 6);
         Assert.DoesNotContain(select, item => item?.GetValue<int>() == 5);
 
         var recruitmentTime = Assert.IsType<JsonObject>(json["recruitment_time"]);
         Assert.Equal(540, recruitmentTime["3"]?.GetValue<int>());
         Assert.Equal(530, recruitmentTime["4"]?.GetValue<int>());
-        Assert.Equal(520, recruitmentTime["5"]?.GetValue<int>());
-        Assert.DoesNotContain("6", recruitmentTime.Select(pair => pair.Key), StringComparer.Ordinal);
+        // 5-star and 6-star times are fixed at 9:00 in WPF dev-v2.
+        Assert.Equal(540, recruitmentTime["5"]?.GetValue<int>());
+        Assert.Equal(540, recruitmentTime["6"]?.GetValue<int>());
         Assert.Equal(
             [
                 "confirm",
@@ -676,7 +700,9 @@ public sealed class TaskModuleAFeatureTests
                 "extra_tags_mode",
                 "first_tags",
                 "force_refresh",
+                "level3_recruitment_permit_reserve",
                 "penguin_id",
+                "preserve_tags",
                 "recruitment_time",
                 "refresh",
                 "report_to_penguin",
@@ -684,7 +710,6 @@ public sealed class TaskModuleAFeatureTests
                 "select",
                 "server",
                 "set_time",
-                "skip_robot",
                 "times",
                 "yituliu_id",
             ],
@@ -858,6 +883,89 @@ public sealed class TaskModuleAFeatureTests
     }
 
     [Fact]
+    public async Task RecruitModule_Save_PreservesConfigOnlyPreserveTagsAndLevel6()
+    {
+        // WPF dev-v2 exposes 6-star auto-confirm and the preserve-tag list only in
+        // the config file; a panel save that changes an unrelated field must not
+        // clear them.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
+        var stored = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        stored["_ui_preserve_tags_enabled"] = true;
+        stored["preserve_tags"] = new JsonArray("支援机械", "高级资深干员");
+        stored["select"] = new JsonArray(4, 6);
+        stored["confirm"] = new JsonArray(3, 4, 6);
+        stored["recruitment_time"] = new JsonObject
+        {
+            ["3"] = 540,
+            ["4"] = 530,
+            ["5"] = 540,
+            ["6"] = 540,
+        };
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(0, stored)).Success);
+
+        var runtime = CreateModuleRuntime(fixture);
+        var module = new RecruitTaskModuleViewModel(runtime, new LocalizedTextMap { Language = "en-us" });
+        await module.BindAsync(0);
+        Assert.True(module.IsTaskBound);
+        Assert.True(module.ChooseLevel6);
+
+        module.Times = 9;
+        Assert.True(await module.SaveAsync());
+
+        var persisted = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.True(persisted["_ui_preserve_tags_enabled"]?.GetValue<bool>());
+        Assert.Equal(
+            ["支援机械", "高级资深干员"],
+            ((JsonArray)persisted["preserve_tags"]!).Select(tag => tag?.GetValue<string>()).ToArray());
+        Assert.Contains(6, ((JsonArray)persisted["select"]!).Select(item => item?.GetValue<int>()));
+        Assert.Contains(6, ((JsonArray)persisted["confirm"]!).Select(item => item?.GetValue<int>()));
+        var recruitmentTime = Assert.IsType<JsonObject>(persisted["recruitment_time"]);
+        Assert.Equal(540, recruitmentTime["6"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task RoguelikeModule_SingleValueSave_PreservesImportedSecondAndThirdStartingOpers()
+    {
+        // The recruit-style single-value panel edits position 1 only; positions 2
+        // and 3 imported from dev-v2 StartingOpers must survive a save.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Roguelike", "rogue")).Success);
+        var stored = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        stored["core_char_list"] = new JsonArray
+        {
+            new JsonObject { ["name"] = "Amiya", ["use_support"] = true },
+            new JsonObject { ["name"] = "Kal'tsit", ["use_support"] = false },
+            new JsonObject { ["name"] = "Exusiai", ["use_support"] = true },
+        };
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(0, stored)).Success);
+
+        var runtime = CreateModuleRuntime(fixture);
+        var module = new RoguelikeModuleViewModel(runtime, new LocalizedTextMap { Language = "en-us" });
+        await module.BindAsync(0);
+        Assert.True(module.IsTaskBound);
+        // Operator aliases are normalized to the battle-data canonical name, which depends
+        // on whether another test already populated the shared cache; only non-empty is stable.
+        Assert.False(string.IsNullOrWhiteSpace(module.CoreChar));
+        Assert.True(module.UseSupport);
+
+        module.CoreChar = "AmiyaGuard";
+        Assert.True(await module.SaveAsync());
+
+        var persisted = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        Assert.DoesNotContain("core_char", persisted.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain("use_support", persisted.Select(pair => pair.Key), StringComparer.Ordinal);
+        var opers = Assert.IsType<JsonArray>(persisted["core_char_list"]);
+        Assert.Equal(3, opers.Count);
+        Assert.Equal("AmiyaGuard", Assert.IsType<JsonObject>(opers[0])["name"]?.GetValue<string>());
+        Assert.True(Assert.IsType<JsonObject>(opers[0])["use_support"]?.GetValue<bool>());
+        Assert.Equal("Kal'tsit", Assert.IsType<JsonObject>(opers[1])["name"]?.GetValue<string>());
+        Assert.False(Assert.IsType<JsonObject>(opers[1])["use_support"]?.GetValue<bool>());
+        Assert.Equal("Exusiai", Assert.IsType<JsonObject>(opers[2])["name"]?.GetValue<string>());
+        Assert.True(Assert.IsType<JsonObject>(opers[2])["use_support"]?.GetValue<bool>());
+    }
+
+    [Fact]
     public void RecruitModule_ResolveFirstTagsForSave_MirrorsFrozenWpfStoredListLifetime()
     {
         // Untouched selection: the stored list persists verbatim, including values that are
@@ -901,21 +1009,43 @@ public sealed class TaskModuleAFeatureTests
     }
 
     [Fact]
-    public async Task QueueEnabledTasks_RecruitIgnoresStalePreserveTagFields()
+    public async Task QueueEnabledTasks_RecruitPreserveTagFieldsReachCore_AndMarkerIsStripped()
     {
         await using var fixture = await TestFixture.CreateAsync();
         Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
-        var staleParams = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
-        staleParams["preserve_tags"] = new JsonArray("支援机械");
-        staleParams["_ui_preserve_tags_enabled"] = true;
-        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(0, staleParams)).Success);
+        var storedParams = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        storedParams["preserve_tags"] = new JsonArray("支援机械", "高级资深干员");
+        storedParams["_ui_preserve_tags_enabled"] = true;
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(0, storedParams)).Success);
 
         var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
 
         Assert.True(queueResult.Success);
         var appended = Assert.Single(fixture.Bridge.AppendedTasks);
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
-        Assert.DoesNotContain("preserve_tags", json.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.Equal(
+            ["支援机械", "高级资深干员"],
+            ((JsonArray)json["preserve_tags"]!).Select(tag => tag?.GetValue<string>()).ToArray());
+        Assert.DoesNotContain("_ui_preserve_tags_enabled", json.Select(pair => pair.Key), StringComparer.Ordinal);
+        Assert.DoesNotContain("skip_robot", json.Select(pair => pair.Key), StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task QueueEnabledTasks_RecruitDisabledPreserveTags_SerializeEmptyArray()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Recruit", "recruit")).Success);
+        var storedParams = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
+        storedParams["preserve_tags"] = new JsonArray("支援机械", "高级资深干员");
+        storedParams["_ui_preserve_tags_enabled"] = false;
+        Assert.True((await fixture.TaskQueue.UpdateTaskParamsAsync(0, storedParams)).Success);
+
+        var queueResult = await fixture.TaskQueue.QueueEnabledTasksAsync();
+
+        Assert.True(queueResult.Success);
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.Empty(Assert.IsType<JsonArray>(json["preserve_tags"]));
         Assert.DoesNotContain("_ui_preserve_tags_enabled", json.Select(pair => pair.Key), StringComparer.Ordinal);
     }
 
@@ -1085,11 +1215,11 @@ public sealed class TaskModuleAFeatureTests
         Assert.True(recruit.Value.ChooseLevel3);
         Assert.False(recruit.Value.ChooseLevel4);
         Assert.True(recruit.Value.ChooseLevel5);
-        Assert.False(recruit.Value.ChooseLevel6);
+        Assert.True(recruit.Value.ChooseLevel6);
         Assert.Equal(["先锋干员"], recruit.Value.FirstTags);
         Assert.Equal(540, recruit.Value.Level3Time);
         Assert.Equal(530, recruit.Value.Level4Time);
-        Assert.Equal(520, recruit.Value.Level5Time);
+        Assert.Equal(540, recruit.Value.Level5Time);
     }
 
     [Fact]
@@ -1507,6 +1637,41 @@ public sealed class TaskModuleAFeatureTests
 
         Assert.Contains("Minimum=\"0\"", element, StringComparison.Ordinal);
         Assert.DoesNotContain("Maximum", element, StringComparison.Ordinal);
+    }
+
+    private static MAAUnifiedRuntime CreateModuleRuntime(TestFixture fixture)
+    {
+        var log = new UiLogService();
+        var diagnostics = new UiDiagnosticsService(fixture.Root, log);
+        var session = new UnifiedSessionService(fixture.Bridge, fixture.Config, log, new SessionStateMachine());
+        var platform = PlatformServicesFactory.CreateDefaults();
+        var platformCapabilityService = new PlatformCapabilityFeatureService(platform, diagnostics);
+        var connectFeatureService = new ConnectFeatureService(session, fixture.Config);
+        return new MAAUnifiedRuntime
+        {
+            CoreBridge = fixture.Bridge,
+            ConfigurationService = fixture.Config,
+            ResourceWorkflowService = new ResourceWorkflowService(fixture.Root, fixture.Bridge, log),
+            SessionService = session,
+            Platform = platform,
+            LogService = log,
+            DiagnosticsService = diagnostics,
+            ConnectFeatureService = connectFeatureService,
+            ShellFeatureService = new ShellFeatureService(connectFeatureService),
+            TaskQueueFeatureService = new TaskQueueFeatureService(session, fixture.Config),
+            CopilotFeatureService = new CopilotFeatureService(),
+            ToolboxFeatureService = new ToolboxFeatureService(),
+            RemoteControlFeatureService = new RemoteControlFeatureService(),
+            PlatformCapabilityService = platformCapabilityService,
+            OverlayFeatureService = new OverlayFeatureService(platformCapabilityService),
+            NotificationProviderFeatureService = new NotificationProviderFeatureService(),
+            SettingsFeatureService = new SettingsFeatureService(fixture.Config, platformCapabilityService, diagnostics),
+            DialogFeatureService = new DialogFeatureService(diagnostics),
+            PostActionFeatureService = new PostActionFeatureService(
+                fixture.Config,
+                diagnostics,
+                platform.PostActionExecutorService),
+        };
     }
 
     private sealed class TestFixture : IAsyncDisposable
