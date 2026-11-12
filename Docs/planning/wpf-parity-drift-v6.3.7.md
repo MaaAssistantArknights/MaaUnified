@@ -306,3 +306,8 @@
 - P1-27：小游戏分类/分派与 AutoRaisePotential、EventShop 任务名已在工具箱链路落地（本轮仅核验，无代码改动）。
 
 P1-07 渠道实例化仍未做：WPF dev-v2 的 `ExternalNotification.Configs` 是按 provider 类型多态的 `$type` 数组，逐类映射需同步 9 个 provider 的模型与加密字段，改动面大且易破坏现有通知发送链路；当前仍以固定 provider + `Enabled` CSV 写回，单实例能力完整。
+
+## 第四轮补缺（2026-11-12）
+
+- P1-07 读侧落地：`ExternalNotificationChannels.ResolveEnabled` 优先解析 WPF `Gui.ExternalNotification.Configs` 的多态 `$type` 数组（Smtp/ServerChan/Bark/Discord/DingTalk/Telegram/Qmsg/Gotify/CustomWebhook，PascalCase 字段映射），支持同类型多实例发送；数组未知或损坏时回退 `Enabled` CSV + 扁平键。WPF 写入的加密凭据不做解密，发送失败会显式暴露。写侧（MAAUnified 自己的多实例编辑/保存）仍未做，UI 仍按 provider 单实例编辑。
+- P1-33 收尾：`SettingsGuideDemoAction` 补 `ReorderTheme`、`AddNightTheme` 两个 gate（与 WPF dev-v2 的 9 个 gate 对齐），五语言文案同步。
