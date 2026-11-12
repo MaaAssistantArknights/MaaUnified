@@ -296,3 +296,13 @@
 - P1-32 `Common.NotAdapted` 只提供链式能力，`BlackFlow` 主题未引入。
 - P1-33 演示已覆盖 7 个 gate（含拖拽排序入口），未 1:1 复刻 WPF 的全部拖拽细节。
 - P1-04 macOS/Linux 锁屏为占位降级；P0-12 Windows 真实 `MAA.Updater.exe` 端到端未在 macOS 验证。
+
+## 第三轮补缺（2026-11-12）
+
+- P0-13：新增"导入本地更新包"入口（文件选择、包名/平台/架构校验、同版本完整包修复提示），与既有外部更新器委托、失败标记、强制完整包路径衔接。
+- P1-04：macOS 锁屏改走系统 `CGSession -suspend`（存在即支持，缺失显式降级）；Linux 保留 loginctl/xdg-screensaver。
+- P1-31：六份 `UiTexts*.resx` 按 key 字节序全量重排，本地化审计基线随之归零乱序预算。
+- P1-32：引入 `BlackFlow`（黑流树海）肉鸽主题，非官服/B 服客户端显示 `Common.NotAdapted` 后缀，客户端切换后刷新条目。
+- P1-27：小游戏分类/分派与 AutoRaisePotential、EventShop 任务名已在工具箱链路落地（本轮仅核验，无代码改动）。
+
+P1-07 渠道实例化仍未做：WPF dev-v2 的 `ExternalNotification.Configs` 是按 provider 类型多态的 `$type` 数组，逐类映射需同步 9 个 provider 的模型与加密字段，改动面大且易破坏现有通知发送链路；当前仍以固定 provider + `Enabled` CSV 写回，单实例能力完整。
