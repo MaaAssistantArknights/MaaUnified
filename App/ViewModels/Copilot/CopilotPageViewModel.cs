@@ -55,6 +55,9 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
     private int? _activeItemCoreTaskId;
     private string? _activeTaskChain;
     private bool _hasActiveRun;
+    // WPF parity (AsstProxy.AllTasksCompleted Copilot branch, baa0032f70): the Copilot owner
+    // launches the end script once per run and only when ｢自动战斗时启用结束脚本｣ is on.
+    private int _stopScriptLaunched;
     private bool _isStartRequestActive;
     private bool _isStopRequestActive;
     private readonly object _startRequestGate = new();
@@ -790,6 +793,20 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
+        if (Runtime.RequiresRestart)
+        {
+            // WPF parity (Bootstrapper.TryGetTaskBlockReason): a stop timeout or a removed GPU
+            // inference device leaves Core untrusted; Copilot is gated like the main queue.
+            LastErrorMessage = RootTexts.GetOrDefault(
+                "RestartRecommendation",
+                "It is recommended to restart MAA to restore normal state");
+            await RecordFailedResultAsync(
+                "Copilot.Start.RequiresRestart",
+                UiOperationResult.Fail(UiErrorCode.RequiresRestart, LastErrorMessage),
+                cancellationToken);
+            return;
+        }
+
         if (!CanStart)
         {
             var sessionActivityBlocked = _connectionState?.IsSessionOperationActive == true
@@ -954,6 +971,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         _activeItemName = activeItemName;
         _activeItemCoreTaskId = taskId;
         _activeTaskChain = taskChain;
+        Interlocked.Exchange(ref _stopScriptLaunched, 0);
         _hasActiveRun = true;
         foreach (var item in Items.Where(item => item.IsChecked || string.Equals(item.Name, activeItemName, StringComparison.Ordinal)))
         {
@@ -1093,6 +1111,10 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 return;
             }
 
+            // WPF parity (TaskQueueViewModel.StopManuallyAsync): a Copilot-owned manual stop
+            // shares the run-scoped end-script launch right with the completion callback.
+            var copilotOwnedRun = Runtime.SessionService.IsRunOwner(CopilotRunOwner);
+            var stopConfirmed = false;
             if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
             {
                 var owner = Runtime.SessionService.CurrentRunOwner;
@@ -1122,10 +1144,18 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                     SyncStoppedUiStateIfSessionNotActive();
                     return;
                 }
+
+                stopConfirmed = true;
             }
             else if (Runtime.SessionService.IsRunOwner(CopilotRunOwner))
             {
                 Runtime.SessionService.EndRun(CopilotRunOwner);
+                stopConfirmed = true;
+            }
+
+            if (copilotOwnedRun && stopConfirmed)
+            {
+                TryLaunchCopilotEndScriptOnce(manualStop: true);
             }
 
             CurrentSessionState = Runtime.SessionService.CurrentState;
@@ -1626,6 +1656,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                         GetRootText("CompleteTask", "Complete task: ")
                         + GetRootText(finishedChain, finishedChain),
                         "copilot completion");
+                    TryLaunchCopilotEndScriptOnce(manualStop: false);
                 }
                 CompleteActiveRun();
                 break;
@@ -1674,6 +1705,78 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 Runtime.LogService.Error($"Failed to dispatch {reason} notification: {ex.Message}");
             }
         });
+    }
+
+    /// <summary>
+    /// WPF parity (AsstProxy.AllTasksCompleted Copilot branch): the Copilot run owns the end
+    /// script launch slot for this run, and it only fires when ｢自动战斗时启用结束脚本｣ is on.
+    /// </summary>
+    private void TryLaunchCopilotEndScriptOnce(bool manualStop)
+    {
+        // WPF parity: ｢自动战斗时启用结束脚本｣ gates both paths, and a manual stop is
+        // additionally gated by ｢手动停止时启用结束脚本｣.
+        if (!ReadCopilotWithScriptSetting()
+            || (manualStop && !ReadManualStopWithScriptSetting())
+            || Interlocked.CompareExchange(ref _stopScriptLaunched, 1, 0) != 0)
+        {
+            return;
+        }
+
+        _ = RunCopilotEndScriptAsync();
+    }
+
+    private bool ReadManualStopWithScriptSetting()
+    {
+        return ReadBooleanSetting(LegacyConfigurationKeys.ManualStopWithScript);
+    }
+
+    private async Task RunCopilotEndScriptAsync()
+    {
+        try
+        {
+            var result = await Runtime.PostActionFeatureService.ExecuteEndScriptAsync(manualStop: false);
+            if (!result.Success)
+            {
+                Runtime.LogService.Warn($"Copilot: end script failed: {result.Message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Runtime.LogService.Warn($"Copilot: end script threw: {ex.Message}");
+        }
+    }
+
+    private bool ReadCopilotWithScriptSetting()
+    {
+        return ReadBooleanSetting(LegacyConfigurationKeys.CopilotWithScript);
+    }
+
+    private bool ReadBooleanSetting(string key)
+    {
+        var service = Runtime.ConfigurationService;
+        var config = service.CurrentConfig;
+        JsonNode? node = null;
+        if (service.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values.TryGetValue(key, out node);
+        }
+
+        if (node is null)
+        {
+            config.GlobalValues.TryGetValue(key, out node);
+        }
+
+        if (node is not JsonValue value)
+        {
+            return false;
+        }
+
+        if (value.TryGetValue(out bool boolean))
+        {
+            return boolean;
+        }
+
+        return value.TryGetValue(out string? text) && bool.TryParse(text, out boolean) && boolean;
     }
 
     private bool ReadUseSystemNotificationSetting()

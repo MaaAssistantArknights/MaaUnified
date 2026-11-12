@@ -45,6 +45,9 @@ public sealed class BaselineOwnershipContractTests
         ("Penguin.", "Settings.Game"),
         ("Yituliu.", "Settings.Game"),
         ("TimeOut.", "Settings.Game"),
+        // Avalonia extension keys for the dev-v2 stall detection and single-run duration limit
+        // (WPF dev-v2 24639a0fdd / 5a55fc8ac1); both are owned by the game settings page.
+        ("RuntimeSettings.", "Settings.Game"),
         ("HotKeys", "Settings.HotKey"),
         ("Performance.", "Settings.Performance"),
         ("RemoteControl.", "Settings.RemoteControl"),

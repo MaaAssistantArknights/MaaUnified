@@ -647,6 +647,308 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
+    public async Task Callback_AllTasksCompleted_WithTaskQueueOwner_ShouldRunPostActionsForAnyQueuedModule()
+    {
+        // WPF dev-v2 baa0032f70/91cdccbb17: completion is judged by the run owner, not by a
+        // task-type whitelist. A Custom entry queued in the main queue must still finish the
+        // run (post actions + end script), which the old _mainTaskTypes whitelist skipped.
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Custom", "custom")).Success);
+        var profile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles[
+            fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile];
+        profile.Values[LegacyConfigurationKeys.EndsWithScript] = JsonValue.Create("after.cmd");
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        Assert.True(fixture.Runtime.SessionService.TryAcquireRun("TaskQueue", out var lease, out _));
+
+        await InvokeCallbackCoreAsync(
+            vm,
+            new CoreCallbackEvent(
+                7,
+                "AllTasksCompleted",
+                """{"task_chain":"Custom","task_id":7,"run_id":"run-owner-completion","finished_tasks":[7]}""",
+                DateTimeOffset.UtcNow),
+            lease);
+
+        Assert.Equal(1, fixture.PostAction.ExecuteCount);
+        Assert.Equal(1, fixture.PostAction.EndScriptExecuteCount);
+        Assert.Equal([false], fixture.PostAction.EndScriptManualStopValues);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+
+        // End script launch slot is per run: neither another manual nor natural request repeats it.
+        await vm.RunStopScriptOnceAsync(manualStop: true);
+        await vm.RunStopScriptOnceAsync(manualStop: false);
+        Assert.Equal(1, fixture.PostAction.EndScriptExecuteCount);
+    }
+
+    [Fact]
+    public async Task StopAsync_ManualStop_ShouldLaunchEndScriptExactlyOncePerRun()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles[
+            fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile];
+        profile.Values[LegacyConfigurationKeys.ManualStopWithScript] = JsonValue.Create(true);
+        profile.Values[LegacyConfigurationKeys.EndsWithScript] = JsonValue.Create("after.cmd");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+
+        await vm.StopAsync();
+
+        Assert.Equal(1, fixture.PostAction.EndScriptExecuteCount);
+        Assert.Equal([true], fixture.PostAction.EndScriptManualStopValues);
+
+        // Repeated requests in the same run must not launch it again.
+        await vm.RunStopScriptOnceAsync(manualStop: true);
+        await vm.RunStopScriptOnceAsync(manualStop: false);
+        Assert.Equal(1, fixture.PostAction.EndScriptExecuteCount);
+    }
+
+    [Fact]
+    public async Task StopAsync_WhenCoreDoesNotSettle_ShouldForceCollectRequireRestartAndBlockNextStart()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+        Assert.True(vm.IsRunning);
+
+        fixture.Bridge.StopStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Bridge.StopRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Bridge.IgnoreStopCancellation = true;
+        vm.StopConfirmTimeout = TimeSpan.FromMilliseconds(120);
+
+        await vm.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        // WPF TaskQueueViewModel.Stop timeout branch: UI returns to idle, the session is force
+        // collected and the requires-restart bit is set for reuse by other failure paths.
+        Assert.False(vm.IsRunning);
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+        Assert.True(fixture.Runtime.RequiresRestart);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        var stopTimeoutText = vm.RootTexts.GetOrDefault("StopTimeout", "StopTimeout");
+        Assert.Contains(
+            vm.LogCards.SelectMany(card => card.Items),
+            item => item.Content.Contains(stopTimeoutText, StringComparison.Ordinal));
+        var restartText = vm.RootTexts.GetOrDefault("RestartRecommendation", "RestartRecommendation");
+        Assert.Contains(
+            vm.LogCards.SelectMany(card => card.Items),
+            item => item.Content.Contains(restartText, StringComparison.Ordinal));
+
+        // Every start entry is now blocked until the process restarts.
+        var startCallsBefore = fixture.Bridge.StartCallCount;
+        await vm.StartAsync();
+        Assert.Equal(startCallsBefore, fixture.Bridge.StartCallCount);
+        Assert.Equal(restartText, vm.LastErrorMessage);
+
+        fixture.Bridge.StopRelease.TrySetResult(true);
+    }
+
+    [Fact]
+    public async Task StopAsync_StopTimeout_LateNativeResult_ShouldNotResurrectRunningState()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        await vm.StartAsync();
+
+        fixture.Bridge.StopStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Bridge.StopRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Bridge.IgnoreStopCancellation = true;
+        vm.StopConfirmTimeout = TimeSpan.FromMilliseconds(120);
+
+        await vm.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+
+        // The hung native stop settles later; it must not move the recovered session back.
+        fixture.Bridge.StopRelease.TrySetResult(true);
+        await Task.Delay(200);
+        Assert.Equal(SessionState.Idle, fixture.Runtime.SessionService.CurrentState);
+        Assert.False(vm.IsRunning);
+    }
+
+    [Fact]
+    public async Task RunDurationLimit_Reached_ShouldStopAndRunPostActionsOnce()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles[
+            fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile];
+        profile.Values[LegacyConfigurationKeys.EnableRunDurationLimit] = JsonValue.Create(true);
+        profile.Values[LegacyConfigurationKeys.RunDurationLimitMinutes] = JsonValue.Create(1);
+        profile.Values[LegacyConfigurationKeys.RunDurationLimitExecutePostActions] = JsonValue.Create(true);
+        profile.Values[LegacyConfigurationKeys.ManualStopWithScript] = JsonValue.Create(true);
+        profile.Values[LegacyConfigurationKeys.EndsWithScript] = JsonValue.Create("after.cmd");
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SettingsMinuteUnit = TimeSpan.FromMilliseconds(40);
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+
+        Assert.True(await WaitForConditionAsync(
+            () => fixture.Bridge.StopCallCount == 1 && !vm.IsRunning,
+            retry: 200,
+            delayMs: 20));
+        Assert.True(await WaitForConditionAsync(() => fixture.PostAction.ExecuteCount == 1, retry: 100, delayMs: 20));
+        Assert.Equal(1, fixture.PostAction.EndScriptExecuteCount);
+        Assert.Equal([true], fixture.PostAction.EndScriptManualStopValues);
+        Assert.NotEqual(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+    }
+
+    [Fact]
+    public async Task StallDetection_WarnsAfterNoOutputAndResetsOnActivity()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var profile = fixture.Runtime.ConfigurationService.CurrentConfig.Profiles[
+            fixture.Runtime.ConfigurationService.CurrentConfig.CurrentProfile];
+        profile.Values[LegacyConfigurationKeys.StallTimeoutEnabled] = JsonValue.Create(true);
+        profile.Values[LegacyConfigurationKeys.StallTimeoutMinutes] = JsonValue.Create(4);
+        // 25 settings-minutes = 1 s here: long enough that the third warning cannot race the
+        // second-warning assertion, short enough for a fast test.
+        profile.Values[LegacyConfigurationKeys.ReminderIntervalMinutes] = JsonValue.Create(25);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        vm.SettingsMinuteUnit = TimeSpan.FromMilliseconds(40);
+        await vm.StartAsync();
+        Assert.Equal(SessionState.Running, fixture.Runtime.SessionService.CurrentState);
+
+        // Activity (any log line) restarts the stall watch: keep logging past the original
+        // 4-minute deadline (160 ms); the warning must not fire while output keeps flowing.
+        for (var i = 0; i < 6; i++)
+        {
+            await Task.Delay(50);
+            vm.AppendSystemLog($"activity {i}");
+        }
+
+        Assert.Equal(0, fixture.NotificationTracker.NotificationCallCount);
+
+        var stallFormat = vm.RootTexts.GetOrDefault("TaskQueue.Stall.Warning", "TaskQueue.Stall.Warning");
+        Assert.True(await WaitForConditionAsync(
+            () => fixture.NotificationTracker.NotificationCallCount >= 1,
+            retry: 100,
+            delayMs: 20));
+        Assert.Equal(string.Format(stallFormat, 4, 4), fixture.NotificationTracker.LastTitle);
+
+        // Subsequent warnings follow the reminder interval and keep accumulating minutes.
+        Assert.True(await WaitForConditionAsync(
+            () => fixture.NotificationTracker.NotificationCallCount >= 2,
+            retry: 200,
+            delayMs: 20));
+        Assert.Equal(string.Format(stallFormat, 4, 29), fixture.NotificationTracker.LastTitle);
+    }
+
+    [Fact]
+    public async Task TaskChainError_OutOfMemory_ShouldUseDedicatedMessage()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackCoreAsync(
+            vm,
+            new CoreCallbackEvent(
+                5,
+                "TaskChainError",
+                """{"taskchain":"Fight","task_id":5,"details":{"error":"OutOfMemory"}}""",
+                DateTimeOffset.UtcNow),
+            null);
+
+        var marker = vm.RootTexts
+            .GetOrDefault("OutOfMemoryError", "OutOfMemoryError")
+            .Replace("{0}", string.Empty, StringComparison.Ordinal)
+            .Trim();
+        Assert.Contains(
+            vm.LogCards.SelectMany(card => card.Items),
+            item => item.Content.Contains(marker, StringComparison.Ordinal));
+        Assert.False(fixture.Runtime.RequiresRestart);
+    }
+
+    [Fact]
+    public async Task TaskChainError_GpuDeviceRemoved_ShouldRequireRestartAndBlockNextStart()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackCoreAsync(
+            vm,
+            new CoreCallbackEvent(
+                6,
+                "TaskChainError",
+                """{"taskchain":"Fight","task_id":6,"details":{"error":"GpuDeviceRemoved"}}""",
+                DateTimeOffset.UtcNow),
+            null);
+
+        Assert.True(fixture.Runtime.RequiresRestart);
+        var marker = vm.RootTexts
+            .GetOrDefault("GpuDeviceRemovedRestartRequired", "GpuDeviceRemovedRestartRequired")
+            .Replace("{0}", string.Empty, StringComparison.Ordinal)
+            .Replace("{key=RestartRecommendation}", string.Empty, StringComparison.Ordinal)
+            .Trim();
+        Assert.Contains(
+            vm.LogCards.SelectMany(card => card.Items),
+            item => item.Content.Contains(marker, StringComparison.Ordinal));
+
+        var startCallsBefore = fixture.Bridge.StartCallCount;
+        await vm.StartAsync();
+        Assert.Equal(startCallsBefore, fixture.Bridge.StartCallCount);
+        Assert.Equal(
+            vm.RootTexts.GetOrDefault("RestartRecommendation", "RestartRecommendation"),
+            vm.LastErrorMessage);
+    }
+
+    [Fact]
+    public async Task ConnectionInfo_ResolutionChanged_ShouldLogErrorWithNewResolution()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackCoreAsync(
+            vm,
+            new CoreCallbackEvent(
+                8,
+                "ConnectionInfo",
+                """{"what":"ResolutionChanged","details":{"width":1920,"height":1080}}""",
+                DateTimeOffset.UtcNow),
+            null);
+
+        var message = vm.RootTexts.GetOrDefault("ResolutionChanged", "ResolutionChanged");
+        Assert.Contains(
+            vm.LogCards.SelectMany(card => card.Items),
+            item => item.Content.Contains(message, StringComparison.Ordinal)
+                    && item.Content.Contains("1920x1080", StringComparison.Ordinal)
+                    && string.Equals(item.Level, "ERROR", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void CoreBridge_DefaultStopTimeout_ShouldMatchWpfSixtySecondStopBudget()
     {
         var field = typeof(MaaCoreBridgeNative).GetField("DefaultStopTimeout", BindingFlags.Static | BindingFlags.NonPublic);
@@ -846,6 +1148,12 @@ public sealed class TaskQueueG2FeatureTests
             """{"finished_tasks":[1],"run_id":"slow-terminal"}""",
             DateTimeOffset.UtcNow));
         Assert.True(await WaitForConditionAsync(() => fixture.Runtime.SessionService.CurrentState == SessionState.Connected));
+        // The callback handler resumes on the UI dispatcher after its awaited event/log writes,
+        // so keep pumping instead of blocking on the post-action signal directly.
+        Assert.True(await WaitForConditionAsync(
+            () => fixture.PostAction.ExecutionStarted.Task.IsCompleted,
+            retry: 200,
+            delayMs: 20));
         await fixture.PostAction.ExecutionStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
         // WPF parity: AsstProxy marks the run idle (SetIdle(true)) before firing
@@ -2039,8 +2347,12 @@ public sealed class TaskQueueG2FeatureTests
             """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-notify","finished_tasks":[3]}""",
             DateTimeOffset.UtcNow);
 
-        await InvokeCallbackAsync(vm, callback);
-        await InvokeCallbackAsync(vm, callback);
+        // WPF dev-v2: AllTasksCompleted counts as a main queue completion only for the run
+        // ownership that started it; the test drives the callback directly, so it declares
+        // the owner the way StartAsync would.
+        Assert.True(fixture.Runtime.SessionService.TryAcquireRun("TaskQueue", out var terminalLease, out _));
+        await InvokeCallbackCoreAsync(vm, callback, terminalLease);
+        await InvokeCallbackCoreAsync(vm, callback, terminalLease);
 
         Assert.True(await WaitForConditionAsync(() => fixture.NotificationTracker.NotificationCallCount == 1));
         Assert.Equal(1, fixture.NotificationTracker.NotificationCallCount);
@@ -2118,8 +2430,11 @@ public sealed class TaskQueueG2FeatureTests
             """{"task_chain":"Fight","task_index":0,"run_id":"run-g2","finished_tasks":[3]}""",
             DateTimeOffset.UtcNow);
 
-        await InvokeCallbackAsync(vm, callback);
-        await InvokeCallbackAsync(vm, callback);
+        // Owner-scoped completion (WPF dev-v2 baa0032f70): a main-queue run resets every item
+        // and never projects finished ids as Success.
+        Assert.True(fixture.Runtime.SessionService.TryAcquireRun("TaskQueue", out var terminalLease, out _));
+        await InvokeCallbackCoreAsync(vm, callback, terminalLease);
+        await InvokeCallbackCoreAsync(vm, callback, terminalLease);
 
         Assert.All(vm.Tasks, task => Assert.Equal(TaskQueueItemStatus.Idle, task.Status));
         Assert.Equal(1, fixture.PostAction.ExecuteCount);
@@ -3311,6 +3626,12 @@ public sealed class TaskQueueG2FeatureTests
 
         public string? StopFailureMessage { get; set; }
 
+        public TaskCompletionSource<bool>? StopStarted { get; set; }
+
+        public TaskCompletionSource<bool>? StopRelease { get; set; }
+
+        public bool IgnoreStopCancellation { get; set; }
+
         public int? ThrowAppendCallNumber { get; set; }
 
         public int? FailAppendCallNumber { get; set; }
@@ -3411,6 +3732,19 @@ public sealed class TaskQueueG2FeatureTests
         public async Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
         {
             StopCallCount++;
+            StopStarted?.TrySetResult(true);
+            if (StopRelease is not null)
+            {
+                if (IgnoreStopCancellation)
+                {
+                    await StopRelease.Task;
+                }
+                else
+                {
+                    await StopRelease.Task.WaitAsync(cancellationToken);
+                }
+            }
+
             if (StartRelease is not null && StartStarted?.Task.IsCompleted == true)
             {
                 await StartRelease.Task.WaitAsync(cancellationToken);
@@ -3667,6 +4001,19 @@ public sealed class TaskQueueG2FeatureTests
     private sealed class CountingPostActionFeatureService : IPostActionFeatureService
     {
         public int ExecuteCount { get; private set; }
+
+        public int EndScriptExecuteCount { get; private set; }
+
+        public List<bool> EndScriptManualStopValues { get; } = [];
+
+        public Task<UiOperationResult> ExecuteEndScriptAsync(
+            bool manualStop,
+            CancellationToken cancellationToken = default)
+        {
+            EndScriptExecuteCount++;
+            EndScriptManualStopValues.Add(manualStop);
+            return Task.FromResult(UiOperationResult.Ok("End script executed."));
+        }
 
         public TaskCompletionSource<bool>? ExecutionStarted { get; set; }
 

@@ -6100,4 +6100,43 @@ A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created b
   <data name="Toolbox.Error.SessionActivity.OtherActive" xml:space="preserve">
     <value>Another session operation is active. Toolbox cannot start until it is stopped or finishes.</value>
   </data>
+  <data name="StopTimeout" xml:space="preserve">
+    <value>Stop timed out: Core did not respond to the stop request in time</value>
+  </data>
+  <data name="RestartRecommendation" xml:space="preserve">
+    <value>It is recommended to restart MAA to restore normal state</value>
+  </data>
+  <data name="OutOfMemoryError" xml:space="preserve">
+    <value>The {0} task stopped due to insufficient memory. Close some programs or restart MAA and try again</value>
+  </data>
+  <data name="GpuDeviceRemovedRestartRequired" xml:space="preserve">
+    <value>The {0} task stopped because the GPU inference device became unavailable, possibly after a graphics driver update or GPU reset. {key=RestartRecommendation}</value>
+  </data>
+  <data name="ResolutionChanged" xml:space="preserve">
+    <value>Emulator resolution has changed, connection closed. Please restart the task to apply the new resolution</value>
+  </data>
+  <data name="ResolutionNotSupportedCurrentResolution" xml:space="preserve">
+    <value>Current resolution: {0}x{1}</value>
+  </data>
+  <data name="TaskQueue.Stall.Warning" xml:space="preserve">
+    <value>Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running; if so, you can ignore this warning. If the task is unresponsive, manual intervention may be required.</value>
+  </data>
+  <data name="TaskQueue.RunDurationLimit.Reached" xml:space="preserve">
+    <value>Run duration limit ({0} min) reached, stopping tasks</value>
+  </data>
+  <data name="Settings.Game.EnableStallTimeout" xml:space="preserve">
+    <value>Detect stalled log updates</value>
+  </data>
+  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
+    <value>Log output stall timeout (min)</value>
+  </data>
+  <data name="Settings.Game.EnableRunDurationLimit" xml:space="preserve">
+    <value>Limit run duration</value>
+  </data>
+  <data name="Settings.Game.RunDurationLimitMinutes" xml:space="preserve">
+    <value>Run duration limit (min)</value>
+  </data>
+  <data name="Settings.Game.RunDurationLimitExecutePostActions" xml:space="preserve">
+    <value>Run completion actions after stopping</value>
+  </data>
 </root>

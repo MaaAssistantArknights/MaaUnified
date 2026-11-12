@@ -259,13 +259,22 @@ public static class ConfigurationKeys
 
     public const string EnableYituliu = "Yituliu.EnableYituliu";
 
+    // Retired: WPF dev-v2 replaced the task-run timeout with log-stall detection
+    // (24639a0fdd). The constant stays so old configs and the baseline key vocabulary keep
+    // resolving; nothing reads it anymore.
     public const string TaskTimeoutMinutes = "TimeOut.Timer.TaskTimeoutMinutes";
     public const string ReminderIntervalMinutes = "TimeOut.Timer.ReminderIntervalMinutes";
 
-    // Retired MAAUnified-only stall-detection keys (never existed in WPF). The constants remain
-    // so the baseline key vocabulary stays stable; the settings UI and runtime no longer read them.
+    // WPF dev-v2 Gui.Notification.{EnableStallTimeout,StallTimeoutMinutes,ReminderIntervalMinutes}
+    // (24639a0fdd). MAAUnified keeps its historical flat TimeOut.Timer vocabulary so already
+    // persisted values keep working.
     public const string StallTimeoutMinutes = "TimeOut.Timer.StallTimeoutMinutes";
     public const string StallTimeoutEnabled = "TimeOut.Timer.StallTimeoutEnabled";
+
+    // WPF dev-v2 Gui.RuntimeSettings (5a55fc8ac1): single-run duration limit.
+    public const string EnableRunDurationLimit = "RuntimeSettings.EnableRunDurationLimit";
+    public const string RunDurationLimitMinutes = "RuntimeSettings.RunDurationLimitMinutes";
+    public const string RunDurationLimitExecutePostActions = "RuntimeSettings.RunDurationLimitExecutePostActions";
 
     public const string BluestacksConfigPath = "Bluestacks.Config.Path";
     public const string BluestacksConfigKeyword = "Bluestacks.Config.Keyword";

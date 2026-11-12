@@ -80,6 +80,38 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
 
     public IAppLifecycleService AppLifecycleService { get; set; } = new NoOpAppLifecycleService();
 
+    private int _requiresRestart;
+
+    /// <summary>
+    /// Gets a value indicating whether this session must be restarted before new tasks may run.
+    /// WPF parity (<c>Bootstrapper.RequiresRestart</c>): a stop timeout force collect leaves Core
+    /// in an untrusted state (it may still be hung and re-emit late callbacks), and a DirectML
+    /// device removal makes the GPU inference device unavailable. Both cases block every task
+    /// start until the process restarts. Process-scoped, so restarting clears it.
+    /// </summary>
+    public bool RequiresRestart => Volatile.Read(ref _requiresRestart) != 0;
+
+    /// <summary>
+    /// Gets the diagnostic reason recorded when <see cref="RequiresRestart"/> was first set.
+    /// </summary>
+    public string? RequiresRestartReason { get; private set; }
+
+    /// <summary>
+    /// Marks the current session as requiring a restart. Idempotent: the first reason wins.
+    /// </summary>
+    /// <param name="reason">Diagnostic reason (scope or Core exception kind).</param>
+    public void MarkRequiresRestart(string reason)
+    {
+        var normalized = string.IsNullOrWhiteSpace(reason) ? "unspecified" : reason.Trim();
+        if (Interlocked.Exchange(ref _requiresRestart, 1) == 1)
+        {
+            return;
+        }
+
+        RequiresRestartReason = normalized;
+        LogService.Warn($"Runtime requires restart: {normalized}. Further task starts are blocked until the process restarts.");
+    }
+
     public async ValueTask DisposeAsync()
     {
         // WPF parity (Bootstrapper.Release -> SettingsViewModel.Sober): restore the sober language

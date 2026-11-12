@@ -5253,4 +5253,43 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="Toolbox.Error.SessionActivity.OtherActive" xml:space="preserve">
     <value>別のセッション操作を実行中です。停止するか完了するまで Toolbox を開始できません。</value>
   </data>
+  <data name="StopTimeout" xml:space="preserve">
+    <value>停止がタイムアウトしました。Core が停止要求に応答しませんでした</value>
+  </data>
+  <data name="RestartRecommendation" xml:space="preserve">
+    <value>MAA を再起動して正常な状態に戻すことをお勧めします</value>
+  </data>
+  <data name="OutOfMemoryError" xml:space="preserve">
+    <value>メモリ不足により{0}タスクが停止しました。他のプログラムを閉じるか、MAA を再起動してもう一度お試しください</value>
+  </data>
+  <data name="GpuDeviceRemovedRestartRequired" xml:space="preserve">
+    <value>{0}タスクは GPU 推論デバイスが無効になったため停止しました。グラフィックスドライバーの更新または GPU のリセットが原因の可能性があります。{key=RestartRecommendation}</value>
+  </data>
+  <data name="ResolutionChanged" xml:space="preserve">
+    <value>エミュレーターの解像度が変更されたため、接続を切断しました。タスクを再起動して新しい解像度を適用してください</value>
+  </data>
+  <data name="ResolutionNotSupportedCurrentResolution" xml:space="preserve">
+    <value>現在の解像度: {0}x{1}</value>
+  </data>
+  <data name="TaskQueue.Stall.Warning" xml:space="preserve">
+    <value>タスクログ出力が {0} 分間更新されていません（現在 {1} 分間停滞）。タスクが正常に実行中か確認してください。正常であればこの警告は無視できます。応答がない場合は、手動での操作が必要になる可能性があります。</value>
+  </data>
+  <data name="TaskQueue.RunDurationLimit.Reached" xml:space="preserve">
+    <value>実行時間の上限（{0} 分）に達したため、タスクを停止します</value>
+  </data>
+  <data name="Settings.Game.EnableStallTimeout" xml:space="preserve">
+    <value>ログ更新の停滞検出を有効にする</value>
+  </data>
+  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
+    <value>ログ出力停滞タイムアウト（分）</value>
+  </data>
+  <data name="Settings.Game.EnableRunDurationLimit" xml:space="preserve">
+    <value>1回の実行時間を制限する</value>
+  </data>
+  <data name="Settings.Game.RunDurationLimitMinutes" xml:space="preserve">
+    <value>実行時間の上限（分）</value>
+  </data>
+  <data name="Settings.Game.RunDurationLimitExecutePostActions" xml:space="preserve">
+    <value>停止後に完了後の動作を実行する</value>
+  </data>
 </root>

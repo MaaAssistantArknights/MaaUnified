@@ -195,6 +195,12 @@ public sealed class UnifiedSessionService
     private long _runBoundaryCallbackWatermark;
     private bool _ignoreIdleConnectionCallbacks;
     private bool _taskQueueTainted;
+    // WPF parity (TaskQueueViewModel.Stop timeout branch): a native stop that does not
+    // settle within the caller's wait window leaves Core untrusted. Every stop attempt
+    // takes a sequence number; a timeout force collect records the latest one so the
+    // still-pending StopAsync cannot move the state machine afterwards.
+    private long _stopAttemptSequence;
+    private long _forceCollectedStopSequence = -1;
 
     private sealed record OneShotRecruitExpediteSnapshot(
         UnifiedTaskItem Task,
@@ -1545,6 +1551,7 @@ public sealed class UnifiedSessionService
     public async Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
     {
         _logService.Debug($"Session.Stop requested: state={CurrentState}");
+        var stopAttempt = Interlocked.Increment(ref _stopAttemptSequence);
 
         var stopRequestedDuringConnect = CurrentState == SessionState.Connecting;
         if (stopRequestedDuringConnect)
@@ -1577,6 +1584,12 @@ public sealed class UnifiedSessionService
             }
             catch (OperationCanceledException)
             {
+                if (IsStopAttemptSupersededByTimeoutForceCollect(stopAttempt))
+                {
+                    _logService.Warn("Session.Stop was canceled after a stop-timeout force collect; state left untouched.");
+                    throw;
+                }
+
                 // The bridge re-checks the caller token in its post-stop not-running
                 // probe, so a cancellation landing after AsstStop already succeeded
                 // surfaces here with the batch already stopped. Never strand the
@@ -1587,6 +1600,15 @@ public sealed class UnifiedSessionService
                 var canceledFallback = await ResolveFailureStateAsync("Session.Stop", SessionState.Connected, CancellationToken.None);
                 MoveToState(canceledFallback, "Session.Stop", "stop-canceled-fallback");
                 throw;
+            }
+
+            if (IsStopAttemptSupersededByTimeoutForceCollect(stopAttempt))
+            {
+                // The caller already gave up and forced the session back to Idle; a late
+                // native stop result must not rewrite that recovered state.
+                _logService.Warn(
+                    $"Session.Stop settled after a stop-timeout force collect; state left as {CurrentState}: success={result.Success}, error={result.Error?.Code} {result.Error?.Message}");
+                return result;
             }
 
             if (result.Success)
@@ -1628,6 +1650,53 @@ public sealed class UnifiedSessionService
             _connectionOperationLock.Release();
         }
     }
+
+    /// <summary>
+    /// Forces the session back to <see cref="SessionState.Idle"/> after the caller's stop wait
+    /// window expired while the native stop was still pending (Core unresponsive).
+    /// WPF parity: <c>TaskQueueViewModel.Stop</c> calls <c>SetStopped()</c> on timeout so the UI
+    /// can never stay stuck in ｢running｣; the same recovery happens here, plus the run owner is
+    /// released and the in-flight <see cref="StopAsync"/> result is ignored.
+    /// </summary>
+    /// <param name="scope">Diagnostic scope recorded in the runtime log.</param>
+    /// <returns><see langword="true"/> when an active run was actually force collected.</returns>
+    public bool ForceCollectAfterStopTimeout(string scope)
+    {
+        if (CurrentState is not (SessionState.Running or SessionState.Stopping))
+        {
+            _logService.Warn($"{scope}: stop-timeout force collect ignored, session is already {CurrentState}");
+            return false;
+        }
+
+        var stateBefore = CurrentState;
+        Interlocked.Exchange(
+            ref _forceCollectedStopSequence,
+            Interlocked.Read(ref _stopAttemptSequence));
+        Interlocked.Exchange(ref _currentAppendAttemptQueuedTaskCount, 0);
+        // The stopped batch's callbacks may still be queued; none of them may resurrect the
+        // run this recovery just ended (same boundary the successful stop relies on).
+        CaptureRunBoundaryCallbackWatermark();
+        ClearTaskIdMappings();
+        _lastSuccessfulConnectionInfo = null;
+        ClearActiveConnectionTarget();
+        MarkIdleConnectionCallbacksStale();
+        string? owner;
+        lock (_runOwnerGate)
+        {
+            owner = _currentRunOwner;
+            _currentRunOwner = null;
+            _currentRunOwnerDisplayName = null;
+            _currentRunOwnershipGeneration = 0;
+        }
+
+        _logService.Warn(
+            $"{scope}: native stop did not settle in time; force collected session {stateBefore} -> Idle (owner={owner ?? "<none>"})");
+        MoveToState(SessionState.Idle, scope, "stop-timeout-force-collect");
+        return true;
+    }
+
+    private bool IsStopAttemptSupersededByTimeoutForceCollect(long stopAttempt)
+        => Volatile.Read(ref _forceCollectedStopSequence) >= stopAttempt;
 
     public async Task<CoreResult<bool>> StartCloseDownAsync(
         string clientType,
@@ -2038,7 +2107,11 @@ public sealed class UnifiedSessionService
             return;
         }
 
+        // WPF dev-v2 f4d8fba923: a resolution change at runtime invalidates the connection
+        // (Connected = false) exactly like an unsupported resolution, so the session must not
+        // keep reporting a running task against a dead connection.
         if (string.Equals(what, "UnsupportedResolution", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(what, "ResolutionChanged", StringComparison.OrdinalIgnoreCase)
             || string.Equals(what, "ResolutionError", StringComparison.OrdinalIgnoreCase)
             || string.Equals(what, "TouchModeNotAvailable", StringComparison.OrdinalIgnoreCase))
         {

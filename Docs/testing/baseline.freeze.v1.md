@@ -9,7 +9,7 @@
 - Locales: `zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas`
 - Feature items: `38`
 - System items: `12`
-- Config keys: `301`
+- Config keys: `304`
 - Fallback records: `15`
 
 ## Feature Parity
@@ -75,8 +75,8 @@
 | `System.PageErrorChannel` | Aligned | `App/ViewModels/Infrastructure/PageViewModelBase.cs` |
 
 ## Config Key Mapping Summary
-- Aligned: `58`
-- Gap: `243`
+- Aligned: `63`
+- Gap: `241`
 - Waived: `0`
 
 ### Aligned Config Keys
@@ -113,7 +113,12 @@
 - `Penguin.EnablePenguin` -> `SettingsPageViewModel.EnablePenguin`
 - `Penguin.Id` -> `SettingsPageViewModel.PenguinId`
 - `Penguin.IsDrGrandet` -> `UnifiedTaskItem.Params[IsDrGrandet]`
+- `RuntimeSettings.EnableRunDurationLimit` -> `SettingsPageViewModel.EnableRunDurationLimit`
+- `RuntimeSettings.RunDurationLimitExecutePostActions` -> `SettingsPageViewModel.RunDurationLimitExecutePostActions`
+- `RuntimeSettings.RunDurationLimitMinutes` -> `SettingsPageViewModel.RunDurationLimitMinutes`
 - `TimeOut.Timer.ReminderIntervalMinutes` -> `SettingsPageViewModel.ReminderIntervalMinutes`
+- `TimeOut.Timer.StallTimeoutEnabled` -> `SettingsPageViewModel.EnableStallTimeout`
+- `TimeOut.Timer.StallTimeoutMinutes` -> `SettingsPageViewModel.StallTimeoutMinutes`
 - `Toolbox.Recruit.ChooseLevel3.Time` -> `ToolboxPageViewModel.RecruitLevel3Time`
 - `Toolbox.Recruit.ChooseLevel4.Time` -> `ToolboxPageViewModel.RecruitLevel4Time`
 - `Toolbox.Recruit.ChooseLevel5.Time` -> `ToolboxPageViewModel.RecruitLevel5Time`

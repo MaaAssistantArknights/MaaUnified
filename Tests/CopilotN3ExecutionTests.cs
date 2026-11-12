@@ -6,7 +6,9 @@ using MAAUnified.App.ViewModels.Copilot;
 using MAAUnified.App.ViewModels.Settings;
 using MAAUnified.App.ViewModels.TaskQueue;
 using MAAUnified.Application.Configuration;
+using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
+using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.CoreBridge;
@@ -104,6 +106,114 @@ public sealed class CopilotN3ExecutionTests
         await fixture.ViewModel.SendLikeAsync(false);
         Assert.Contains("点踩", fixture.ViewModel.StatusMessage, StringComparison.Ordinal);
         Assert.Equal(string.Empty, fixture.ViewModel.LastErrorMessage);
+    }
+
+    [Fact]
+    public async Task CopilotManualStop_WithScriptSettings_ShouldShareSingleEndScriptLaunch()
+    {
+        var postAction = new CountingPostActionFeatureService();
+        await using var fixture = await CopilotN3Fixture.CreateAsync(postAction);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        if (fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[MAAUnified.Compat.Constants.ConfigurationKeys.CopilotWithScript] = JsonValue.Create(true);
+            profile.Values[MAAUnified.Compat.Constants.ConfigurationKeys.ManualStopWithScript] = JsonValue.Create(true);
+        }
+
+        fixture.ViewModel.FilePath = fixture.CreateCopilotFile();
+        await fixture.ViewModel.ImportFromFileAsync();
+        await fixture.ViewModel.StartAsync();
+        var taskId = fixture.Bridge.LastAppendedTaskId;
+
+        await fixture.ViewModel.StopAsync();
+        Assert.Equal(1, postAction.EndScriptExecuteCount);
+
+        // WPF shares one launch slot per run: the late completion callback must not relaunch.
+        fixture.ViewModel.ApplyRuntimeCallback(new CoreCallbackEvent(
+            3,
+            "AllTasksCompleted",
+            $$"""{"task_chain":"Copilot","task_id":{{taskId}}}""",
+            DateTimeOffset.UtcNow));
+        Assert.Equal(1, postAction.EndScriptExecuteCount);
+    }
+
+    [Fact]
+    public async Task CopilotManualStop_WithoutManualStopWithScript_ShouldNotLaunchEndScript()
+    {
+        var postAction = new CountingPostActionFeatureService();
+        await using var fixture = await CopilotN3Fixture.CreateAsync(postAction);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        if (fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[MAAUnified.Compat.Constants.ConfigurationKeys.CopilotWithScript] = JsonValue.Create(true);
+        }
+
+        fixture.ViewModel.FilePath = fixture.CreateCopilotFile();
+        await fixture.ViewModel.ImportFromFileAsync();
+        await fixture.ViewModel.StartAsync();
+
+        await fixture.ViewModel.StopAsync();
+        Assert.Equal(0, postAction.EndScriptExecuteCount);
+    }
+
+    [Fact]
+    public async Task CopilotCompletion_WithoutCopilotWithScript_ShouldNotLaunchEndScript()
+    {
+        var postAction = new CountingPostActionFeatureService();
+        await using var fixture = await CopilotN3Fixture.CreateAsync(postAction);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        fixture.ViewModel.FilePath = fixture.CreateCopilotFile();
+        await fixture.ViewModel.ImportFromFileAsync();
+        await fixture.ViewModel.StartAsync();
+        var taskId = fixture.Bridge.LastAppendedTaskId;
+        fixture.ViewModel.ApplyRuntimeCallback(new CoreCallbackEvent(
+            3,
+            "AllTasksCompleted",
+            $$"""{"task_chain":"Copilot","task_id":{{taskId}}}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.Equal(0, postAction.EndScriptExecuteCount);
+    }
+
+    [Fact]
+    public async Task CopilotCompletion_WithCopilotWithScript_ShouldLaunchEndScriptOnce()
+    {
+        var postAction = new CountingPostActionFeatureService();
+        await using var fixture = await CopilotN3Fixture.CreateAsync(postAction);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+        if (fixture.Runtime.ConfigurationService.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[MAAUnified.Compat.Constants.ConfigurationKeys.CopilotWithScript] = JsonValue.Create(true);
+        }
+
+        fixture.ViewModel.FilePath = fixture.CreateCopilotFile();
+        await fixture.ViewModel.ImportFromFileAsync();
+        await fixture.ViewModel.StartAsync();
+        var taskId = fixture.Bridge.LastAppendedTaskId;
+        fixture.ViewModel.ApplyRuntimeCallback(new CoreCallbackEvent(
+            3,
+            "AllTasksCompleted",
+            $$"""{"task_chain":"Copilot","task_id":{{taskId}}}""",
+            DateTimeOffset.UtcNow));
+
+        Assert.Equal(1, postAction.EndScriptExecuteCount);
+
+        // A duplicate AllTasksCompleted for the finished run must not relaunch the script.
+        fixture.ViewModel.ApplyRuntimeCallback(new CoreCallbackEvent(
+            3,
+            "AllTasksCompleted",
+            $$"""{"task_chain":"Copilot","task_id":{{taskId}}}""",
+            DateTimeOffset.UtcNow));
+        Assert.Equal(1, postAction.EndScriptExecuteCount);
     }
 
     [Fact]
@@ -1668,6 +1778,45 @@ public sealed class CopilotN3ExecutionTests
         Assert.Equal(filePath, item.SourcePath);
     }
 
+    private sealed class CountingPostActionFeatureService : IPostActionFeatureService
+    {
+        public int EndScriptExecuteCount { get; private set; }
+
+        public Task<UiOperationResult<PostActionConfig>> LoadAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(UiOperationResult<PostActionConfig>.Ok(new PostActionConfig(), "Loaded."));
+
+        public Task<UiOperationResult> SaveAsync(PostActionConfig config, CancellationToken cancellationToken = default)
+            => Task.FromResult(UiOperationResult.Ok("Saved."));
+
+        public Task<UiOperationResult<PostActionPreview>> GetCapabilityPreviewAsync(
+            PostActionConfig config,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(UiOperationResult<PostActionPreview>.Ok(
+                new PostActionPreview(false, [], []),
+                "Previewed."));
+
+        public Task<UiOperationResult<PostActionPreview>> ValidateSelectionAsync(
+            PostActionConfig config,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(UiOperationResult<PostActionPreview>.Ok(
+                new PostActionPreview(false, [], []),
+                "Validated."));
+
+        public Task<UiOperationResult> ExecuteAfterCompletionAsync(
+            PostActionExecutionContext context,
+            PostActionConfig? configOverride = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(UiOperationResult.Ok("Post action executed."));
+
+        public Task<UiOperationResult> ExecuteEndScriptAsync(
+            bool manualStop,
+            CancellationToken cancellationToken = default)
+        {
+            EndScriptExecuteCount++;
+            return Task.FromResult(UiOperationResult.Ok("End script executed."));
+        }
+    }
+
     private sealed class CopilotN3Fixture : IAsyncDisposable
     {
         private readonly CancellationTokenSource _pumpCts = new();
@@ -1739,7 +1888,8 @@ public sealed class CopilotN3ExecutionTests
             return path;
         }
 
-        public static async Task<CopilotN3Fixture> CreateAsync()
+        public static async Task<CopilotN3Fixture> CreateAsync(
+            IPostActionFeatureService? postActionFeatureService = null)
         {
             var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -1794,7 +1944,7 @@ public sealed class CopilotN3ExecutionTests
                 SettingsFeatureService = new SettingsFeatureService(config, notificationTracker, diagnostics),
                 AchievementTrackerService = achievementTracker,
                 DialogFeatureService = new DialogFeatureService(diagnostics),
-                PostActionFeatureService = new PostActionFeatureService(
+                PostActionFeatureService = postActionFeatureService ?? new PostActionFeatureService(
                     config,
                     diagnostics,
                     platform.PostActionExecutorService),

@@ -328,6 +328,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     // within five seconds of LinkStart recording _taskStartTime.
     private static readonly TimeSpan TaskStartCancelUnlockWindow = TimeSpan.FromSeconds(5);
     private const int MaxTimeoutMinutes = 11451;
+    // WPF dev-v2 NotificationSettings defaults (24639a0fdd): 30 min without any log output is
+    // the first stall warning, later warnings follow the reminder interval (also 30 min).
+    private const int DefaultStallTimeoutMinutes = 30;
+    private const int DefaultReminderIntervalMinutes = 30;
+    // WPF dev-v2 RuntimeSettings.RunDurationLimitMinutes default (5a55fc8ac1).
+    private const int DefaultRunDurationLimitMinutes = 240;
     private const int MaxOverlayLogs = 200;
     private const string GuideSaveScope = "TaskQueue.Guide.Save";
     private const int GuideMaxStep = 7;
@@ -379,8 +385,21 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         public RunOwnershipLease Lease { get; }
     }
-    private CancellationTokenSource? _taskTimeoutReminderCts;
-    private int _taskTimeoutReminderCount;
+    private CancellationTokenSource? _stallReminderCts;
+    private int _stallReminderCount;
+    private CancellationTokenSource? _runDurationLimitCts;
+    private int _stopScriptLaunched;
+    // Durable ｢this run was started by the main queue｣ marker for terminal callback handling.
+    // The session clears its run owner as soon as the state watermark flips to Connected, which
+    // can happen before the queued AllTasksCompleted handler runs; WPF snapshots the owner in the
+    // callback before SetIdle(true) for exactly this reason.
+    private bool _taskQueueRunActive;
+    // One SettingsMinuteUnit of the stall / run-duration timers. Production is one minute;
+    // tests compress it so the timer behavior is observable without waiting real minutes.
+    internal TimeSpan SettingsMinuteUnit { get; set; } = TimeSpan.FromMinutes(1);
+
+    // WPF TaskQueueViewModel.Stop default wait window: 60 s before the UI is force collected.
+    internal TimeSpan StopConfirmTimeout { get; set; } = TimeSpan.FromSeconds(60);
     private CancellationTokenSource? _sanityReminderCts;
     private bool _suppressTaskEnabledSync;
     private bool _suppressModuleAutoSave;
@@ -3373,10 +3392,45 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return StartAsyncCore(exclusiveSessionOperationLease, cancellationToken);
     }
 
+    /// <summary>
+    /// WPF parity (Bootstrapper.RequiresRestart): once a stop timed out or the GPU inference
+    /// device was removed, Core state is untrusted and every start entry is blocked until the
+    /// process restarts. Resource-broken / core-loading reasons are layered on top later.
+    /// </summary>
+    /// <param name="scope">Diagnostic scope of the entry being blocked.</param>
+    /// <param name="message">Localized user facing reason.</param>
+    /// <returns><see langword="true"/> when the entry must not start a run.</returns>
+    private bool TryGetRequiresRestartBlock(string scope, out string message)
+    {
+        message = string.Empty;
+        if (!Runtime.RequiresRestart)
+        {
+            return false;
+        }
+
+        message = GetRootText(
+            "RestartRecommendation",
+            "It is recommended to restart MAA to restore normal state");
+        Runtime.LogService.Warn(
+            $"{scope} blocked: the session requires a restart ({Runtime.RequiresRestartReason ?? "unspecified"}).");
+        return true;
+    }
+
     private async Task StartAsyncCore(
         IDisposable? exclusiveSessionOperationLease,
         CancellationToken cancellationToken)
     {
+        if (TryGetRequiresRestartBlock("TaskQueue.Start", out var restartBlockMessage))
+        {
+            LastErrorMessage = restartBlockMessage;
+            AppendStartFailureLog(restartBlockMessage);
+            await RecordFailedResultAsync(
+                "TaskQueue.Start.RequiresRestart",
+                UiOperationResult.Fail(UiErrorCode.RequiresRestart, restartBlockMessage),
+                cancellationToken);
+            return;
+        }
+
         if (exclusiveSessionOperationLease is not null
             && !_connectionGameSharedState.IsExclusiveSessionOperationLease(exclusiveSessionOperationLease))
         {
@@ -3606,8 +3660,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 CurrentSessionState = Runtime.SessionService.CurrentState;
                 _currentRunId = Guid.NewGuid().ToString("N");
                 _lastPostActionRunId = string.Empty;
+                _taskQueueRunActive = true;
+                Interlocked.Exchange(ref _stopScriptLaunched, 0);
                 TrackAchievementsAfterStart(appendResult.Value);
-                StartOrResetTaskTimeoutReminder();
+                StartOrResetStallReminder();
+                StartRunDurationLimitWatch();
                 keepRunOwner = true;
                 SetStartRequestActive(false);
             }
@@ -4560,6 +4617,17 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     public async Task RunSelectedTaskOnceAsync(CancellationToken cancellationToken = default)
     {
+        if (TryGetRequiresRestartBlock("TaskQueue.RunOnce", out var restartBlockMessage))
+        {
+            LastErrorMessage = restartBlockMessage;
+            AppendStartFailureLog(restartBlockMessage);
+            await RecordFailedResultAsync(
+                "TaskQueue.RunOnce.RequiresRestart",
+                UiOperationResult.Fail(UiErrorCode.RequiresRestart, restartBlockMessage),
+                cancellationToken);
+            return;
+        }
+
         using var runOnceActivity = _connectionGameSharedState.TryBeginSessionOperation(
             "TaskQueue.RunOnce",
             requireIdle: true);
@@ -4794,6 +4862,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 CurrentSessionState = Runtime.SessionService.CurrentState;
                 _currentRunId = Guid.NewGuid().ToString("N");
                 _lastPostActionRunId = string.Empty;
+                _taskQueueRunActive = true;
+                Interlocked.Exchange(ref _stopScriptLaunched, 0);
+                StartOrResetStallReminder();
                 TrackAchievementsAfterStart(appendResult.Value);
                 keepRunOwner = true;
             }
@@ -4852,6 +4923,17 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
     private async Task RunAccountSwitchManualAsync(CancellationToken cancellationToken)
     {
+        if (TryGetRequiresRestartBlock("TaskQueue.AccountSwitch", out var restartBlockMessage))
+        {
+            LastErrorMessage = restartBlockMessage;
+            AppendStartFailureLog(restartBlockMessage);
+            await RecordFailedResultAsync(
+                "TaskQueue.AccountSwitch.RequiresRestart",
+                UiOperationResult.Fail(UiErrorCode.RequiresRestart, restartBlockMessage),
+                cancellationToken);
+            return;
+        }
+
         using var accountSwitchActivity = _connectionGameSharedState.TryBeginSessionOperation(
             "TaskQueue.AccountSwitch",
             requireIdle: true);
@@ -4955,6 +5037,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 CurrentSessionState = Runtime.SessionService.CurrentState;
                 _currentRunId = Guid.NewGuid().ToString("N");
                 _lastPostActionRunId = string.Empty;
+                _taskQueueRunActive = true;
+                Interlocked.Exchange(ref _stopScriptLaunched, 0);
+                StartOrResetStallReminder();
                 keepRunOwner = true;
             }
             catch (OperationCanceledException) when (startRequestCts.IsCancellationRequested || cancellationToken.IsCancellationRequested)
@@ -5180,7 +5265,16 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 updateThumbnail: false,
                 splitMode: LogCardSplitMode.Both);
 
-            if (!await ApplyResultAsync(await Runtime.ConnectFeatureService.StopAsync(cancellationToken), "TaskQueue.Stop", cancellationToken))
+            var stop = await RequestCoreStopWithTimeoutAsync("TaskQueue.Stop", cancellationToken);
+            if (!stop.Settled)
+            {
+                // WPF parity: the timeout branch already force collected the UI and marked the
+                // session as requires-restart; this stop attempt is finished.
+                _clearTaskStatusesWhenStopped = false;
+                return;
+            }
+
+            if (!await ApplyResultAsync(stop.Result!, "TaskQueue.Stop", cancellationToken))
             {
                 CurrentSessionState = Runtime.SessionService.CurrentState;
                 if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
@@ -5192,7 +5286,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return;
             }
 
-            _ = RunEndScriptAfterManualStopAsync();
+            await RunStopScriptOnceAsync(manualStop: true);
+            _taskQueueRunActive = false;
             // A successful core stop clears the native task queue, so any pending
             // failed-start cleanup requirement is resolved as well.
             SetCoreQueueCleanupRequired(false);
@@ -5208,32 +5303,87 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     }
 
     /// <summary>
-    /// Internal stop variant that waits for a fixed settle window before forcing a core stop.
-    /// This entry point is currently not wired to any UI control. WPF's roguelike
-    /// "wait until combat completes" delayed stop is implemented by <see cref="StopAsync"/>
-    /// through WaitUntilRoguelikeCombatCompleteAsync instead.
+    /// Requests a native stop and bounds the wait with <see cref="StopConfirmTimeout"/>
+    /// (WPF <c>TaskQueueViewModel.Stop(int timeout = 60 * 1000)</c>). On timeout the session is
+    /// force collected, marked requires-restart, and the UI returns to idle even when Core is
+    /// hung; the late native result is only observed for diagnostics.
     /// </summary>
-    private async Task RunEndScriptAfterManualStopAsync()
+    /// <returns>
+    /// <c>Settled = true</c> with the native stop result, or <c>Settled = false</c> when the
+    /// wait window expired and the timeout recovery ran.
+    /// </returns>
+    private async Task<(bool Settled, UiOperationResult? Result)> RequestCoreStopWithTimeoutAsync(
+        string scope,
+        CancellationToken cancellationToken)
     {
-        try
+        var stopTask = Runtime.ConnectFeatureService.StopAsync(cancellationToken);
+        if (!stopTask.IsCompleted)
         {
-            var result = await Runtime.PostActionFeatureService.ExecuteEndScriptAsync(manualStop: true);
-            if (!result.Success)
+            var timeoutTask = Task.Delay(StopConfirmTimeout, CancellationToken.None);
+            var winner = await Task.WhenAny(stopTask, timeoutTask);
+            if (!ReferenceEquals(winner, stopTask))
             {
-                await RecordEventAsync("TaskQueue.Stop.EndsWithScript", result.Message, CancellationToken.None);
+                ObserveDetachedStop(stopTask, scope);
+                await HandleStopTimeoutAsync(scope, cancellationToken);
+                return (false, null);
             }
         }
-        catch (Exception ex)
-        {
-            try
-            {
-                await RecordEventAsync("TaskQueue.Stop.EndsWithScript", ex.Message, CancellationToken.None);
-            }
-            catch
-            {
-                // Best effort: manual stop script failures must not break stop flow.
-            }
-        }
+
+        return (true, await stopTask);
+    }
+
+    private void ObserveDetachedStop(Task<UiOperationResult> stopTask, string scope)
+    {
+        _ = stopTask.ContinueWith(
+            task => Runtime.LogService.Warn(
+                $"{scope}: late stop result after timeout force collect: success={task.Result.Success}; message={task.Result.Message}"),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        _ = stopTask.ContinueWith(
+            task => Runtime.LogService.Warn(
+                $"{scope}: late stop faulted after timeout force collect: {task.Exception?.GetBaseException().Message}"),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    private async Task HandleStopTimeoutAsync(string scope, CancellationToken cancellationToken)
+    {
+        var message = GetRootText(
+                          "StopTimeout",
+                          "Stop timed out: Core did not respond to the stop request in time")
+                      + Environment.NewLine
+                      + GetRootText(
+                          "RestartRecommendation",
+                          "It is recommended to restart MAA to restore normal state");
+        Runtime.LogService.Warn(
+            $"{scope}: stop did not settle within {StopConfirmTimeout.TotalSeconds:0.###} s; force collecting the session.");
+        // The requires-restart bit is shared with P1-15 (GpuDeviceRemoved): both leave Core in a
+        // state that only a process restart can recover, so every later start is blocked.
+        Runtime.MarkRequiresRestart(scope + ".StopTimeout");
+        Runtime.SessionService.ForceCollectAfterStopTimeout(scope);
+        CancelStallReminder();
+        CancelRunDurationLimitWatch();
+        _clearTaskStatusesWhenStopped = false;
+        _taskQueueRunActive = false;
+        _activeRunLease = null;
+        SetCoreQueueCleanupRequired(false);
+        Runtime.SessionService.EndRun(TaskQueueRunOwner);
+        AppendLogEntry(
+            DateTimeOffset.Now,
+            message,
+            "ERROR",
+            updateThumbnail: false,
+            notifyActivity: false,
+            splitMode: LogCardSplitMode.Both);
+        ResetAllTaskStatuses();
+        CurrentSessionState = Runtime.SessionService.CurrentState;
+        SyncStoppedUiStateIfSessionNotActive();
+        await RecordFailedResultAsync(
+            scope + ".Timeout",
+            UiOperationResult.Fail(UiErrorCode.StopTimedOut, message),
+            cancellationToken);
     }
 
     public async Task WaitAndStopAsync(CancellationToken cancellationToken = default)
@@ -5299,21 +5449,31 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             }
 
             CurrentSessionState = Runtime.SessionService.CurrentState;
-            if (CurrentSessionState is SessionState.Running or SessionState.Stopping
-                && !await ApplyResultAsync(
-                    await Runtime.ConnectFeatureService.StopAsync(cancellationToken),
-                    "TaskQueue.WaitAndStop",
-                    cancellationToken))
+            if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
             {
-                CurrentSessionState = Runtime.SessionService.CurrentState;
-                if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+                var stop = await RequestCoreStopWithTimeoutAsync("TaskQueue.WaitAndStop", cancellationToken);
+                if (!stop.Settled)
                 {
                     _clearTaskStatusesWhenStopped = false;
+                    return;
                 }
-                SyncStoppedUiStateIfSessionNotActive();
 
-                return;
+                if (!await ApplyResultAsync(stop.Result!, "TaskQueue.WaitAndStop", cancellationToken))
+                {
+                    CurrentSessionState = Runtime.SessionService.CurrentState;
+                    if (CurrentSessionState is SessionState.Running or SessionState.Stopping)
+                    {
+                        _clearTaskStatusesWhenStopped = false;
+                    }
+                    SyncStoppedUiStateIfSessionNotActive();
+
+                    return;
+                }
+
+                await RunStopScriptOnceAsync(manualStop: true);
             }
+
+            _taskQueueRunActive = false;
 
             ResetAllTaskStatuses();
             CurrentSessionState = Runtime.SessionService.CurrentState;
@@ -5552,6 +5712,28 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                         "Failed to obtain emulator resolution. Try restarting the emulator and ADB, restarting the computer, or switching to another emulator."),
                     "ERROR");
                 break;
+            case "ResolutionChanged":
+                {
+                    // WPF dev-v2 f4d8fba923 (AsstProxy.ProcConnectInfo): a runtime resolution
+                    // change kills the connection; report the new size and require a restart of
+                    // the task so the new resolution is applied.
+                    var baseMessage = GetRootText(
+                        "ResolutionChanged",
+                        "Emulator resolution has changed, connection closed. Please restart the task to apply the new resolution");
+                    var width = GetIntValue(metadata.Details, "width") ?? 0;
+                    var height = GetIntValue(metadata.Details, "height") ?? 0;
+                    if (width > 0 && height > 0)
+                    {
+                        baseMessage = $"{baseMessage} ({string.Format(
+                            GetRootText("ResolutionNotSupportedCurrentResolution", "Current resolution: {0}x{1}"),
+                            width,
+                            height)})";
+                    }
+
+                    AppendSystemLog(baseMessage, "ERROR");
+                    break;
+                }
+
             case "TouchModeNotAvailable":
                 AppendSystemLog(
                     BuildLocalizedMessage(
@@ -6164,6 +6346,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         string weight = "Regular",
         LogCardSplitMode splitMode = LogCardSplitMode.None)
     {
+        if (notifyActivity)
+        {
+            // WPF parity (TaskQueueViewModel.AddLog -> RunningState.NotifyOutputActivity):
+            // any visible output proves the task is not stalled.
+            NotifyOutputActivity();
+        }
+
         var logTime = FormatLogTimestamp(timestamp);
         if (string.IsNullOrWhiteSpace(content) && !updateThumbnail)
         {
@@ -6483,7 +6672,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         {
             "TaskChainStart" => BuildTaskChainStartLog(taskIndex, payload.TaskChain),
             "TaskChainCompleted" => BuildTaskChainCompletedLog(taskIndex, payload.TaskChain),
-            "TaskChainError" => BuildTaskChainErrorLog(payload.TaskChain),
+            "TaskChainError" => BuildTaskChainErrorLog(payload),
             "TaskChainExtraInfo" => BuildTaskChainExtraInfoLog(payload),
             "SubTaskError" => BuildSubTaskErrorLog(payload, taskIndex),
             "SubTaskStart" => BuildSubTaskStartLog(payload),
@@ -6565,13 +6754,44 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return new(content);
     }
 
-    private TaskQueueCallbackUserLog BuildTaskChainErrorLog(string? taskChain)
+    private TaskQueueCallbackUserLog BuildTaskChainErrorLog(CallbackPayload payload)
     {
-        return new(
-            Content: GetRootText("TaskError", "Task error: ") + ResolveModuleDisplayName(taskChain ?? "TaskQueue"),
-            Level: "ERROR",
-            UpdateThumbnail: true,
-            ForceScreenshot: true);
+        var taskChain = payload.TaskChain;
+        var displayName = ResolveModuleDisplayName(taskChain ?? "TaskQueue");
+        // Core reports the TaskExceptionKind of a crashed task chain in `details.error`
+        // (Assistant.cpp task_exception_name); plain recognition failures have no such field.
+        // WPF dev-v2 c3b21524ea / 75273dfca8 classify it into dedicated texts and mark the
+        // session as restart-required for a removed DirectML device.
+        switch (GetStringValue(payload.Details, "error"))
+        {
+            case "GpuDeviceRemoved":
+                Runtime.MarkRequiresRestart("TaskChainError.GpuDeviceRemoved");
+                return new(
+                    Content: string.Format(
+                        GetRootText(
+                            "GpuDeviceRemovedRestartRequired",
+                            "The {0} task stopped because the GPU inference device became unavailable, possibly after a graphics driver update or GPU reset. {key=RestartRecommendation}"),
+                        displayName),
+                    Level: "ERROR",
+                    UpdateThumbnail: true,
+                    ForceScreenshot: true);
+            case "OutOfMemory":
+                return new(
+                    Content: string.Format(
+                        GetRootText(
+                            "OutOfMemoryError",
+                            "The {0} task stopped due to insufficient memory. Close some programs or restart MAA and try again"),
+                        displayName),
+                    Level: "ERROR",
+                    UpdateThumbnail: true,
+                    ForceScreenshot: true);
+            default:
+                return new(
+                    Content: GetRootText("TaskError", "Task error: ") + displayName,
+                    Level: "ERROR",
+                    UpdateThumbnail: true,
+                    ForceScreenshot: true);
+        }
     }
 
     private TaskQueueCallbackUserLog? BuildTaskChainExtraInfoLog(CallbackPayload payload)
@@ -6826,41 +7046,78 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
 
 
-    private void StartOrResetTaskTimeoutReminder()
+    /// <summary>
+    /// WPF parity (RunningState.NotifyOutputActivity / ResetStallTimer, 24639a0fdd): every log
+    /// line is ｢output activity｣ and restarts the stall watch from the configured stall timeout.
+    /// Only a run in progress is watched; logs during connect or post-actions never arm it.
+    /// </summary>
+    private void NotifyOutputActivity()
     {
-        CancelTaskTimeoutReminder();
-        _taskTimeoutReminderCount = 0;
-        var config = Runtime.ConfigurationService.CurrentConfig;
-        var timeoutMinutes = Math.Clamp(
-            TryReadProfileInt(config, ConfigurationKeys.TaskTimeoutMinutes, 60),
-            0,
-            MaxTimeoutMinutes);
-        var reminderMinutes = Math.Clamp(
-            TryReadProfileInt(config, ConfigurationKeys.ReminderIntervalMinutes, 30),
-            1,
-            MaxTimeoutMinutes);
-        _taskTimeoutReminderCts = new CancellationTokenSource();
-        _ = RunTaskTimeoutReminderLoopAsync(timeoutMinutes, reminderMinutes, _taskTimeoutReminderCts.Token);
+        if (Runtime.SessionService.CurrentState is not (SessionState.Running or SessionState.Stopping))
+        {
+            return;
+        }
+
+        StartOrResetStallReminder();
     }
 
-    private async Task RunTaskTimeoutReminderLoopAsync(int timeoutMinutes, int reminderMinutes, CancellationToken cancellationToken)
+    private void StartOrResetStallReminder()
+    {
+        CancelStallReminder();
+        _stallReminderCount = 0;
+        var config = Runtime.ConfigurationService.CurrentConfig;
+        if (!TryReadProfileBool(config, ConfigurationKeys.StallTimeoutEnabled, true))
+        {
+            return;
+        }
+
+        var stallMinutes = Math.Clamp(
+            TryReadProfileInt(config, ConfigurationKeys.StallTimeoutMinutes, DefaultStallTimeoutMinutes),
+            0,
+            MaxTimeoutMinutes);
+        if (stallMinutes <= 0)
+        {
+            return;
+        }
+
+        var reminderMinutes = Math.Clamp(
+            TryReadProfileInt(config, ConfigurationKeys.ReminderIntervalMinutes, DefaultReminderIntervalMinutes),
+            1,
+            MaxTimeoutMinutes);
+        _stallReminderCts = new CancellationTokenSource();
+        _ = RunStallReminderLoopAsync(stallMinutes, reminderMinutes, _stallReminderCts.Token);
+    }
+
+    private async Task RunStallReminderLoopAsync(
+        int stallMinutes,
+        int reminderMinutes,
+        CancellationToken cancellationToken)
     {
         try
         {
-            await Task.Delay(TimeSpan.FromMinutes(timeoutMinutes), cancellationToken);
+            // First fire uses the stall timeout; later fires use the reminder interval while the
+            // accumulated minutes keep growing, exactly like WPF RunningState.StallTimer_Elapsed.
+            await Task.Delay(ScaleMinutes(stallMinutes), cancellationToken);
             while (true)
             {
-                _taskTimeoutReminderCount++;
-                var accumulatedMinutes = timeoutMinutes + ((_taskTimeoutReminderCount - 1) * reminderMinutes);
+                if (Runtime.SessionService.CurrentState is not (SessionState.Running or SessionState.Stopping))
+                {
+                    return;
+                }
+
+                _stallReminderCount++;
+                var accumulatedMinutes = stallMinutes + ((_stallReminderCount - 1) * reminderMinutes);
                 var message = string.Format(
                     GetRootText(
-                        "TaskTimeoutWarning",
-                        "The task has been running for over {0} minutes (currently {1} minutes). If there is no further log output for a long time, manual intervention may be required."),
-                    timeoutMinutes,
+                        "TaskQueue.Stall.Warning",
+                        "The task has been running for over {0} minutes (currently {1} minutes). Manual intervention may be required."),
+                    stallMinutes,
                     accumulatedMinutes);
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    AppendLogEntry(DateTimeOffset.Now, message, "WARN", updateThumbnail: false);
+                    // A stalled notification is not output activity; re-arming would turn the
+                    // reminder interval back into the full stall timeout.
+                    AppendLogEntry(DateTimeOffset.Now, message, "WARN", updateThumbnail: false, notifyActivity: false);
                     var systemNotification = new TaskQueueSystemNotification(
                         message,
                         string.Empty,
@@ -6872,7 +7129,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 });
                 _ = Runtime.AchievementTrackerService.Unlock("LongTaskTimeout");
 
-                await Task.Delay(TimeSpan.FromMinutes(reminderMinutes), cancellationToken);
+                await Task.Delay(ScaleMinutes(reminderMinutes), cancellationToken);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -6880,11 +7137,168 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    private void CancelTaskTimeoutReminder()
+    private TimeSpan ScaleMinutes(int minutes)
+        => TimeSpan.FromTicks(SettingsMinuteUnit.Ticks * Math.Max(0, minutes));
+
+    private void CancelStallReminder()
     {
-        _taskTimeoutReminderCts?.Cancel();
-        _taskTimeoutReminderCts?.Dispose();
-        _taskTimeoutReminderCts = null;
+        _stallReminderCts?.Cancel();
+        _stallReminderCts?.Dispose();
+        _stallReminderCts = null;
+    }
+
+    /// <summary>
+    /// WPF parity (RunningState.SetRunDeadline / TaskQueueViewModel.SetRunDeadlineFromSettings,
+    /// 5a55fc8ac1): a run started by the main queue arms a single deadline timer. Reaching it
+    /// behaves like a manual stop (roguelike combat wait, stop script gate, post actions).
+    /// Runs started by another owner never arm it, which keeps scheduled/remote starts isolated.
+    /// </summary>
+    private void StartRunDurationLimitWatch()
+    {
+        CancelRunDurationLimitWatch();
+        var config = Runtime.ConfigurationService.CurrentConfig;
+        if (!TryReadProfileBool(config, ConfigurationKeys.EnableRunDurationLimit, false))
+        {
+            return;
+        }
+
+        var limitMinutes = Math.Clamp(
+            TryReadProfileInt(config, ConfigurationKeys.RunDurationLimitMinutes, DefaultRunDurationLimitMinutes),
+            1,
+            MaxTimeoutMinutes);
+        var executePostActions = TryReadProfileBool(
+            config,
+            ConfigurationKeys.RunDurationLimitExecutePostActions,
+            true);
+        var runId = _currentRunId;
+        var cts = new CancellationTokenSource();
+        _runDurationLimitCts = cts;
+        _ = RunRunDurationLimitWatchAsync(limitMinutes, executePostActions, runId, cts.Token);
+    }
+
+    private async Task RunRunDurationLimitWatchAsync(
+        int limitMinutes,
+        bool executePostActions,
+        string runId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(ScaleMinutes(limitMinutes), cancellationToken);
+            if (!string.Equals(runId, _currentRunId, StringComparison.Ordinal))
+            {
+                // The run this deadline belonged to already ended and a new one started.
+                return;
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(() => StopByRunDurationLimitAsync(limitMinutes, executePostActions));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private async Task StopByRunDurationLimitAsync(int limitMinutes, bool executePostActions)
+    {
+        try
+        {
+            if (CurrentSessionState is not (SessionState.Running or SessionState.Stopping)
+                || Runtime.SessionService.CurrentState is not (SessionState.Running or SessionState.Stopping))
+            {
+                return;
+            }
+
+            // WPF parity: a scheduled start or remote takeover may have claimed the run while
+            // the wait window was open; only the run that armed this deadline is stopped here.
+            var runId = _currentRunId;
+            var message = string.Format(
+                GetRootText(
+                    "TaskQueue.RunDurationLimit.Reached",
+                    "Run duration limit of {0} minutes reached, stopping the tasks."),
+                limitMinutes);
+            AppendLogEntry(DateTimeOffset.Now, message, "WARN", updateThumbnail: false);
+            QueueAutomaticSystemNotification(
+                new TaskQueueSystemNotification(
+                    message,
+                    string.Empty,
+                    "TaskQueue.Notification.RunDurationLimit",
+                    "run duration limit reached"),
+                _useSystemNotifications);
+
+            await StopAsync(userInitiated: true);
+            if (!executePostActions
+                || !string.Equals(runId, _currentRunId, StringComparison.Ordinal)
+                || Runtime.SessionService.CurrentState is SessionState.Running or SessionState.Stopping)
+            {
+                return;
+            }
+
+            await RunPostActionsAfterManualStopAsync();
+        }
+        catch (Exception ex)
+        {
+            await RecordErrorAsync(
+                "TaskQueue.RunDurationLimit",
+                "Stopping by the run duration limit failed unexpectedly.",
+                ex);
+        }
+    }
+
+    private void CancelRunDurationLimitWatch()
+    {
+        _runDurationLimitCts?.Cancel();
+        _runDurationLimitCts?.Dispose();
+        _runDurationLimitCts = null;
+    }
+
+    /// <summary>
+    /// WPF parity (TaskQueueViewModel.RunStopScriptOnceAsync): the end script has exactly one
+    /// launch per run. Manual stop and natural completion race on the same Interlocked slot;
+    /// the flag is reset when the next run leaves idle.
+    /// </summary>
+    /// <param name="manualStop">Whether the end script is gated by ｢使用手动停止脚本｣.</param>
+    /// <returns>The script execution result, or an informational result when nothing ran.</returns>
+    public async Task<UiOperationResult> RunStopScriptOnceAsync(bool manualStop)
+    {
+        var config = Runtime.ConfigurationService.CurrentConfig;
+        if (manualStop && !TryReadProfileBool(config, ConfigurationKeys.ManualStopWithScript, false))
+        {
+            return UiOperationResult.Ok("Manual stop script is disabled.");
+        }
+
+        if (string.IsNullOrWhiteSpace(TryReadProfileString(config, ConfigurationKeys.EndsWithScript, string.Empty)))
+        {
+            return UiOperationResult.Ok("End script is not configured.");
+        }
+
+        if (Interlocked.CompareExchange(ref _stopScriptLaunched, 1, 0) != 0)
+        {
+            return UiOperationResult.Ok("End script was already launched for this run.");
+        }
+
+        try
+        {
+            var result = await Runtime.PostActionFeatureService.ExecuteEndScriptAsync(manualStop);
+            if (!result.Success)
+            {
+                await RecordEventAsync("TaskQueue.Stop.EndsWithScript", result.Message, CancellationToken.None);
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                await RecordEventAsync("TaskQueue.Stop.EndsWithScript", ex.Message, CancellationToken.None);
+            }
+            catch
+            {
+                // Best effort: end script failures must not break the stop flow.
+            }
+
+            return UiOperationResult.Fail(UiErrorCode.PostActionExecutionFailed, ex.Message);
+        }
     }
 
     private void ScheduleSanityRecoveryReminder(DateTimeOffset now)
@@ -7183,7 +7597,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     "task completion",
                     BuildAllTasksCompletedExternalMessage(callback.Timestamp));
             case "TaskChainError":
-                var taskFailureLog = BuildTaskChainErrorLog(payload.TaskChain);
+                var taskFailureLog = BuildTaskChainErrorLog(payload);
                 return new TaskQueueSystemNotification(
                     NormalizeNotificationText(taskFailureLog.Content, "Task failed"),
                     string.Empty,
@@ -7999,19 +8413,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return false;
     }
 
-    private bool IsMainTaskQueueCompletion(CallbackPayload payload)
-    {
-        if (payload.FinishedTaskIds.Count == 0)
-        {
-            return false;
-        }
-
-        return payload.FinishedTaskIds.Any(taskId =>
-            Runtime.SessionService.TryResolveTaskIndexByCoreTaskId(taskId, out var taskIndex)
-            && IsValidTaskIndex(taskIndex, Tasks.Count)
-            && MainTaskModules.Contains(TaskModuleTypes.Normalize(Tasks[taskIndex].Type)));
-    }
-
     private async Task HandleCallbackAsync(CoreCallbackEvent callback)
     {
         // Capture the active run lease on the callback pump thread (dispatch time), not when
@@ -8019,7 +8420,19 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         // reach the UI thread after a new run already acquired its lease, and capturing at
         // execution time would release the new run's owner mid-run.
         var leaseSnapshot = _activeRunLease;
-        await Dispatcher.UIThread.InvokeAsync(() => HandleCallbackCoreAsync(callback, leaseSnapshot?.Lease));
+        try
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => HandleCallbackCoreAsync(callback, leaseSnapshot?.Lease));
+        }
+        catch (Exception ex)
+        {
+            // The pump hands us fire-and-forget tasks, so an exception here would otherwise be
+            // lost and leave the run without its terminal handling.
+            await RecordErrorAsync(
+                "TaskQueue.Callback.Handler",
+                $"TaskQueue callback handler failed for {callback.MsgName}({callback.MsgId}).",
+                ex);
+        }
     }
 
     private async Task HandleCallbackCoreAsync(CoreCallbackEvent callback, RunOwnershipLease? callbackRunLease)
@@ -8070,7 +8483,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             case "TaskChainStart":
                 _currentRunId = runId;
                 UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Running);
-                StartOrResetTaskTimeoutReminder();
                 AppendWpfCallbackLog(callback, metadata, taskIndex);
                 await RecordRuntimeStatusAsync(
                     runId,
@@ -8164,7 +8576,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 QueueAutomaticNotifications(callback, metadata, taskIndex, runId);
                 break;
             case "TaskChainStopped":
-                CancelTaskTimeoutReminder();
+                _taskQueueRunActive = false;
+                CancelStallReminder();
+                CancelRunDurationLimitWatch();
                 // WPF SetStopped() logs "Stopped" (split on both sides) when the
                 // stop callback arrives. notifyActivity stays false so the stall
                 // reminder cancelled above is not restarted by this final entry.
@@ -8191,11 +8605,23 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 CompleteTaskQueueRunOwnership(callbackRunLease);
                 break;
             case "AllTasksCompleted":
+                // WPF parity (AsstProxy.AllTasksCompleted, baa0032f70/91cdccbb17): whether this
+                // terminal callback is a main queue completion is decided by the run ownership
+                // that started it, not by a task-type whitelist. The old whitelist skipped
+                // completion for Custom/SingleStep/UserDataUpdate entries queued in the main
+                // queue and misjudged residual entries from failed feature starts.
+                // The watermarked state handler may already have released the owner before this
+                // UI handler runs, so the page-level marker set when the run started is
+                // authoritative (WPF takes the owner before SetIdle(true) clears it).
+                var isTaskQueueOwnedRun = _taskQueueRunActive
+                    || (callbackRunLease is { } terminalLease
+                        && string.Equals(terminalLease.Owner, TaskQueueRunOwner, StringComparison.Ordinal));
+                _taskQueueRunActive = false;
                 ResetAllTaskStatuses();
                 // A pure data-update chain (OperBox/Depot) only reports through
                 // finished_tasks and never sends TaskChainCompleted, so project those ids
                 // as completed instead of leaving them idle.
-                if (!IsMainTaskQueueCompletion(metadata))
+                if (!isTaskQueueOwnedRun)
                 {
                     foreach (var finishedTaskId in metadata.FinishedTaskIds)
                     {
@@ -8230,7 +8656,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 // post actions (e.g. the power-action confirmation countdown) are still
                 // running. Release the run owner before executing post actions.
                 CompleteTaskQueueRunOwnership(callbackRunLease);
-                if (IsMainTaskQueueCompletion(metadata))
+                if (isTaskQueueOwnedRun)
                 {
                     AppendWpfCallbackLog(callback, metadata, taskIndex);
                     QueueAutomaticNotifications(callback, metadata, taskIndex, runId);
@@ -8250,7 +8676,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
                     await TryTriggerPallasWineAsync(callback.Timestamp);
                 }
-                CancelTaskTimeoutReminder();
+                CancelStallReminder();
+                CancelRunDurationLimitWatch();
                 CompleteTaskQueueRunOwnership();
 
                 break;
@@ -8848,16 +9275,48 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
+    /// <summary>
+    /// Runs the completion post actions for a run that ended through the run duration limit.
+    /// The end script is not launched here: <see cref="StopAsync"/> already took the per-run
+    /// launch slot as a manual stop.
+    /// </summary>
+    private async Task RunPostActionsAfterManualStopAsync()
+    {
+        var once = PostActionModule.Once;
+        try
+        {
+            var result = await Runtime.PostActionFeatureService.ExecuteAfterCompletionAsync(
+                new PostActionExecutionContext(
+                    "RunDurationLimit",
+                    WasSuccessfulTaskChain: true,
+                    RunId: _currentRunId),
+                PostActionModule.BuildRuntimeConfig());
+            if (!result.Success)
+            {
+                LastErrorMessage = result.Message;
+                await RecordFailedResultAsync("PostAction.Execute", result);
+                return;
+            }
+
+            StatusMessage = result.Message;
+        }
+        finally
+        {
+            if (once)
+            {
+                await PostActionModule.ReloadPersistentConfigAsync();
+            }
+        }
+    }
+
     private async Task ExecutePostActionAfterCompletionAsync(CoreCallbackEvent callback, string runId, int? taskIndex)
     {
         var once = PostActionModule.Once;
         try
         {
-            var endScriptResult = await Runtime.PostActionFeatureService.ExecuteEndScriptAsync(manualStop: false);
-            if (!endScriptResult.Success)
-            {
-                await RecordEventAsync("TaskQueue.PostAction.EndsWithScript", endScriptResult.Message, CancellationToken.None);
-            }
+            // WPF parity (TaskQueueViewModel.CheckAfterCompleted -> RunStopScriptOnceAsync):
+            // natural completion shares the per-run launch slot with the manual stop path.
+            await RunStopScriptOnceAsync(manualStop: false);
 
             var result = await Runtime.PostActionFeatureService.ExecuteAfterCompletionAsync(
                 new PostActionExecutionContext(
@@ -9684,7 +10143,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             IsWaitingForStop = false;
             // WPF parity (RunningState Idle -> UpdateMainTasksProgress(0)).
             UpdateMainTasksProgress(0);
-            CancelTaskTimeoutReminder();
+            CancelStallReminder();
+            CancelRunDurationLimitWatch();
             SyncStoppedUiStateIfSessionNotActive();
         }
 

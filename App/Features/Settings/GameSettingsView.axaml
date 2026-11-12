@@ -137,18 +137,23 @@
                  Text="{Binding PenguinId, UpdateSourceTrigger=LostFocus}" />
       </Grid>
 
+      <CheckBox Classes="app-checkbox"
+                Content="{Binding RootTexts[Settings.Game.EnableStallTimeout]}"
+                IsChecked="{Binding EnableStallTimeout}" />
+
       <Grid Classes="settings-page-two-column"
             ColumnDefinitions="Auto,24,Auto">
         <Grid Classes="settings-page-labeled-row"
               controls:SettingsLabelWidthCoordinator.GroupKey="Game.Timeouts"
               ColumnDefinitions="Auto,*">
-          <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.TaskTimeoutMinutes]}" />
+          <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.StallTimeoutMinutes]}" />
           <controls:AppNumberInput Grid.Column="1"
                                    Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
                                    HorizontalAlignment="Left"
+                                   IsEnabled="{Binding EnableStallTimeout}"
                                    Minimum="0"
                                    Maximum="11451"
-                                   Value="{Binding TaskTimeoutMinutes}" />
+                                   Value="{Binding StallTimeoutMinutes}" />
         </Grid>
 
         <Grid Grid.Column="2"
@@ -163,6 +168,31 @@
                                    Maximum="11451"
                                    Value="{Binding ReminderIntervalMinutes}" />
         </Grid>
+      </Grid>
+
+      <CheckBox Classes="app-checkbox"
+                Content="{Binding RootTexts[Settings.Game.EnableRunDurationLimit]}"
+                IsChecked="{Binding EnableRunDurationLimit}" />
+
+      <Grid Classes="settings-page-two-column"
+            ColumnDefinitions="Auto,24,Auto"
+            IsVisible="{Binding ShowRunDurationLimitOptions}">
+        <Grid Classes="settings-page-labeled-row"
+              controls:SettingsLabelWidthCoordinator.GroupKey="Game.RunDurationLimit"
+              ColumnDefinitions="Auto,*">
+          <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.RunDurationLimitMinutes]}" />
+          <controls:AppNumberInput Grid.Column="1"
+                                   Width="{DynamicResource MAA.Size.Settings.FieldNarrowWidth}"
+                                   HorizontalAlignment="Left"
+                                   Minimum="1"
+                                   Maximum="11451"
+                                   Value="{Binding RunDurationLimitMinutes}" />
+        </Grid>
+
+        <CheckBox Grid.Column="2"
+                  Classes="app-checkbox"
+                  Content="{Binding RootTexts[Settings.Game.RunDurationLimitExecutePostActions]}"
+                  IsChecked="{Binding RunDurationLimitExecutePostActions}" />
       </Grid>
     </controls:AdaptiveSpacingStackPanel>
   </Grid>

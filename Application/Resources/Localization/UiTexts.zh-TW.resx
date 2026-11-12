@@ -5256,4 +5256,43 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="Toolbox.Error.SessionActivity.OtherActive" xml:space="preserve">
     <value>另一項工作階段操作正在進行，Toolbox 暫時無法啟動；請先停止或等待該操作。</value>
   </data>
+  <data name="StopTimeout" xml:space="preserve">
+    <value>停止逾時，Core 未能及時回應停止請求</value>
+  </data>
+  <data name="RestartRecommendation" xml:space="preserve">
+    <value>建議重新啟動 MAA 以恢復正常狀態</value>
+  </data>
+  <data name="OutOfMemoryError" xml:space="preserve">
+    <value>{0}任務因記憶體不足停止，請關閉部分程式或重新啟動 MAA 後再試</value>
+  </data>
+  <data name="GpuDeviceRemovedRestartRequired" xml:space="preserve">
+    <value>{0}任務因 GPU 推論裝置失效而停止，可能是顯示卡驅動程式更新或 GPU 重設所致。{key=RestartRecommendation}</value>
+  </data>
+  <data name="ResolutionChanged" xml:space="preserve">
+    <value>模擬器解析度已變更，連線已中斷。請重新開始任務以套用新解析度</value>
+  </data>
+  <data name="ResolutionNotSupportedCurrentResolution" xml:space="preserve">
+    <value>目前解析度：{0}x{1}</value>
+  </data>
+  <data name="TaskQueue.Stall.Warning" xml:space="preserve">
+    <value>任務日誌輸出已超過 {0} 分鐘無更新（目前已停滯 {1} 分鐘）。請確認任務是否正常執行，若任務正常可忽略此提示，若無回應則可能需要手動干預。</value>
+  </data>
+  <data name="TaskQueue.RunDurationLimit.Reached" xml:space="preserve">
+    <value>已達到執行時長上限（{0} 分鐘），停止任務</value>
+  </data>
+  <data name="Settings.Game.EnableStallTimeout" xml:space="preserve">
+    <value>啟用日誌更新停滯偵測</value>
+  </data>
+  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
+    <value>日誌輸出停滯逾時時間（分鐘）</value>
+  </data>
+  <data name="Settings.Game.EnableRunDurationLimit" xml:space="preserve">
+    <value>限制單次運行時長</value>
+  </data>
+  <data name="Settings.Game.RunDurationLimitMinutes" xml:space="preserve">
+    <value>運行時長上限（分鐘）</value>
+  </data>
+  <data name="Settings.Game.RunDurationLimitExecutePostActions" xml:space="preserve">
+    <value>停止後執行完成後動作</value>
+  </data>
 </root>

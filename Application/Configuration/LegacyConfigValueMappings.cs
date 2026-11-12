@@ -101,9 +101,21 @@ internal static class LegacyConfigValueMappings
         ["RuntimeSettings.ExecuteScriptOnManualStop"] = "Start.ManualStopWithScript",
         ["RuntimeSettings.BlockSleep"] = "Start.BlockSleep",
         ["RuntimeSettings.BlockSleepWithScreenOn"] = "Start.BlockSleepWithScreenOn",
+        // Pre-migration dev-v2 layout: the stall settings lived on RuntimeSettings before WPF
+        // moved them to Gui.Notification (24639a0fdd).
+        ["RuntimeSettings.EnableStallTimeout"] = "TimeOut.Timer.StallTimeoutEnabled",
+        ["RuntimeSettings.StallTimeoutMinutes"] = "TimeOut.Timer.StallTimeoutMinutes",
+        ["RuntimeSettings.StallTimeoutReminderIntervalMinutes"] = "TimeOut.Timer.ReminderIntervalMinutes",
+        // dev-v2 (5a55fc8ac1) run duration limit keys keep their names; mapping them explicitly
+        // keeps the importer from skipping the whole RuntimeSettings section as unsupported.
+        ["RuntimeSettings.EnableRunDurationLimit"] = "RuntimeSettings.EnableRunDurationLimit",
+        ["RuntimeSettings.RunDurationLimitMinutes"] = "RuntimeSettings.RunDurationLimitMinutes",
+        ["RuntimeSettings.RunDurationLimitExecutePostActions"] = "RuntimeSettings.RunDurationLimitExecutePostActions",
 
         // Gui.Notification
         ["Notification.ReminderIntervalMinutes"] = "TimeOut.Timer.ReminderIntervalMinutes",
+        ["Notification.EnableStallTimeout"] = "TimeOut.Timer.StallTimeoutEnabled",
+        ["Notification.StallTimeoutMinutes"] = "TimeOut.Timer.StallTimeoutMinutes",
 
         // Gui.RemoteControl
         ["RemoteControl.RemoteControlGetTaskEndpointUri"] = "RemoteControl.RemoteControlGetTaskEndpointUri",

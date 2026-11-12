@@ -342,6 +342,9 @@ internal static class BaselineTestSupport
         "Overlay.PreviewPinned",
         "TimeOut.Timer.StallTimeoutEnabled",
         "TimeOut.Timer.StallTimeoutMinutes",
+        "RuntimeSettings.EnableRunDurationLimit",
+        "RuntimeSettings.RunDurationLimitMinutes",
+        "RuntimeSettings.RunDurationLimitExecutePostActions",
     };
 
     // Maps each frozen configuration key value to its ConfigurationKeys constant identifier

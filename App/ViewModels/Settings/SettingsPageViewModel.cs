@@ -46,8 +46,13 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private const int EmulatorWaitSecondsMax = int.MaxValue;
     private const int DefaultEmulatorWaitSeconds = 60;
     private const int DefaultRemotePollIntervalMs = 1000;
-    private const int DefaultTaskTimeoutMinutes = 60;
+    // WPF dev-v2 NotificationSettings defaults (24639a0fdd): stall watch enabled, 30 minutes
+    // without any log output before the first warning; later warnings follow the reminder
+    // interval (also 30 minutes by default).
+    private const int DefaultStallTimeoutMinutes = 30;
     private const int DefaultReminderIntervalMinutes = 30;
+    // WPF dev-v2 RuntimeSettings defaults (5a55fc8ac1).
+    private const int DefaultRunDurationLimitMinutes = 240;
     private const int MaxTimeoutMinutes = 11451;
     private const int DefaultMaxNumberOfLogThumbnails = 100;
     private const int MaxNumberOfLogThumbnailsMin = 0;
@@ -386,8 +391,12 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private bool _enablePenguin = true;
     private bool _enableYituliu = true;
     private string _penguinId = string.Empty;
-    private int _taskTimeoutMinutes = DefaultTaskTimeoutMinutes;
+    private bool _stallTimeoutEnabled = true;
+    private int _stallTimeoutMinutes = DefaultStallTimeoutMinutes;
     private int _reminderIntervalMinutes = DefaultReminderIntervalMinutes;
+    private bool _enableRunDurationLimit;
+    private int _runDurationLimitMinutes = DefaultRunDurationLimitMinutes;
+    private bool _runDurationLimitExecutePostActions = true;
     private bool _hasPendingStartPerformanceChanges;
     private string _startPerformanceValidationMessage = string.Empty;
     private DateTimeOffset? _lastSuccessfulStartPerformanceSaveAt;
@@ -3628,13 +3637,65 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         }
     }
 
-    public int TaskTimeoutMinutes
+    public bool EnableStallTimeout
     {
-        get => _taskTimeoutMinutes;
+        get => _stallTimeoutEnabled;
+        set
+        {
+            if (SetProperty(ref _stallTimeoutEnabled, value))
+            {
+                MarkStartPerformanceDirty();
+            }
+        }
+    }
+
+    public int StallTimeoutMinutes
+    {
+        get => _stallTimeoutMinutes;
         set
         {
             var normalized = Math.Clamp(value, 0, MaxTimeoutMinutes);
-            if (SetProperty(ref _taskTimeoutMinutes, normalized))
+            if (SetProperty(ref _stallTimeoutMinutes, normalized))
+            {
+                MarkStartPerformanceDirty();
+            }
+        }
+    }
+
+    public bool EnableRunDurationLimit
+    {
+        get => _enableRunDurationLimit;
+        set
+        {
+            if (SetProperty(ref _enableRunDurationLimit, value))
+            {
+                MarkStartPerformanceDirty();
+                OnPropertyChanged(nameof(ShowRunDurationLimitOptions));
+            }
+        }
+    }
+
+    public bool ShowRunDurationLimitOptions => EnableRunDurationLimit;
+
+    public int RunDurationLimitMinutes
+    {
+        get => _runDurationLimitMinutes;
+        set
+        {
+            var normalized = Math.Clamp(value, 1, MaxTimeoutMinutes);
+            if (SetProperty(ref _runDurationLimitMinutes, normalized))
+            {
+                MarkStartPerformanceDirty();
+            }
+        }
+    }
+
+    public bool RunDurationLimitExecutePostActions
+    {
+        get => _runDurationLimitExecutePostActions;
+        set
+        {
+            if (SetProperty(ref _runDurationLimitExecutePostActions, value))
             {
                 MarkStartPerformanceDirty();
             }
@@ -10875,8 +10936,12 @@ public sealed record StartPerformanceSettingsSnapshot(
     bool EnablePenguin,
     bool EnableYituliu,
     string PenguinId,
-    int TaskTimeoutMinutes,
-    int ReminderIntervalMinutes)
+    bool EnableStallTimeout,
+    int StallTimeoutMinutes,
+    int ReminderIntervalMinutes,
+    bool EnableRunDurationLimit,
+    int RunDurationLimitMinutes,
+    bool RunDurationLimitExecutePostActions)
 {
     public IReadOnlyDictionary<string, string> ToGlobalSettingUpdates()
     {
@@ -10905,8 +10970,12 @@ public sealed record StartPerformanceSettingsSnapshot(
             [ConfigurationKeys.EnablePenguin] = EnablePenguin.ToString(),
             [ConfigurationKeys.EnableYituliu] = EnableYituliu.ToString(),
             [ConfigurationKeys.PenguinId] = PenguinId,
-            [ConfigurationKeys.TaskTimeoutMinutes] = TaskTimeoutMinutes.ToString(),
+            [ConfigurationKeys.StallTimeoutEnabled] = EnableStallTimeout.ToString(),
+            [ConfigurationKeys.StallTimeoutMinutes] = StallTimeoutMinutes.ToString(),
             [ConfigurationKeys.ReminderIntervalMinutes] = ReminderIntervalMinutes.ToString(),
+            [ConfigurationKeys.EnableRunDurationLimit] = EnableRunDurationLimit.ToString(),
+            [ConfigurationKeys.RunDurationLimitMinutes] = RunDurationLimitMinutes.ToString(),
+            [ConfigurationKeys.RunDurationLimitExecutePostActions] = RunDurationLimitExecutePostActions.ToString(),
         };
 
         // GPU settings are profile-scoped to match WPF GpuOption (ConfigurationHelper.SetValue)

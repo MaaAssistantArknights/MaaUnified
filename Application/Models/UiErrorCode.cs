@@ -24,11 +24,13 @@ public static class UiErrorCode
     public const string PlatformOperationFailed = "PlatformOperationFailed";
     public const string ProfileMissing = "ProfileMissing";
     public const string RemoteControlConnectivityFailed = "RemoteControlConnectivityFailed";
+    public const string RequiresRestart = "RequiresRestart";
     public const string SessionStateNotAllowed = "SessionStateNotAllowed";
     public const string SettingBatchEmpty = "SettingBatchEmpty";
     public const string SettingKeyMissing = "SettingKeyMissing";
     public const string SettingsSaveFailed = "SettingsSaveFailed";
     public const string StageManagerServiceUnavailable = "StageManagerServiceUnavailable";
+    public const string StopTimedOut = "StopTimedOut";
     public const string TaskLoadFailed = "TaskLoadFailed";
     public const string TaskMoveOutOfRange = "TaskMoveOutOfRange";
     public const string TaskNameMissing = "TaskNameMissing";

@@ -60,6 +60,93 @@ public sealed class SessionStateSyncTests
     }
 
     [Fact]
+    public async Task StopAsync_WhenCoreDoesNotSettle_ForceCollectRecoversIdleAndIgnoresLateResult()
+    {
+        var stopCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var bridge = new FakeBridge
+        {
+            BlockStop = true,
+            IgnoreStopCancellation = true,
+            StopCompletion = stopCompletion,
+        };
+        var session = new UnifiedSessionService(
+            bridge,
+            CreateConfigService(),
+            new UiLogService(),
+            new SessionStateMachine());
+
+        var start = await session.StartAsync();
+        Assert.True(start.Success);
+        Assert.Equal(SessionState.Running, session.CurrentState);
+        Assert.True(session.TryAcquireRun("TaskQueue", out _, out _));
+
+        var stopTask = session.StopAsync();
+        await bridge.StopStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(SessionState.Stopping, session.CurrentState);
+
+        // WPF TaskQueueViewModel.Stop timeout branch: the caller gives up on the native stop
+        // and the session is recovered to Idle with the run owner released.
+        Assert.True(session.ForceCollectAfterStopTimeout("Session.Test.StopTimeout"));
+        Assert.Equal(SessionState.Idle, session.CurrentState);
+        Assert.Null(session.CurrentRunOwner);
+
+        // A repeated force collect on the already recovered session is a no-op.
+        Assert.False(session.ForceCollectAfterStopTimeout("Session.Test.StopTimeout.Again"));
+
+        // The hung native stop settles afterwards; its result must not move the state machine.
+        stopCompletion.TrySetResult(true);
+        var stop = await stopTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(stop.Success);
+        await Task.Delay(150);
+        Assert.Equal(SessionState.Idle, session.CurrentState);
+
+        bridge.Complete();
+    }
+
+    [Fact]
+    public async Task CallbackStream_ResolutionChanged_ShouldInvalidateConnectionAndReturnToIdle()
+    {
+        var bridge = new FakeBridge();
+        var session = new UnifiedSessionService(
+            bridge,
+            CreateConfigService(),
+            new UiLogService(),
+            new SessionStateMachine());
+
+        var start = await session.StartAsync();
+        Assert.True(start.Success);
+        Assert.Equal(SessionState.Running, session.CurrentState);
+
+        using var cts = new CancellationTokenSource();
+        var pumpTask = Task.Run(async () =>
+        {
+            try
+            {
+                await session.StartCallbackPumpAsync(_ => Task.CompletedTask, cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // expected on cancellation
+            }
+        });
+
+        // WPF dev-v2 f4d8fba923: a runtime resolution change closes the connection and stops
+        // the running task instead of leaving the session ｢running｣ against a dead link.
+        bridge.Publish(new CoreCallbackEvent(
+            9,
+            "ConnectionInfo",
+            """{"what":"ResolutionChanged","details":{"width":1920,"height":1080}}""",
+            DateTimeOffset.UtcNow));
+
+        await WaitUntilAsync(() => session.CurrentState == SessionState.Idle);
+        Assert.Null(session.LastSuccessfulConnectionInfo);
+
+        cts.Cancel();
+        bridge.Complete();
+        await pumpTask;
+    }
+
+    [Fact]
     public async Task CallbackStream_StaleTerminalCallbackFromStoppedBatch_DoesNotRegressRunningState()
     {
         var bridge = new FakeBridge();
@@ -1644,6 +1731,15 @@ public sealed class SessionStateSyncTests
 
         public int StopCallCount { get; private set; }
 
+        public bool BlockStop { get; init; }
+
+        public bool IgnoreStopCancellation { get; init; }
+
+        public TaskCompletionSource<bool>? StopCompletion { get; init; }
+
+        public TaskCompletionSource<bool> StopStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public int AppendCallCount { get; private set; }
 
         public List<CoreTaskRequest> AppendedTasks { get; } = [];
@@ -1771,12 +1867,29 @@ public sealed class SessionStateSyncTests
                 : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "queue cleanup failed")));
         }
 
-        public Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
+        public async Task<CoreResult<bool>> StopAsync(CancellationToken cancellationToken = default)
         {
             StopCallCount++;
-            return Task.FromResult(StopSucceeds
+            StopStarted.TrySetResult(true);
+            if (BlockStop)
+            {
+                if (StopCompletion is null)
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                else if (IgnoreStopCancellation)
+                {
+                    await StopCompletion.Task;
+                }
+                else
+                {
+                    await StopCompletion.Task.WaitAsync(cancellationToken);
+                }
+            }
+
+            return StopSucceeds
                 ? CoreResult<bool>.Ok(true)
-                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "stop failed")));
+                : CoreResult<bool>.Fail(new CoreError(CoreErrorCode.StopFailed, "stop failed"));
         }
 
         public Task<CoreResult<CoreRuntimeStatus>> GetRuntimeStatusAsync(CancellationToken cancellationToken = default)

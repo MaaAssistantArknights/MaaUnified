@@ -496,8 +496,12 @@ public sealed partial class SettingsPageViewModel
             EnablePenguin: EnablePenguin,
             EnableYituliu: EnableYituliu,
             PenguinId: (PenguinId ?? string.Empty).Trim(),
-            TaskTimeoutMinutes: Math.Clamp(TaskTimeoutMinutes, 0, MaxTimeoutMinutes),
-            ReminderIntervalMinutes: Math.Clamp(ReminderIntervalMinutes, 1, MaxTimeoutMinutes));
+            EnableStallTimeout: EnableStallTimeout,
+            StallTimeoutMinutes: Math.Clamp(StallTimeoutMinutes, 0, MaxTimeoutMinutes),
+            ReminderIntervalMinutes: Math.Clamp(ReminderIntervalMinutes, 1, MaxTimeoutMinutes),
+            EnableRunDurationLimit: EnableRunDurationLimit,
+            RunDurationLimitMinutes: Math.Clamp(RunDurationLimitMinutes, 1, MaxTimeoutMinutes),
+            RunDurationLimitExecutePostActions: RunDurationLimitExecutePostActions);
     }
 
     private UiOperationResult ValidateStartPerformanceSnapshot(StartPerformanceSettingsSnapshot snapshot)
@@ -594,14 +598,24 @@ public sealed partial class SettingsPageViewModel
             EnablePenguin: ReadProfileBoolFlexible(config, ConfigurationKeys.EnablePenguin, true),
             EnableYituliu: ReadProfileBoolFlexible(config, ConfigurationKeys.EnableYituliu, true),
             PenguinId: ReadProfileString(config, ConfigurationKeys.PenguinId, string.Empty).Trim(),
-            TaskTimeoutMinutes: Math.Clamp(
-                ReadProfileInt(config, ConfigurationKeys.TaskTimeoutMinutes, DefaultTaskTimeoutMinutes),
+            EnableStallTimeout: ReadProfileBoolFlexible(config, ConfigurationKeys.StallTimeoutEnabled, true),
+            StallTimeoutMinutes: Math.Clamp(
+                ReadProfileInt(config, ConfigurationKeys.StallTimeoutMinutes, DefaultStallTimeoutMinutes),
                 0,
                 MaxTimeoutMinutes),
             ReminderIntervalMinutes: Math.Clamp(
                 ReadProfileInt(config, ConfigurationKeys.ReminderIntervalMinutes, DefaultReminderIntervalMinutes),
                 1,
-                MaxTimeoutMinutes));
+                MaxTimeoutMinutes),
+            EnableRunDurationLimit: ReadProfileBoolFlexible(config, ConfigurationKeys.EnableRunDurationLimit, false),
+            RunDurationLimitMinutes: Math.Clamp(
+                ReadProfileInt(config, ConfigurationKeys.RunDurationLimitMinutes, DefaultRunDurationLimitMinutes),
+                1,
+                MaxTimeoutMinutes),
+            RunDurationLimitExecutePostActions: ReadProfileBoolFlexible(
+                config,
+                ConfigurationKeys.RunDurationLimitExecutePostActions,
+                true));
     }
 
     private static bool HasExplicitStartPerformanceConfigValues(
@@ -789,8 +803,12 @@ public sealed partial class SettingsPageViewModel
             EnablePenguin = snapshot.EnablePenguin;
             EnableYituliu = snapshot.EnableYituliu;
             PenguinId = snapshot.PenguinId;
-            TaskTimeoutMinutes = snapshot.TaskTimeoutMinutes;
+            EnableStallTimeout = snapshot.EnableStallTimeout;
+            StallTimeoutMinutes = snapshot.StallTimeoutMinutes;
             ReminderIntervalMinutes = snapshot.ReminderIntervalMinutes;
+            EnableRunDurationLimit = snapshot.EnableRunDurationLimit;
+            RunDurationLimitMinutes = snapshot.RunDurationLimitMinutes;
+            RunDurationLimitExecutePostActions = snapshot.RunDurationLimitExecutePostActions;
         }
         finally
         {

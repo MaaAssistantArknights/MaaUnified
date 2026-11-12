@@ -5393,28 +5393,87 @@
     {
       "key": "TimeOut.Timer.StallTimeoutMinutes",
       "owner_item_id": "Settings.Game",
-      "parity_status": "Gap",
+      "parity_status": "Aligned",
       "priority": "P0",
-      "notes": "Gap: complete mapping_target/read_path/write_path evidence is not recorded.",
+      "notes": "WPF dev-v2 24639a0fdd stall detection: the value is loaded from the active profile, persisted by the settings page, and consumed by the task queue stall watch. Executed evidence: TaskQueueG2FeatureTests.StallDetection_WarnsAfterNoOutputAndResetsOnActivity.",
       "evidence": {
-        "ui_path": "App/ViewModels/TaskQueue/TaskQueuePageViewModel.cs",
+        "ui_path": "App/Features/Settings/GameSettingsView.axaml",
         "log_path": "debug/avalonia-ui-events.log",
         "scope": "Config.TimeOut.Timer.StallTimeoutMinutes",
         "case_id": "CFG-298"
-      }
+      },
+      "waiver": null,
+      "mapping_target": "SettingsPageViewModel.StallTimeoutMinutes",
+      "read_path": "App/ViewModels/Settings/SettingsPageViewModel.StartPerformance.cs::ReadStartPerformanceSnapshot",
+      "write_path": "App/ViewModels/Settings/SettingsPageViewModel.cs::ToProfileSettingUpdates"
     },
     {
       "key": "TimeOut.Timer.StallTimeoutEnabled",
       "owner_item_id": "Settings.Game",
-      "parity_status": "Gap",
+      "parity_status": "Aligned",
       "priority": "P0",
-      "notes": "Gap: complete mapping_target/read_path/write_path evidence is not recorded.",
+      "notes": "WPF dev-v2 24639a0fdd stall detection toggle: the value is loaded from the active profile, persisted by the settings page, and gates the task queue stall watch. Executed evidence: TaskQueueG2FeatureTests.StallDetection_WarnsAfterNoOutputAndResetsOnActivity.",
       "evidence": {
-        "ui_path": "App/ViewModels/TaskQueue/TaskQueuePageViewModel.cs",
+        "ui_path": "App/Features/Settings/GameSettingsView.axaml",
         "log_path": "debug/avalonia-ui-events.log",
         "scope": "Config.TimeOut.Timer.StallTimeoutEnabled",
         "case_id": "CFG-299"
-      }
+      },
+      "waiver": null,
+      "mapping_target": "SettingsPageViewModel.EnableStallTimeout",
+      "read_path": "App/ViewModels/Settings/SettingsPageViewModel.StartPerformance.cs::ReadStartPerformanceSnapshot",
+      "write_path": "App/ViewModels/Settings/SettingsPageViewModel.cs::ToProfileSettingUpdates"
+    },
+    {
+      "key": "RuntimeSettings.EnableRunDurationLimit",
+      "owner_item_id": "Settings.Game",
+      "parity_status": "Aligned",
+      "priority": "P0",
+      "notes": "WPF dev-v2 5a55fc8ac1 single-run duration limit: the value is loaded from the active profile, persisted by the settings page, and arms the task queue deadline watch. Executed evidence: TaskQueueG2FeatureTests.RunDurationLimit_Reached_ShouldStopAndRunPostActionsOnce. Executed evidence: pending (locator contract verified; per-row executed test not yet attached).",
+      "evidence": {
+        "ui_path": "App/Features/Settings/GameSettingsView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.RuntimeSettings.EnableRunDurationLimit",
+        "case_id": "CFG-302"
+      },
+      "waiver": null,
+      "mapping_target": "SettingsPageViewModel.EnableRunDurationLimit",
+      "read_path": "App/ViewModels/Settings/SettingsPageViewModel.StartPerformance.cs::ReadStartPerformanceSnapshot",
+      "write_path": "App/ViewModels/Settings/SettingsPageViewModel.cs::ToProfileSettingUpdates"
+    },
+    {
+      "key": "RuntimeSettings.RunDurationLimitMinutes",
+      "owner_item_id": "Settings.Game",
+      "parity_status": "Aligned",
+      "priority": "P0",
+      "notes": "WPF dev-v2 5a55fc8ac1 single-run duration limit minutes (default 240): loaded, persisted, and consumed by the task queue deadline watch. Executed evidence: TaskQueueG2FeatureTests.RunDurationLimit_Reached_ShouldStopAndRunPostActionsOnce. Executed evidence: pending (locator contract verified; per-row executed test not yet attached).",
+      "evidence": {
+        "ui_path": "App/Features/Settings/GameSettingsView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.RuntimeSettings.RunDurationLimitMinutes",
+        "case_id": "CFG-303"
+      },
+      "waiver": null,
+      "mapping_target": "SettingsPageViewModel.RunDurationLimitMinutes",
+      "read_path": "App/ViewModels/Settings/SettingsPageViewModel.StartPerformance.cs::ReadStartPerformanceSnapshot",
+      "write_path": "App/ViewModels/Settings/SettingsPageViewModel.cs::ToProfileSettingUpdates"
+    },
+    {
+      "key": "RuntimeSettings.RunDurationLimitExecutePostActions",
+      "owner_item_id": "Settings.Game",
+      "parity_status": "Aligned",
+      "priority": "P0",
+      "notes": "WPF dev-v2 5a55fc8ac1 option to run post actions after the duration limit stops the run: loaded, persisted, and consumed by the task queue deadline watch. Executed evidence: TaskQueueG2FeatureTests.RunDurationLimit_Reached_ShouldStopAndRunPostActionsOnce. Executed evidence: pending (locator contract verified; per-row executed test not yet attached).",
+      "evidence": {
+        "ui_path": "App/Features/Settings/GameSettingsView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.RuntimeSettings.RunDurationLimitExecutePostActions",
+        "case_id": "CFG-304"
+      },
+      "waiver": null,
+      "mapping_target": "SettingsPageViewModel.RunDurationLimitExecutePostActions",
+      "read_path": "App/ViewModels/Settings/SettingsPageViewModel.StartPerformance.cs::ReadStartPerformanceSnapshot",
+      "write_path": "App/ViewModels/Settings/SettingsPageViewModel.cs::ToProfileSettingUpdates"
     },
     {
       "key": "Bluestacks.Config.Path",
@@ -6933,10 +6992,10 @@
   "metadata": {
     "feature_item_count": 38,
     "system_item_count": 12,
-    "config_key_count": 301,
+    "config_key_count": 304,
     "fallback_record_count": 15,
     "wpf_config_key_count": 292,
-    "avalonia_extension_config_key_count": 9,
+    "avalonia_extension_config_key_count": 12,
     "wpf_config_key_set_sha256": "566082d9e031b813dd5806d73baa6c319b0e44db24a2a6001be3b16eae94a0cd"
   }
 }

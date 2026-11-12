@@ -58,9 +58,11 @@ public sealed class TaskQueueNotificationTests
             ["finished_tasks"] = new JsonArray(1),
         };
         fixture.MapCoreTaskId(1, 0);
+        var runLease = fixture.AcquireTaskQueueRun();
         await NotificationFixture.InvokeCallbackAsync(
             fixture.ViewModel,
-            new CoreCallbackEvent(0, "AllTasksCompleted", payload.ToJsonString(), DateTimeOffset.UtcNow));
+            new CoreCallbackEvent(0, "AllTasksCompleted", payload.ToJsonString(), DateTimeOffset.UtcNow),
+            runLease);
 
         await WaitForNotificationCountAsync(fixture.NotificationCapability, 1);
         Assert.Contains("completed", fixture.NotificationCapability.LastTitle, StringComparison.OrdinalIgnoreCase);
@@ -79,9 +81,11 @@ public sealed class TaskQueueNotificationTests
             ["finished_tasks"] = new JsonArray(1),
         };
         fixture.MapCoreTaskId(1, 0);
+        var runLease = fixture.AcquireTaskQueueRun();
         await NotificationFixture.InvokeCallbackAsync(
             fixture.ViewModel,
-            new CoreCallbackEvent(0, "AllTasksCompleted", payload.ToJsonString(), DateTimeOffset.UtcNow));
+            new CoreCallbackEvent(0, "AllTasksCompleted", payload.ToJsonString(), DateTimeOffset.UtcNow),
+            runLease);
 
         await WaitForNotificationCountAsync(fixture.NotificationCapability, 1);
         Assert.False(fixture.NotificationCapability.LastNotification?.UseSystemNotification);
@@ -163,13 +167,15 @@ public sealed class TaskQueueNotificationTests
         await fixture.ViewModel.InitializeAsync();
         fixture.ViewModel.AppendSystemLog("detail-line");
         fixture.MapCoreTaskId(1, 0);
+        var runLease = fixture.AcquireTaskQueueRun();
         await NotificationFixture.InvokeCallbackAsync(
             fixture.ViewModel,
             new CoreCallbackEvent(
                 0,
                 "AllTasksCompleted",
                 """{"run_id":"external-completion-run","finished_tasks":[1]}""",
-                DateTimeOffset.UtcNow));
+                DateTimeOffset.UtcNow),
+            runLease);
 
         await WaitForExternalNotificationCountAsync(notificationProvider, 1);
         var call = Assert.Single(notificationProvider.SendCalls);
@@ -692,7 +698,10 @@ public sealed class TaskQueueNotificationTests
             }
         }
 
-        public static async Task InvokeCallbackAsync(TaskQueuePageViewModel vm, CoreCallbackEvent callback)
+        public static async Task InvokeCallbackAsync(
+            TaskQueuePageViewModel vm,
+            CoreCallbackEvent callback,
+            RunOwnershipLease? runLease = null)
         {
             var method = typeof(TaskQueuePageViewModel).GetMethod(
                 "HandleCallbackCoreAsync",
@@ -702,9 +711,19 @@ public sealed class TaskQueueNotificationTests
                 throw new InvalidOperationException("Unable to locate TaskQueue callback handler.");
             }
 
-            var result = method.Invoke(vm, new object?[] { callback, GetActiveRunLease(vm) }) as Task
+            var result = method.Invoke(vm, new object?[] { callback, runLease ?? GetActiveRunLease(vm) }) as Task
                 ?? throw new InvalidOperationException("TaskQueue callback handler did not return a task.");
             await result;
+        }
+
+        /// <summary>
+        /// Declares the main-queue run ownership a real StartAsync would hold. WPF dev-v2
+        /// decides AllTasksCompleted notification/post-action eligibility by that ownership.
+        /// </summary>
+        public RunOwnershipLease AcquireTaskQueueRun()
+        {
+            Assert.True(Runtime.SessionService.TryAcquireRun("TaskQueue", out var lease, out _));
+            return lease;
         }
 
         private static RunOwnershipLease? GetActiveRunLease(TaskQueuePageViewModel vm)

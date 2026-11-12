@@ -419,7 +419,11 @@ public sealed class ConfigurationImportTests
         var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
 
         Assert.True(report.Success);
-        Assert.Contains(
+        // dev-v2 5a55fc8ac1 run duration limit keys are supported now (P1-01), so they import
+        // instead of warning.
+        Assert.True(
+            service.CurrentConfig.Profiles["Default"].Values["RuntimeSettings.EnableRunDurationLimit"]?.GetValue<bool>());
+        Assert.DoesNotContain(
             report.Warnings,
             warning => warning.Contains("Gui.RuntimeSettings.EnableRunDurationLimit", StringComparison.Ordinal));
         Assert.Contains(
