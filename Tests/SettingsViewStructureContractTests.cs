@@ -456,7 +456,7 @@ public sealed class SettingsViewStructureContractTests
             < versionUpdate.IndexOf("Settings.VersionUpdate.ResourceUpdate", StringComparison.Ordinal),
             "Version update actions should keep software update before resource update.");
         Assert.Contains("RowDefinitions=\"Auto,10,Auto\"", versionUpdate, StringComparison.Ordinal);
-        Assert.Contains("ColumnDefinitions=\"Auto,12,Auto,24,Auto\"", versionUpdate, StringComparison.Ordinal);
+        Assert.Contains("ColumnDefinitions=\"Auto,12,Auto,24,Auto,24,Auto\"", versionUpdate, StringComparison.Ordinal);
         Assert.Contains("Grid.Column=\"2\"", versionUpdate, StringComparison.Ordinal);
         Assert.Contains("Tip=\"{DynamicResource ResourceUpdateTip}\"", versionUpdate, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding VersionUpdateInlineMessage}\"", versionUpdate, StringComparison.Ordinal);
