@@ -1615,6 +1615,41 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
+    public async Task RoguelikeModule_LanguageHotSwitch_ShouldRefreshLocalizedOptionsInPlace()
+    {
+        await using var fixture = await TestFixture.CreateAsync(language: "zh-cn");
+        var module = new RoguelikeModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "zh-cn" });
+
+        Assert.Equal("界园", module.ThemeOptions.Single(option => option.Value == "JieGarden").Display);
+
+        module.Theme = "Sami";
+        module.Mode = 4;
+
+        var themeOptions = module.ThemeOptions;
+        var modeOptions = module.ModeOptions;
+        var difficultyOptions = module.DifficultyOptions;
+        var squadOptions = module.SquadOptions;
+        var difficultyCurrent = difficultyOptions.Single(option => option.Value == -1);
+        Assert.Equal("不切换 (-1)", difficultyCurrent.Display);
+
+        module.Texts.Language = "en-us";
+
+        // 语言热切换只刷新条目文本（RefreshLocalization），不重建列表、不影响选中值。
+        Assert.Same(themeOptions, module.ThemeOptions);
+        Assert.Same(modeOptions, module.ModeOptions);
+        Assert.Same(difficultyOptions, module.DifficultyOptions);
+        Assert.Same(squadOptions, module.SquadOptions);
+        Assert.Equal("Sami", module.Theme);
+        Assert.Equal(4, module.Mode);
+        Assert.Equal("Sami", themeOptions.Single(option => option.Value == "Sami").Display);
+        Assert.Equal(
+            "Gain Experience Points, clear as many nodes as possible",
+            modeOptions.Single(option => option.Value == 0).Display);
+        Assert.Equal("Don't Switch (-1)", difficultyCurrent.Display);
+        Assert.Equal("Gathering Squad", squadOptions.Single(option => option.Value == "集群分队").Display);
+    }
+
+    [Fact]
     public async Task TaskQueuePage_TaskEnabledToggle_ShouldPersistToService()
     {
         await using var fixture = await TestFixture.CreateAsync();

@@ -79,6 +79,9 @@
   <data name="Common.LoadingTaskHint" xml:space="preserve">
     <value>왼쪽 작업 목록에서 작업을 먼저 선택하세요.</value>
   </data>
+  <data name="Common.NotAdapted" xml:space="preserve">
+    <value>미지원</value>
+  </data>
   <data name="Common.ValidationIssues" xml:space="preserve">
     <value>검증 메시지</value>
   </data>

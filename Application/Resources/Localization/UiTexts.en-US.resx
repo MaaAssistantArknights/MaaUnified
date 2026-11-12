@@ -143,6 +143,9 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Common.LoadingTaskHint" xml:space="preserve">
     <value>Select a task from the left list first.</value>
   </data>
+  <data name="Common.NotAdapted" xml:space="preserve">
+    <value>Not yet adapted</value>
+  </data>
   <data name="Common.ValidationIssues" xml:space="preserve">
     <value>Validation Issues</value>
   </data>

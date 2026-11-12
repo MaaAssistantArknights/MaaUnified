@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             xmlns:infra="clr-namespace:MAAUnified.App.ViewModels.Infrastructure"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.TaskQueue"
              x:Class="MAAUnified.App.Features.TaskQueue.RoguelikeSettingsView">
   <UserControl.Styles>
@@ -15,11 +16,11 @@
               <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
                 <controls:SettingsLabel Text="{Binding Texts[Roguelike.Theme]}" />
                 <controls:AppSelect ItemsSource="{Binding ThemeOptions}"
-                                    SelectedValueBinding="{Binding Type}"
+                                    SelectedValueBinding="{Binding Value}"
                                     SelectedValue="{Binding Theme}">
                   <controls:AppSelect.ItemTemplate>
-                    <DataTemplate x:DataType="vm:TaskModuleOption">
-                      <TextBlock Text="{Binding DisplayName}" />
+                    <DataTemplate x:DataType="infra:LocalizedOptionItem">
+                      <TextBlock Text="{Binding Display}" ToolTip.Tip="{Binding Tip}" />
                     </DataTemplate>
                   </controls:AppSelect.ItemTemplate>
                 </controls:AppSelect>
@@ -33,8 +34,8 @@
                                     SelectedValueBinding="{Binding Value}"
                                     SelectedValue="{Binding Difficulty}">
                   <controls:AppSelect.ItemTemplate>
-                    <DataTemplate x:DataType="vm:RoguelikeModuleViewModel+IntOption">
-                      <TextBlock Text="{Binding DisplayName}" />
+                    <DataTemplate x:DataType="infra:LocalizedOptionItem">
+                      <TextBlock Text="{Binding Display}" ToolTip.Tip="{Binding Tip}" />
                     </DataTemplate>
                   </controls:AppSelect.ItemTemplate>
                 </controls:AppSelect>
@@ -47,8 +48,8 @@
                                     SelectedValueBinding="{Binding Value}"
                                     SelectedValue="{Binding Mode}">
                   <controls:AppSelect.ItemTemplate>
-                    <DataTemplate x:DataType="vm:RoguelikeModuleViewModel+IntOption">
-                      <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                    <DataTemplate x:DataType="infra:LocalizedOptionItem">
+                      <TextBlock Text="{Binding Display}" ToolTip.Tip="{Binding Tip}" TextWrapping="Wrap" />
                     </DataTemplate>
                   </controls:AppSelect.ItemTemplate>
                 </controls:AppSelect>
@@ -58,11 +59,11 @@
                                           controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
                 <controls:SettingsLabel Text="{Binding Texts[Roguelike.CollectibleModeSquad]}" />
                 <controls:AppSelect ItemsSource="{Binding SquadOptions}"
-                                    SelectedValueBinding="{Binding Type}"
+                                    SelectedValueBinding="{Binding Value}"
                                     SelectedValue="{Binding CollectibleModeSquad}">
                   <controls:AppSelect.ItemTemplate>
-                    <DataTemplate x:DataType="vm:TaskModuleOption">
-                      <TextBlock Text="{Binding DisplayName}" />
+                    <DataTemplate x:DataType="infra:LocalizedOptionItem">
+                      <TextBlock Text="{Binding Display}" ToolTip.Tip="{Binding Tip}" />
                     </DataTemplate>
                   </controls:AppSelect.ItemTemplate>
                 </controls:AppSelect>
@@ -75,11 +76,11 @@
               <controls:SettingsInlineRow controls:SettingsLabelWidthCoordinator.GroupKey="TaskQueue.Fields">
                 <controls:SettingsLabel Text="{Binding Texts[Roguelike.Squad]}" />
                 <controls:AppSelect ItemsSource="{Binding SquadOptions}"
-                                    SelectedValueBinding="{Binding Type}"
+                                    SelectedValueBinding="{Binding Value}"
                                     SelectedValue="{Binding Squad}">
                   <controls:AppSelect.ItemTemplate>
-                    <DataTemplate x:DataType="vm:TaskModuleOption">
-                      <TextBlock Text="{Binding DisplayName}" />
+                    <DataTemplate x:DataType="infra:LocalizedOptionItem">
+                      <TextBlock Text="{Binding Display}" ToolTip.Tip="{Binding Tip}" />
                     </DataTemplate>
                   </controls:AppSelect.ItemTemplate>
                 </controls:AppSelect>

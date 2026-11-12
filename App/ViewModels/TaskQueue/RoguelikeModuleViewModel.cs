@@ -1,6 +1,8 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Text.Json.Nodes;
 using MAAUnified.App.Services;
+using MAAUnified.App.ViewModels.Infrastructure;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Services;
@@ -37,15 +39,6 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
 
     private static readonly object BattleDataCacheLock = new();
     private static BattleDataCache? _battleDataCache;
-
-    private static readonly (string Value, string TextKey, string Fallback)[] ThemeOptionSpecs =
-    [
-        ("Phantom", "RoguelikeThemePhantom", "傀影"),
-        ("Mizuki", "RoguelikeThemeMizuki", "水月"),
-        ("Sami", "RoguelikeThemeSami", "萨米"),
-        ("Sarkaz", "RoguelikeThemeSarkaz", "萨卡兹"),
-        ("JieGarden", "RoguelikeThemeJieGarden", "界园"),
-    ];
 
     private static readonly Dictionary<string, IReadOnlyList<(string TextKey, string Value, string Fallback)>> SquadDictionary =
         new(StringComparer.Ordinal)
@@ -178,10 +171,11 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
     private bool _suppressDelayAbortPersist;
 
     private bool _suppressOptionRefresh;
-    private IReadOnlyList<TaskModuleOption> _themeOptions = [];
-    private IReadOnlyList<IntOption> _modeOptions = [];
-    private IReadOnlyList<IntOption> _difficultyOptions = [];
-    private IReadOnlyList<TaskModuleOption> _squadOptions = [];
+    private readonly UiLocalizer _optionLocalizer;
+    private readonly LocalizedObservableList<string> _themeOptions;
+    private LocalizedObservableList<int> _modeOptions;
+    private LocalizedObservableList<int> _difficultyOptions;
+    private LocalizedObservableList<string> _squadOptions;
     private IReadOnlyList<TaskModuleOption> _rolesOptions = [];
     private IReadOnlyList<IntOption> _findPlayTimeTargetOptions = [];
     private IReadOnlyList<TaskModuleOption> _coreCharOptions = [];
@@ -190,6 +184,11 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
     public RoguelikeModuleViewModel(MAAUnifiedRuntime runtime, LocalizedTextMap texts)
         : base(runtime, texts, "TaskQueue.Roguelike")
     {
+        _optionLocalizer = new UiLocalizer(texts.Language);
+        _themeOptions = BuildThemeOptions();
+        _modeOptions = BuildModeOptions();
+        _difficultyOptions = BuildDifficultyOptions();
+        _squadOptions = BuildSquadOptions();
         ApplyPersistentDelayAbortSetting(ResolveDelayAbortUntilCombatComplete());
         Texts.PropertyChanged += OnTextsPropertyChanged;
         RebuildOptionState();
@@ -198,13 +197,13 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
 
     public sealed record IntOption(int Value, string DisplayName);
 
-    public IReadOnlyList<TaskModuleOption> ThemeOptions => _themeOptions;
+    public ObservableCollection<LocalizedOptionItem<string>> ThemeOptions => _themeOptions.Items;
 
-    public IReadOnlyList<IntOption> ModeOptions => _modeOptions;
+    public ObservableCollection<LocalizedOptionItem<int>> ModeOptions => _modeOptions.Items;
 
-    public IReadOnlyList<IntOption> DifficultyOptions => _difficultyOptions;
+    public ObservableCollection<LocalizedOptionItem<int>> DifficultyOptions => _difficultyOptions.Items;
 
-    public IReadOnlyList<TaskModuleOption> SquadOptions => _squadOptions;
+    public ObservableCollection<LocalizedOptionItem<string>> SquadOptions => _squadOptions.Items;
 
     public IReadOnlyList<TaskModuleOption> RolesOptions => _rolesOptions;
 
@@ -240,34 +239,34 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
         }
     }
 
-    public TaskModuleOption? SelectedThemeOption
+    public LocalizedOptionItem<string>? SelectedThemeOption
     {
-        get => ResolveSelectedOption(ThemeOptions, Theme);
-        set => Theme = value?.Type ?? "JieGarden";
+        get => ResolveSelectedItem(ThemeOptions, Theme, StringComparer.OrdinalIgnoreCase);
+        set => Theme = value?.Value ?? "JieGarden";
     }
 
-    public IntOption? SelectedModeOption
+    public LocalizedOptionItem<int>? SelectedModeOption
     {
-        get => ResolveSelectedOption(ModeOptions, Mode);
+        get => ResolveSelectedItem(ModeOptions, Mode);
         set => Mode = value?.Value ?? ModeExp;
     }
 
-    public IntOption? SelectedDifficultyOption
+    public LocalizedOptionItem<int>? SelectedDifficultyOption
     {
-        get => ResolveSelectedOption(DifficultyOptions, Difficulty);
+        get => ResolveSelectedItem(DifficultyOptions, Difficulty);
         set => Difficulty = value?.Value ?? int.MaxValue;
     }
 
-    public TaskModuleOption? SelectedSquadOption
+    public LocalizedOptionItem<string>? SelectedSquadOption
     {
-        get => ResolveSelectedOption(SquadOptions, Squad);
-        set => Squad = value?.Type ?? string.Empty;
+        get => ResolveSelectedItem(SquadOptions, Squad, StringComparer.Ordinal);
+        set => Squad = value?.Value ?? string.Empty;
     }
 
-    public TaskModuleOption? SelectedCollectibleModeSquadOption
+    public LocalizedOptionItem<string>? SelectedCollectibleModeSquadOption
     {
-        get => ResolveSelectedOption(SquadOptions, CollectibleModeSquad);
-        set => CollectibleModeSquad = value?.Type ?? string.Empty;
+        get => ResolveSelectedItem(SquadOptions, CollectibleModeSquad, StringComparer.Ordinal);
+        set => CollectibleModeSquad = value?.Value ?? string.Empty;
     }
 
     public TaskModuleOption? SelectedRolesOption
@@ -402,6 +401,9 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
     public void RefreshGuiDependentOptions()
     {
         RebuildOptionState();
+
+        // 客户端类型等 GUI 条件变化后，条目链的附加 key（如 Common.NotAdapted）需要重新求值。
+        RefreshLocalizedOptionLists();
     }
 
     public string CoreCharTipText => Texts.GetOrDefault("Roguelike.CoreCharTip", "根据当前主题选择开局核心干员。");
@@ -1054,7 +1056,37 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             return;
         }
 
-        RebuildOptionState();
+        // 语言热切换只刷新本地化条目链的文本，不重建列表：附加 key 的显示条件在刷新时重新求值。
+        RefreshOptionLocalization();
+    }
+
+    private void RefreshOptionLocalization()
+    {
+        RefreshLocalizedOptionLists();
+        _rolesOptions = BuildRolesOptions();
+        _findPlayTimeTargetOptions = BuildFindPlayTimeTargetOptions();
+        RefreshCoreCharOptions();
+
+        OnPropertyChanged(nameof(RolesOptions));
+        OnPropertyChanged(nameof(FindPlayTimeTargetOptions));
+        OnPropertyChanged(nameof(CoreCharOptions));
+        OnPropertyChanged(nameof(CoreCharNameOptions));
+        OnPropertyChanged(nameof(SelectedRolesOption));
+        OnPropertyChanged(nameof(SelectedFindPlayTimeTargetOption));
+        OnPropertyChanged(nameof(SelectedCoreCharOption));
+        RaiseComputedPropertyChanges();
+    }
+
+    /// <summary>
+    /// 重新求值本地化条目链的显示文本与附加 key 条件（语言切换、客户端类型变化后调用）。
+    /// </summary>
+    private void RefreshLocalizedOptionLists()
+    {
+        _optionLocalizer.Language = Texts.Language;
+        _themeOptions.RefreshLocalization();
+        _modeOptions.RefreshLocalization();
+        _difficultyOptions.RefreshLocalization();
+        _squadOptions.RefreshLocalization();
     }
 
     private void RebuildOptionState()
@@ -1062,10 +1094,9 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
         _suppressOptionRefresh = true;
         try
         {
-            _themeOptions = ThemeOptionSpecs
-                .Select(spec => new TaskModuleOption(spec.Value, Texts.GetOrDefault(spec.TextKey, spec.Fallback)))
-                .ToArray();
-            if (!_themeOptions.Any(option => string.Equals(option.Type, Theme, StringComparison.OrdinalIgnoreCase)))
+            _optionLocalizer.Language = Texts.Language;
+
+            if (!_themeOptions.Any(option => string.Equals(option.Value, Theme, StringComparison.OrdinalIgnoreCase)))
             {
                 SetProperty(ref _theme, "JieGarden", nameof(Theme));
             }
@@ -1094,40 +1125,23 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             }
 
             _squadOptions = BuildSquadOptions();
-            if (!_squadOptions.Any(option => string.Equals(option.Type, Squad, StringComparison.Ordinal)))
+            if (!_squadOptions.Any(option => string.Equals(option.Value, Squad, StringComparison.Ordinal)))
             {
                 SetProperty(ref _squad, "指挥分队", nameof(Squad));
             }
 
-            if (!_squadOptions.Any(option => string.Equals(option.Type, CollectibleModeSquad, StringComparison.Ordinal)))
+            if (!_squadOptions.Any(option => string.Equals(option.Value, CollectibleModeSquad, StringComparison.Ordinal)))
             {
                 SetProperty(ref _collectibleModeSquad, _squad, nameof(CollectibleModeSquad));
             }
 
-            _findPlayTimeTargetOptions =
-            [
-                new IntOption(1, Texts.GetOrDefault("RoguelikePlaytimeLing", "令 - 掷地有声")),
-                new IntOption(2, Texts.GetOrDefault("RoguelikePlaytimeShu", "黍 - 种因得果")),
-                new IntOption(3, Texts.GetOrDefault("RoguelikePlaytimeNian", "年 - 三缺一")),
-            ];
+            _findPlayTimeTargetOptions = BuildFindPlayTimeTargetOptions();
             if (_findPlayTimeTarget is < 1 or > 3)
             {
                 SetProperty(ref _findPlayTimeTarget, 1, nameof(FindPlayTimeTarget));
             }
 
-            _coreCharOptions = BuildCoreCharOptions();
-            var clientType = ResolveCurrentClientType();
-            var operNameLanguage = ResolveOperatorDisplayLanguage(clientType);
-            var battleDataCache = GetBattleDataCache();
-            SetProperty(
-                ref _coreChar,
-                NormalizeCoreCharValue(_coreChar, _coreCharOptions, battleDataCache),
-                nameof(CoreChar));
-            UpdateCoreCharDisplayTextWithoutTracking(clientType, operNameLanguage, battleDataCache);
-            _coreCharNameOptions = _coreCharOptions
-                .Select(option => option.DisplayName)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
+            RefreshCoreCharOptions();
         }
         finally
         {
@@ -1154,48 +1168,88 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
         RaiseComputedPropertyChanges();
     }
 
-    private IReadOnlyList<IntOption> BuildModeOptions()
+    private void RefreshCoreCharOptions()
     {
-        var result = new List<IntOption>();
+        _coreCharOptions = BuildCoreCharOptions();
+        var clientType = ResolveCurrentClientType();
+        var operNameLanguage = ResolveOperatorDisplayLanguage(clientType);
+        var battleDataCache = GetBattleDataCache();
+        SetProperty(
+            ref _coreChar,
+            NormalizeCoreCharValue(_coreChar, _coreCharOptions, battleDataCache),
+            nameof(CoreChar));
+        UpdateCoreCharDisplayTextWithoutTracking(clientType, operNameLanguage, battleDataCache);
+        _coreCharNameOptions = _coreCharOptions
+            .Select(option => option.DisplayName)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private IReadOnlyList<IntOption> BuildFindPlayTimeTargetOptions()
+    {
+        return
+        [
+            new IntOption(1, Texts.GetOrDefault("RoguelikePlaytimeLing", "令 - 掷地有声")),
+            new IntOption(2, Texts.GetOrDefault("RoguelikePlaytimeShu", "黍 - 种因得果")),
+            new IntOption(3, Texts.GetOrDefault("RoguelikePlaytimeNian", "年 - 三缺一")),
+        ];
+    }
+
+    private LocalizedObservableList<string> BuildThemeOptions()
+    {
+        // WPF dev-v2 对 BlackFlow 主题按客户端追加 Common.NotAdapted；MAAUnified 尚未提供该主题，
+        // 现有主题均已适配，因此这里只保留链式能力（WithSecondaryKey）供后续主题接入。
+        return new LocalizedObservableList<string>(
+            _optionLocalizer,
+            Scope,
+            new LocalizedEntry<string>("Phantom", "RoguelikeThemePhantom", "傀影"),
+            new LocalizedEntry<string>("Mizuki", "RoguelikeThemeMizuki", "水月"),
+            new LocalizedEntry<string>("Sami", "RoguelikeThemeSami", "萨米"),
+            new LocalizedEntry<string>("Sarkaz", "RoguelikeThemeSarkaz", "萨卡兹"),
+            new LocalizedEntry<string>("JieGarden", "RoguelikeThemeJieGarden", "界园"));
+    }
+
+    private LocalizedObservableList<int> BuildModeOptions()
+    {
+        var entries = new List<LocalizedEntry<int>>
+        {
+            new(ModeExp, "RoguelikeStrategyExp", "刷等级，尽可能稳定地打更多层数"),
+            new(ModeInvestment, "RoguelikeStrategyGold", "刷源石锭，投资完成后自动退出"),
+            new(ModeCollectible, "RoguelikeStrategyLastReward", "刷开局，刷取热水壶或精二干员开局"),
+        };
 
         if (IsThemeJieGarden)
         {
-            result.Add(new IntOption(ModeExp, Texts.GetOrDefault("RoguelikeStrategyExp", "刷等级，尽可能稳定地打更多层数")));
-            result.Add(new IntOption(ModeInvestment, Texts.GetOrDefault("RoguelikeStrategyGold", "刷源石锭，投资完成后自动退出")));
-            result.Add(new IntOption(ModeCollectible, Texts.GetOrDefault("RoguelikeStrategyLastReward", "刷开局，刷取热水壶或精二干员开局")));
-            result.Add(new IntOption(ModeFindPlaytime, Texts.GetOrDefault("RoguelikeStrategyFindPlaytime", "刷常乐节点，第一层进洞，找不到需要的节点就重开")));
-            return result;
+            entries.Add(new LocalizedEntry<int>(ModeFindPlaytime, "RoguelikeStrategyFindPlaytime", "刷常乐节点，第一层进洞，找不到需要的节点就重开"));
+            return new LocalizedObservableList<int>(_optionLocalizer, Scope, [.. entries]);
         }
 
-        result.Add(new IntOption(ModeExp, Texts.GetOrDefault("RoguelikeStrategyExp", "刷等级，尽可能稳定地打更多层数")));
-        result.Add(new IntOption(ModeInvestment, Texts.GetOrDefault("RoguelikeStrategyGold", "刷源石锭，投资完成后自动退出")));
-        result.Add(new IntOption(ModeCollectible, Texts.GetOrDefault("RoguelikeStrategyLastReward", "刷开局，刷取热水壶或精二干员开局")));
-        result.Add(new IntOption(ModeSquad, Texts.GetOrDefault("RoguelikeStrategyMonthlySquad", "刷月度小队，尽可能稳定地打更多层数")));
-        result.Add(new IntOption(ModeExploration, Texts.GetOrDefault("RoguelikeStrategyDeepExploration", "刷深入调查，尽可能稳定地打更多层数")));
+        entries.Add(new LocalizedEntry<int>(ModeSquad, "RoguelikeStrategyMonthlySquad", "刷月度小队，尽可能稳定地打更多层数"));
+        entries.Add(new LocalizedEntry<int>(ModeExploration, "RoguelikeStrategyDeepExploration", "刷深入调查，尽可能稳定地打更多层数"));
 
         if (IsThemeSami)
         {
-            result.Add(new IntOption(ModeCollapse, Texts.GetOrDefault("RoguelikeStrategyCollapse", "刷坍缩范式，遇到非稀有坍缩范式后直接重开")));
+            entries.Add(new LocalizedEntry<int>(ModeCollapse, "RoguelikeStrategyCollapse", "刷坍缩范式，遇到非稀有坍缩范式后直接重开"));
         }
 
-        return result;
+        return new LocalizedObservableList<int>(_optionLocalizer, Scope, [.. entries]);
     }
 
-    private IReadOnlyList<IntOption> BuildDifficultyOptions()
+    private LocalizedObservableList<int> BuildDifficultyOptions()
     {
         var maxDifficulty = GetMaxDifficultyForTheme(Theme);
-        var list = new List<IntOption>(maxDifficulty + 3)
+        var entries = new List<LocalizedEntry<int>>(maxDifficulty + 3)
         {
-            new IntOption(-1, $"{Texts.GetOrDefault("NotSwitch", "不切换")} (-1)"),
-            new IntOption(int.MaxValue, $"MAX ({maxDifficulty})"),
+            new LocalizedEntry<int>(-1, "NotSwitch", "不切换").WithSuffix(" (-1)"),
+            new LocalizedEntry<int>(int.MaxValue, null, $"MAX ({maxDifficulty})"),
         };
 
         for (var value = maxDifficulty; value >= 0; value--)
         {
-            list.Add(new IntOption(value, value == 0 ? "MIN (0)" : value.ToString()));
+            entries.Add(new LocalizedEntry<int>(value, null, value == 0 ? "MIN (0)" : value.ToString()));
         }
 
-        return list;
+        return new LocalizedObservableList<int>(_optionLocalizer, Scope, [.. entries]);
     }
 
     private IReadOnlyList<TaskModuleOption> BuildRolesOptions()
@@ -1217,9 +1271,9 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
         return roles;
     }
 
-    private IReadOnlyList<TaskModuleOption> BuildSquadOptions()
+    private LocalizedObservableList<string> BuildSquadOptions()
     {
-        var result = new List<TaskModuleOption>();
+        var entries = new List<LocalizedEntry<string>>();
 
         var themeKey = $"{Theme}_{Mode}";
         if (!SquadDictionary.ContainsKey(themeKey))
@@ -1231,16 +1285,16 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
         {
             foreach (var (textKey, value, fallback) in themedSquads)
             {
-                result.Add(new TaskModuleOption(value, Texts.GetOrDefault(textKey, fallback)));
+                entries.Add(new LocalizedEntry<string>(value, textKey, fallback));
             }
         }
 
         foreach (var (textKey, value, fallback) in CommonSquads)
         {
-            result.Add(new TaskModuleOption(value, Texts.GetOrDefault(textKey, fallback)));
+            entries.Add(new LocalizedEntry<string>(value, textKey, fallback));
         }
 
-        return result;
+        return new LocalizedObservableList<string>(_optionLocalizer, Scope, [.. entries]);
     }
 
     private IReadOnlyList<TaskModuleOption> BuildCoreCharOptions()
@@ -1929,6 +1983,25 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
     private static bool ContainsStructuredMarkers(string value)
     {
         return !string.IsNullOrWhiteSpace(value) && value.IndexOfAny(['[', ']', '{', '}', ':', '"']) >= 0;
+    }
+
+    private static LocalizedOptionItem<TValue>? ResolveSelectedItem<TValue>(
+        IEnumerable<LocalizedOptionItem<TValue>> options,
+        TValue value,
+        IEqualityComparer<TValue>? comparer = null)
+    {
+        var equality = comparer ?? EqualityComparer<TValue>.Default;
+        LocalizedOptionItem<TValue>? first = null;
+        foreach (var option in options)
+        {
+            first ??= option;
+            if (equality.Equals(option.Value, value))
+            {
+                return option;
+            }
+        }
+
+        return first;
     }
 
     private static TaskModuleOption? ResolveSelectedOption(

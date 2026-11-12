@@ -79,6 +79,9 @@
   <data name="Common.LoadingTaskHint" xml:space="preserve">
     <value>左側のタスクリストから対象タスクを選択してください。</value>
   </data>
+  <data name="Common.NotAdapted" xml:space="preserve">
+    <value>未対応</value>
+  </data>
   <data name="Common.ValidationIssues" xml:space="preserve">
     <value>検証メッセージ</value>
   </data>

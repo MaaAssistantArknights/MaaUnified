@@ -143,6 +143,9 @@
   <data name="Common.LoadingTaskHint" xml:space="preserve">
     <value>请先在左侧任务列表中选择对应任务。</value>
   </data>
+  <data name="Common.NotAdapted" xml:space="preserve">
+    <value>未适配</value>
+  </data>
   <data name="Common.ValidationIssues" xml:space="preserve">
     <value>校验信息</value>
   </data>
