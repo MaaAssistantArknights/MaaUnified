@@ -4438,6 +4438,48 @@
       "write_path": "Application/Configuration/AvaloniaJsonConfigStore.cs::SaveAsync"
     },
     {
+      "key": "Guide.AgreementConfirmed",
+      "owner_item_id": "Settings.Gui",
+      "parity_status": "Gap",
+      "priority": "P0",
+      "notes": "dev-v2 新增键（v6.3.7 冻结基线之外）。引导协议确认状态；MAAUnified 扩展键，用于单独持久化。",
+      "evidence": {
+        "ui_path": "App/Features/Root/TaskQueueGuideView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.Guide.AgreementConfirmed",
+        "case_id": "CFG-325"
+      },
+      "mapping_target": null
+    },
+    {
+      "key": "Guide.Skipped",
+      "owner_item_id": "Settings.Gui",
+      "parity_status": "Gap",
+      "priority": "P0",
+      "notes": "dev-v2 新增键（v6.3.7 冻结基线之外）。引导跳过标记；MAAUnified 扩展键。",
+      "evidence": {
+        "ui_path": "App/Features/Root/TaskQueueGuideView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.Guide.Skipped",
+        "case_id": "CFG-326"
+      },
+      "mapping_target": null
+    },
+    {
+      "key": "Guide.SkippedAtStep",
+      "owner_item_id": "Settings.Gui",
+      "parity_status": "Gap",
+      "priority": "P0",
+      "notes": "dev-v2 新增键（v6.3.7 冻结基线之外）。引导跳过时所在步骤；MAAUnified 扩展键。",
+      "evidence": {
+        "ui_path": "App/Features/Root/TaskQueueGuideView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.Guide.SkippedAtStep",
+        "case_id": "CFG-327"
+      },
+      "mapping_target": null
+    },
+    {
       "key": "Guide.StepIndex",
       "owner_item_id": "Settings.Gui",
       "parity_status": "Gap",
@@ -4453,6 +4495,20 @@
       "mapping_target": "UnifiedConfigurationService.CurrentConfig.GlobalValues[Guide.StepIndex]",
       "read_path": "App/ViewModels/TaskQueue/TaskQueuePageViewModel.cs",
       "write_path": "App/ViewModels/TaskQueue/TaskQueuePageViewModel.cs::SetGuideStepIndexAsync"
+    },
+    {
+      "key": "Guide.StepOrderVersion",
+      "owner_item_id": "Settings.Gui",
+      "parity_status": "Gap",
+      "priority": "P0",
+      "notes": "dev-v2 新增键（v6.3.7 冻结基线之外）。引导步骤顺序版本，用于旧 StepIndex 迁移；MAAUnified 扩展键。",
+      "evidence": {
+        "ui_path": "App/Features/Root/TaskQueueGuideView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.Guide.StepOrderVersion",
+        "case_id": "CFG-328"
+      },
+      "mapping_target": null
     },
     {
       "key": "HotKeys",
@@ -7284,10 +7340,10 @@
   "metadata": {
     "feature_item_count": 38,
     "system_item_count": 12,
-    "config_key_count": 324,
+    "config_key_count": 328,
     "fallback_record_count": 15,
     "wpf_config_key_count": 292,
-    "avalonia_extension_config_key_count": 32,
+    "avalonia_extension_config_key_count": 36,
     "wpf_config_key_set_sha256": "566082d9e031b813dd5806d73baa6c319b0e44db24a2a6001be3b16eae94a0cd"
   }
 }
