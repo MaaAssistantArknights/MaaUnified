@@ -14,6 +14,8 @@ public sealed class ConfigLoadResult
 
     public SchemaMigrationNotice? SchemaMigrationNotice { get; init; }
 
+    public ConfigRepairNotice? ConfigRepairNotice { get; init; }
+
     public SensitiveStorageState SensitiveStorageState { get; init; }
 
     public SensitiveStorageErrorCode? SensitiveStorageErrorCode { get; init; }

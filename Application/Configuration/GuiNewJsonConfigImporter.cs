@@ -58,6 +58,15 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
                     JsonElement? taskQueueProp = null;
                     foreach (var valueProp in configProp.Value.EnumerateObject())
                     {
+                        // dev-v2 (`382009b97b`) nests every per-profile setting under `Gui`. Must stay
+                        // case sensitive: v6.3.7 stores the flat `GUI.InverseClearMode` key here.
+                        if (string.Equals(valueProp.Name, "Gui", StringComparison.Ordinal)
+                            && valueProp.Value.ValueKind == JsonValueKind.Object)
+                        {
+                            MergeProfileGuiSection(profile, configProp.Name, valueProp.Value, fillMissingOnly, report);
+                            continue;
+                        }
+
                         if (string.Equals(valueProp.Name, "TaskQueue", StringComparison.OrdinalIgnoreCase))
                         {
                             if (valueProp.Value.ValueKind == JsonValueKind.Array)
@@ -107,9 +116,21 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
                 }
             }
 
-            MergeObjectAsGlobal(root, "GUI", target, fillMissingOnly, report);
+            // v6.3.7 keeps UI settings in the root `GUI` object; dev-v2 (`382009b97b`) renamed it
+            // to `Gui` and nested Background/Performance inside. The legacy branch stays
+            // case-insensitive for older files that serialize the object under other casings.
+            if (root.TryGetProperty("Gui", out _) && !root.TryGetProperty("GUI", out _))
+            {
+                MergeDevV2RootGui(root, target, fillMissingOnly, report);
+            }
+            else
+            {
+                MergeObjectAsGlobal(root, "GUI", target, fillMissingOnly, report);
+            }
+
             MergeObjectAsGlobal(root, "VersionUpdate", target, fillMissingOnly, report);
             MergeObjectAsGlobal(root, "AnnouncementInfo", target, fillMissingOnly, report);
+            MergeDevV2Update(root, target, fillMissingOnly, report);
             MergeTimersAsGlobal(root, target, fillMissingOnly, report);
 
             report.ImportedGuiNew = true;
@@ -153,6 +174,22 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         var zeroBased = properties.Any(static prop => string.Equals(prop.Name, "0", StringComparison.Ordinal));
         foreach (var prop in properties)
         {
+            // dev-v2 (`382009b97b`): `Timers` became a named object whose slots live in
+            // `Timers.List` as `{ Id, IsEnabled, Config, Hour, Minute }` items.
+            if (string.Equals(prop.Name, "List", StringComparison.OrdinalIgnoreCase))
+            {
+                if (prop.Value.ValueKind == JsonValueKind.Array)
+                {
+                    MergeDevV2TimerList(prop.Value, target, fillMissingOnly, report);
+                }
+                else if (prop.Value.ValueKind != JsonValueKind.Null)
+                {
+                    report.Warnings.Add($"Timer entry `List` was not recognized and was skipped.");
+                }
+
+                continue;
+            }
+
             if (TryMergeTimerEntry(prop, zeroBased, target, fillMissingOnly, report))
             {
                 continue;
@@ -171,6 +208,29 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
                 JsonImportMergeHelper.ToJsonNode(prop.Value),
                 fillMissingOnly,
                 report);
+        }
+    }
+
+    private static void MergeDevV2TimerList(
+        JsonElement list,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        var entries = list.EnumerateArray().ToArray();
+        for (var position = 0; position < entries.Length; position++)
+        {
+            var entry = entries[position];
+            if (entry.ValueKind != JsonValueKind.Object)
+            {
+                report.Warnings.Add($"Timer list entry #{position} is not an object and was skipped.");
+                continue;
+            }
+
+            // `Timer.Id` is the 0-based slot id built by the dev-v2 ConfigConverter migration;
+            // fall back to the array position when the id is missing or not an integer.
+            var rawId = TryReadTimerIndex(entry, out var id) ? id : position;
+            MergeTimerEntry(rawId, zeroBased: true, entry, target, fillMissingOnly, report);
         }
     }
 
@@ -235,10 +295,37 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
             return;
         }
 
-        MergeTimerProperty(timer, "Enable", $"Timer.Timer{index}", target, fillMissingOnly, report);
+        MergeTimerEnabledProperty(timer, index, target, fillMissingOnly, report);
         MergeTimerProperty(timer, "Hour", $"Timer.Timer{index}Hour", target, fillMissingOnly, report);
         MergeTimerProperty(timer, ["Minute", "Min"], $"Timer.Timer{index}Min", target, fillMissingOnly, report);
         MergeTimerProperty(timer, "Config", $"Timer.Timer{index}.Config", target, fillMissingOnly, report);
+    }
+
+    private static void MergeTimerEnabledProperty(
+        JsonElement timer,
+        int index,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        // v6.3.7 stores `Enable`; dev-v2 stores the tri-state `IsEnabled` (null = half checked).
+        if (!TryGetPropertyIgnoreCase(timer, "IsEnabled", out var value)
+            && !TryGetPropertyIgnoreCase(timer, "Enable", out value))
+        {
+            return;
+        }
+
+        // The settings page persists a half-checked slot as an empty string, so a null
+        // `IsEnabled` must not be stored as JSON null (it would read back as the fallback).
+        var node = value.ValueKind == JsonValueKind.Null
+            ? JsonValue.Create(string.Empty)
+            : JsonImportMergeHelper.ToJsonNode(value);
+        JsonImportMergeHelper.MergeGlobalValue(
+            target,
+            $"Timer.Timer{index}",
+            node,
+            fillMissingOnly,
+            report);
     }
 
     private static void MergeTimerProperty(
@@ -331,7 +418,23 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
 
     private static bool TryReadTimerIndex(JsonElement entry, out int index)
     {
-        if (TryGetPropertyIgnoreCase(entry, "Key", out var key))
+        // `Id` is the dev-v2 `Timer.Id` slot id; `Key`/`Index` cover the intermediate
+        // dictionary-serialized-as-array shape.
+        foreach (var propertyName in (string[])["Id", "Key", "Index"])
+        {
+            if (TryReadTimerIndexProperty(entry, propertyName, out index))
+            {
+                return true;
+            }
+        }
+
+        index = 0;
+        return false;
+    }
+
+    private static bool TryReadTimerIndexProperty(JsonElement entry, string propertyName, out int index)
+    {
+        if (TryGetPropertyIgnoreCase(entry, propertyName, out var key))
         {
             if (key.ValueKind == JsonValueKind.Number && key.TryGetInt32(out index))
             {
@@ -340,20 +443,6 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
 
             if (key.ValueKind == JsonValueKind.String
                 && int.TryParse(key.GetString(), out index))
-            {
-                return true;
-            }
-        }
-
-        if (TryGetPropertyIgnoreCase(entry, "Index", out var indexProperty))
-        {
-            if (indexProperty.ValueKind == JsonValueKind.Number && indexProperty.TryGetInt32(out index))
-            {
-                return true;
-            }
-
-            if (indexProperty.ValueKind == JsonValueKind.String
-                && int.TryParse(indexProperty.GetString(), out index))
             {
                 return true;
             }
@@ -409,6 +498,170 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
                 fillMissingOnly,
                 report);
         }
+    }
+
+    private static void MergeDevV2Update(
+        JsonElement root,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        if (!root.TryGetProperty("Update", out var update) || update.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        foreach (var prop in update.EnumerateObject())
+        {
+            var legacyKey = LegacyConfigValueMappings.TryMapDevV2UpdateKey(prop.Name);
+            if (legacyKey is null)
+            {
+                report.Warnings.Add($"Update key `{prop.Name}` is not supported by MAAUnified and was skipped.");
+                continue;
+            }
+
+            JsonImportMergeHelper.MergeGlobalValue(
+                target,
+                LegacyConfigValueMappings.NormalizeGlobalKey(legacyKey),
+                JsonImportMergeHelper.ToJsonNode(prop.Value),
+                fillMissingOnly,
+                report);
+        }
+    }
+
+    private static void MergeDevV2RootGui(
+        JsonElement root,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        if (!root.TryGetProperty("Gui", out var gui) || gui.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        foreach (var prop in gui.EnumerateObject())
+        {
+            MergeDevV2RootGuiValue(prop.Name, prop.Value, target, fillMissingOnly, report);
+        }
+    }
+
+    private static void MergeDevV2RootGuiValue(
+        string path,
+        JsonElement value,
+        UnifiedConfig target,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        var legacyKey = LegacyConfigValueMappings.TryMapDevV2RootGuiKey(path);
+        if (legacyKey is not null)
+        {
+            JsonImportMergeHelper.MergeGlobalValue(
+                target,
+                LegacyConfigValueMappings.NormalizeGlobalKey(legacyKey),
+                JsonImportMergeHelper.ToJsonNode(value),
+                fillMissingOnly,
+                report);
+            return;
+        }
+
+        if (value.ValueKind == JsonValueKind.Object && LegacyConfigValueMappings.IsDevV2RootGuiSection(path))
+        {
+            foreach (var child in value.EnumerateObject())
+            {
+                MergeDevV2RootGuiValue($"{path}.{child.Name}", child.Value, target, fillMissingOnly, report);
+            }
+
+            return;
+        }
+
+        report.Warnings.Add($"Root `Gui` key `{path}` is not supported by MAAUnified and was skipped.");
+    }
+
+    private static void MergeProfileGuiSection(
+        UnifiedProfile profile,
+        string profileName,
+        JsonElement gui,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        foreach (var prop in gui.EnumerateObject())
+        {
+            MergeProfileGuiValue(profile, profileName, prop.Name, prop.Value, fillMissingOnly, report);
+        }
+    }
+
+    private static void MergeProfileGuiValue(
+        UnifiedProfile profile,
+        string profileName,
+        string path,
+        JsonElement value,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        var legacyKey = LegacyConfigValueMappings.TryMapDevV2ProfileGuiKey(path);
+        if (legacyKey is not null)
+        {
+            WarnOnUnsupportedPostActionFlags(profileName, legacyKey, value, report);
+            JsonImportMergeHelper.MergeProfileValue(
+                profile,
+                profileName,
+                LegacyConfigValueMappings.NormalizeProfileKey(legacyKey),
+                JsonImportMergeHelper.ToJsonNode(value),
+                fillMissingOnly,
+                report);
+            return;
+        }
+
+        if (value.ValueKind == JsonValueKind.Object && LegacyConfigValueMappings.IsDevV2ProfileGuiSection(path))
+        {
+            foreach (var child in value.EnumerateObject())
+            {
+                MergeProfileGuiValue(profile, profileName, $"{path}.{child.Name}", child.Value, fillMissingOnly, report);
+            }
+
+            return;
+        }
+
+        report.Warnings.Add($"Profile `{profileName}` key `Gui.{path}` is not supported by MAAUnified and was skipped.");
+    }
+
+    private static void WarnOnUnsupportedPostActionFlags(
+        string profileName,
+        string legacyKey,
+        JsonElement value,
+        ImportReport report)
+    {
+        // dev-v2 `SkipOnError`/`LockScreen`/`ExitPCClient` flags (P1-03 `cda1c3b07f`,
+        // P1-04 `d58cb0825b`) have no MAAUnified counterpart yet; keep the supported low bits
+        // and report the rest instead of dropping them silently.
+        const int supportedPostActionMask = 0xFF;
+        if (!string.Equals(legacyKey, "MainFunction.PostActions", StringComparison.Ordinal)
+            || !TryReadPostActionFlags(value, out var flags)
+            || (flags & ~supportedPostActionMask) == 0)
+        {
+            return;
+        }
+
+        report.Warnings.Add(
+            $"Profile `{profileName}` post actions contain unsupported flags 0x{flags & ~supportedPostActionMask:X}; only ExitArknights/BackToAndroidHome/ExitEmulator/ExitSelf/Hibernate/Shutdown/Sleep were imported.");
+    }
+
+    private static bool TryReadPostActionFlags(JsonElement value, out int flags)
+    {
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out flags))
+        {
+            return true;
+        }
+
+        if (value.ValueKind == JsonValueKind.String
+            && int.TryParse(value.GetString(), out flags))
+        {
+            return true;
+        }
+
+        flags = 0;
+        return false;
     }
 
     private static void MergeTaskQueue(
@@ -474,13 +727,16 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
 
     private static string ResolveUiLanguage(JsonElement root, UnifiedConfig target)
     {
-        if (root.TryGetProperty("GUI", out var gui)
-            && gui.ValueKind == JsonValueKind.Object
-            && gui.TryGetProperty("Localization", out var language)
-            && language.ValueKind == JsonValueKind.String
-            && !string.IsNullOrWhiteSpace(language.GetString()))
+        // v6.3.7 keeps the language in the root `GUI` object; dev-v2 (`382009b97b`) renames it
+        // to `Gui`. Both must be read before the globals are merged.
+        if (TryReadRootGuiLanguage(root, "GUI") is { } legacyLanguage)
         {
-            return language.GetString()!;
+            return legacyLanguage;
+        }
+
+        if (TryReadRootGuiLanguage(root, "Gui") is { } language)
+        {
+            return language;
         }
 
         if (target.GlobalValues.TryGetValue("GUI.Localization", out var node)
@@ -492,6 +748,17 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         }
 
         return "zh-cn";
+    }
+
+    private static string? TryReadRootGuiLanguage(JsonElement root, string guiPropertyName)
+    {
+        return root.TryGetProperty(guiPropertyName, out var gui)
+               && gui.ValueKind == JsonValueKind.Object
+               && gui.TryGetProperty("Localization", out var language)
+               && language.ValueKind == JsonValueKind.String
+               && !string.IsNullOrWhiteSpace(language.GetString())
+            ? language.GetString()
+            : null;
     }
 
     private static string NormalizeProfileKey(string key)

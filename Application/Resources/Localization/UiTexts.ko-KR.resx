@@ -733,6 +733,20 @@
   <data name="Main.CloseConfirm.Update.Title" xml:space="preserve">
     <value>MAA가 업데이트 중입니다</value>
   </data>
+  <data name="Main.ConfigRepair.Dialog.Cancel" xml:space="preserve">
+    <value>닫기</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Confirm" xml:space="preserve">
+    <value>확인했습니다</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Prompt" xml:space="preserve">
+    <value>설정을 읽는 중 문제가 발견되어 자동 복구를 실행했습니다.
+{0}
+권장 조치: {1}</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Title" xml:space="preserve">
+    <value>설정 복구 알림</value>
+  </data>
   <data name="Main.RootPage.Failed.Copilot.Message" xml:space="preserve">
     <value>Copilot 페이지 초기화를 완료하지 못했습니다.</value>
   </data>

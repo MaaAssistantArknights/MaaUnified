@@ -1408,6 +1408,20 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   <data name="Main.Blocking.Title" xml:space="preserve">
     <value>Config validation blocked ({0}): Start/LinkStart disabled</value>
   </data>
+  <data name="Main.ConfigRepair.Dialog.Cancel" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Confirm" xml:space="preserve">
+    <value>I Understand</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Prompt" xml:space="preserve">
+    <value>Problems were found while reading the configuration and an automatic recovery was applied.
+{0}
+Suggested action: {1}</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Title" xml:space="preserve">
+    <value>Configuration Recovery Notice</value>
+  </data>
   <data name="Main.CloseConfirm.Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Security;
 using MAAUnified.Application.Services;
@@ -14,6 +15,7 @@ public sealed class AvaloniaJsonConfigStore : IUnifiedConfigStore
     };
     private const FileShare SharedConfigReadShare = FileShare.ReadWrite | FileShare.Delete;
     private const int MaxBackupPublishAttempts = 16;
+    private const int MaxDeserializationRepairAttempts = 20;
     private const UnixFileMode PrivateUnixFileMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
 
     public AvaloniaJsonConfigStore(string baseDirectory)
@@ -29,23 +31,122 @@ public sealed class AvaloniaJsonConfigStore : IUnifiedConfigStore
 
     public string ConfigPath { get; }
 
+    public ConfigLoadRepair? LastLoadRepair { get; private set; }
+
     public bool Exists() => File.Exists(ConfigPath);
 
     public async Task<UnifiedConfig?> LoadAsync(CancellationToken cancellationToken = default)
     {
+        LastLoadRepair = null;
         if (!Exists())
         {
             return null;
         }
 
-        await using var stream = new FileStream(
-            ConfigPath,
-            FileMode.Open,
-            FileAccess.Read,
-            SharedConfigReadShare,
-            bufferSize: 4096,
-            FileOptions.Asynchronous);
-        return await JsonSerializer.DeserializeAsync<UnifiedConfig>(stream, _serializerOptions, cancellationToken);
+        string json;
+        await using (var stream = new FileStream(
+                         ConfigPath,
+                         FileMode.Open,
+                         FileAccess.Read,
+                         SharedConfigReadShare,
+                         bufferSize: 4096,
+                         FileOptions.Asynchronous))
+        using (var reader = new StreamReader(stream))
+        {
+            json = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        JsonNode? node;
+        try
+        {
+            node = JsonNode.Parse(json);
+        }
+        catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidOperationException)
+        {
+            // Never rewrite defaults over an unreadable file without keeping a copy of it.
+            LastLoadRepair = new ConfigLoadRepair([], PreserveUnreadableConfig());
+            throw new JsonException("config/avalonia.json is not valid JSON.", ex);
+        }
+
+        if (node is null)
+        {
+            return null;
+        }
+
+        if (node is not JsonObject root)
+        {
+            LastLoadRepair = new ConfigLoadRepair([], PreserveUnreadableConfig());
+            throw new JsonException("The configuration JSON root must be an object.");
+        }
+
+        return DeserializeWithRepair(root);
+    }
+
+    /// <summary>
+    /// Deserializes the document, deleting the node named by each recoverable
+    /// <see cref="JsonException.Path"/> and retrying (bounded).
+    /// </summary>
+    private UnifiedConfig? DeserializeWithRepair(JsonObject root)
+    {
+        var removedPaths = new List<string>();
+        JsonException? lastError = null;
+        for (var attempt = 0; attempt <= MaxDeserializationRepairAttempts; attempt++)
+        {
+            try
+            {
+                var config = root.Deserialize<UnifiedConfig>(_serializerOptions);
+                if (removedPaths.Count > 0)
+                {
+                    LastLoadRepair = new ConfigLoadRepair(removedPaths.ToArray(), null);
+                }
+
+                return config;
+            }
+            catch (JsonException ex)
+            {
+                lastError = ex;
+                if (attempt == MaxDeserializationRepairAttempts)
+                {
+                    break;
+                }
+
+                if (!ConfigJsonRepair.TryRemoveNode(root, ex.Path))
+                {
+                    break;
+                }
+
+                removedPaths.Add(ex.Path!);
+            }
+        }
+
+        LastLoadRepair = new ConfigLoadRepair(removedPaths.ToArray(), PreserveUnreadableConfig());
+        throw new JsonException(
+            "Failed to deserialize config/avalonia.json after removing unreadable values.",
+            lastError);
+    }
+
+    /// <summary>
+    /// Copies the unreadable configuration next to it so the user can still recover it manually.
+    /// </summary>
+    private string? PreserveUnreadableConfig()
+    {
+        try
+        {
+            if (!Exists())
+            {
+                return null;
+            }
+
+            EnsureSafeBackupDirectory();
+            var backupPath = ResolveBackupPath(
+                $".broken.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.{Guid.NewGuid():N}");
+            File.Copy(ConfigPath, backupPath, overwrite: false);
+            return backupPath;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     public async Task SaveAsync(UnifiedConfig config, CancellationToken cancellationToken = default)

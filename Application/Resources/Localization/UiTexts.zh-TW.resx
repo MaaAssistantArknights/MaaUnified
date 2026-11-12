@@ -625,6 +625,20 @@
   <data name="Main.CloseConfirm.Update.Title" xml:space="preserve">
     <value>MAA 正在更新</value>
   </data>
+  <data name="Main.ConfigRepair.Dialog.Cancel" xml:space="preserve">
+    <value>關閉</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Confirm" xml:space="preserve">
+    <value>我知道了</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Prompt" xml:space="preserve">
+    <value>讀取設定時發現問題，已自動執行復原。
+{0}
+建議: {1}</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Title" xml:space="preserve">
+    <value>設定復原提示</value>
+  </data>
   <data name="Main.RootPage.Failed.Copilot.Message" xml:space="preserve">
     <value>Copilot 頁面未能完成初始化。</value>
   </data>

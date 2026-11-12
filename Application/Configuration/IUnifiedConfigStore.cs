@@ -6,6 +6,11 @@ public interface IUnifiedConfigStore
 {
     string ConfigPath { get; }
 
+    /// <summary>
+    /// Gets the recovery performed by the most recent <see cref="LoadAsync"/> call, if any.
+    /// </summary>
+    ConfigLoadRepair? LastLoadRepair => null;
+
     bool Exists();
 
     Task<UnifiedConfig?> LoadAsync(CancellationToken cancellationToken = default);

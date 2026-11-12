@@ -33,6 +33,7 @@ public sealed class UnifiedConfigurationService
     private const string GuiFileName = "gui.json";
     private const string ParseNullWarningCode = "ConfigRepair.DeserializeNull";
     private const string ParseExceptionWarningCode = "ConfigRepair.DeserializeException";
+    private const string ConfigRepairWarningCode = "ConfigRepair.Recovered";
     private const string SensitivePendingCommitFileName = ".sensitive-settings.pending.json";
     private const string ConfigBackupFilePrefix = "avalonia.json.bak.";
     private const string SchemaConfigBackupFilePrefix = "avalonia.json.schema-v";
@@ -216,6 +217,12 @@ public sealed class UnifiedConfigurationService
             try
             {
                 var loaded = await _store.LoadAsync(cancellationToken);
+                var loadRepairNotice = BuildConfigRepairNotice(_store.LastLoadRepair, rebuiltDefaults: false);
+                if (loadRepairNotice is not null)
+                {
+                    LogConfigRepair(loadRepairNotice);
+                }
+
                 if (loaded is not null)
                 {
                     CurrentConfig = loaded;
@@ -279,6 +286,9 @@ public sealed class UnifiedConfigurationService
                         || decryptedLegacySensitiveValueCount > 0
                         || normalizedSensitiveScopeCount > 0
                         || repairedNullEntries
+                        // Persist the cleaned document right away so the same unreadable values
+                        // are not repaired again on every start.
+                        || loadRepairNotice?.RemovedJsonPaths.Count > 0
                         || repairedProfileSelection is not null
                         || removedPersistedSensitiveValues
                         || requiresSensitiveMigration
@@ -298,6 +308,12 @@ public sealed class UnifiedConfigurationService
                     if (repairedNullEntries)
                     {
                         LogService.Info("Removed null profile or task queue entries from config/avalonia.json.");
+                    }
+
+                    if (loadRepairNotice?.RemovedJsonPaths.Count > 0)
+                    {
+                        LogService.Info(
+                            $"Persisted config/avalonia.json after removing {loadRepairNotice.RemovedJsonPaths.Count} unreadable value(s).");
                     }
 
                     if (clearedRecruitExpeditedCount > 0)
@@ -376,6 +392,7 @@ public sealed class UnifiedConfigurationService
                         ImportReport = hasUnreadableLegacySensitiveValues ? legacyConversionReport : null,
                         ValidationIssues = validationIssues,
                         SchemaMigrationNotice = schemaMigrationNotice,
+                        ConfigRepairNotice = loadRepairNotice,
                         SensitiveStorageState = _sensitiveSettingsService.State,
                         SensitiveStorageErrorCode = _sensitiveSettingsService.LastErrorCode,
                     };
@@ -394,6 +411,7 @@ public sealed class UnifiedConfigurationService
                     LoadedFromExistingConfig = true,
                     ValidationIssues = rebuildIssues,
                     SchemaMigrationNotice = BuildSchemaMigrationNotice(),
+                    ConfigRepairNotice = BuildConfigRepairNotice(_store.LastLoadRepair, rebuiltDefaults: true),
                     SensitiveStorageState = _sensitiveSettingsService.State,
                     SensitiveStorageErrorCode = _sensitiveSettingsService.LastErrorCode,
                 };
@@ -408,11 +426,18 @@ public sealed class UnifiedConfigurationService
                     cancellationToken,
                     validationMode,
                     replaceInvalidPersistedConfig: true);
+                var repairNotice = BuildConfigRepairNotice(_store.LastLoadRepair, rebuiltDefaults: true);
+                if (repairNotice is not null)
+                {
+                    LogConfigRepair(repairNotice);
+                }
+
                 return new ConfigLoadResult {
                     Config = CurrentConfig,
                     LoadedFromExistingConfig = true,
                     ValidationIssues = fallbackIssues,
                     SchemaMigrationNotice = BuildSchemaMigrationNotice(),
+                    ConfigRepairNotice = repairNotice,
                     SensitiveStorageState = _sensitiveSettingsService.State,
                     SensitiveStorageErrorCode = _sensitiveSettingsService.LastErrorCode,
                 };
@@ -673,6 +698,51 @@ public sealed class UnifiedConfigurationService
             LatestSchemaVersion: latest,
             Message: $"Detected outdated schema version v{current}. Configuration will stay on compatible read mode until an explicit save.",
             SuggestedAction: "Review settings and save configuration to migrate to the latest schema. A schema backup will be created before overwrite.");
+    }
+
+    private static ConfigRepairNotice? BuildConfigRepairNotice(ConfigLoadRepair? repair, bool rebuiltDefaults)
+    {
+        if (repair is null && !rebuiltDefaults)
+        {
+            return null;
+        }
+
+        var removedPaths = repair?.RemovedJsonPaths ?? [];
+        var brokenBackupPath = repair?.BrokenConfigBackupPath;
+        var message = new StringBuilder();
+        if (removedPaths.Count > 0)
+        {
+            message.Append(
+                $"Removed {removedPaths.Count} unreadable value(s) from config/avalonia.json and kept the remaining settings: {string.Join(", ", removedPaths)}");
+        }
+
+        if (rebuiltDefaults)
+        {
+            if (message.Length > 0)
+            {
+                message.Append(' ');
+            }
+
+            message.Append(
+                brokenBackupPath is null
+                    ? "The configuration file was unreadable and has been replaced with a default configuration."
+                    : $"The configuration file was unreadable and has been replaced with a default configuration; the damaged file was kept as config/{Path.GetFileName(brokenBackupPath)}.");
+        }
+
+        return new ConfigRepairNotice(
+            RemovedJsonPaths: removedPaths,
+            BrokenConfigBackupPath: brokenBackupPath,
+            RebuiltDefaults: rebuiltDefaults,
+            Message: message.ToString(),
+            SuggestedAction: rebuiltDefaults
+                ? "Review the restored settings, then reconfigure the affected profiles. Restore the saved copy manually if it can be repaired."
+                : "Review the affected settings; removed values fall back to their defaults.");
+    }
+
+    private void LogConfigRepair(ConfigRepairNotice notice)
+    {
+        LogService.Warn(
+            $"[{ConfigRepairWarningCode}] {notice.Message} BrokenBackupPath={notice.BrokenConfigBackupPath ?? "-"}.");
     }
 
     private void LogValidationIssues(IReadOnlyList<ConfigValidationIssue> issues)

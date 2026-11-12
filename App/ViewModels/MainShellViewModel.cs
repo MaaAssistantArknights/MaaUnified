@@ -125,6 +125,7 @@ public sealed class MainShellViewModel : ObservableObject
     private int _shellBackgroundBlur = 12;
     private Stretch _shellBackgroundStretch = Stretch.UniformToFill;
     private bool _schemaMigrationNoticeShown;
+    private bool _configRepairNoticeShown;
     private StartupShellSnapshot _startupSnapshot = StartupShellSnapshot.Default;
     private string _dismissedWindowUpdateOverlaySignature = string.Empty;
 
@@ -925,6 +926,9 @@ public sealed class MainShellViewModel : ObservableObject
 
         StartBackgroundStartupDialog(
             ct => ShowSchemaMigrationNoticeIfNeededAsync(loadResult, ct),
+            cancellationToken);
+        StartBackgroundStartupDialog(
+            ct => ShowConfigRepairNoticeIfNeededAsync(loadResult, ct),
             cancellationToken);
         if (startupAnnouncementSettingsPage is not null)
         {
@@ -4345,6 +4349,72 @@ public sealed class MainShellViewModel : ObservableObject
             scope,
             UiOperationResult.Fail(UiErrorCode.TaskValidationFailed, $"{summary} | {LastError}"),
             cancellationToken);
+    }
+
+    private async Task ShowConfigRepairNoticeIfNeededAsync(
+        ConfigLoadResult loadResult,
+        CancellationToken cancellationToken = default)
+    {
+        var notice = loadResult.ConfigRepairNotice;
+        if (_configRepairNoticeShown || notice is null)
+        {
+            return;
+        }
+
+        _configRepairNoticeShown = true;
+        try
+        {
+            var noticeBody = string.Format(
+                CultureInfo.CurrentCulture,
+                RootTexts.GetOrDefault(
+                    "Main.ConfigRepair.Dialog.Prompt",
+                    "Problems were found while reading the configuration and an automatic recovery was applied.{2}{0}{2}Suggested action: {1}"),
+                notice.Message,
+                notice.SuggestedAction,
+                Environment.NewLine);
+            var chrome = DialogTextCatalog.CreateRootCatalog(
+                CurrentShellLanguage,
+                "Root.Localization.MainShell",
+                texts => new DialogChromeSnapshot(
+                    title: texts.GetOrDefault(
+                        "Main.ConfigRepair.Dialog.Title",
+                        "Configuration Recovery Notice"),
+                    confirmText: texts.GetOrDefault(
+                        "Main.ConfigRepair.Dialog.Confirm",
+                        "I Understand"),
+                    cancelText: texts.GetOrDefault(
+                        "Main.ConfigRepair.Dialog.Cancel",
+                        "Close")));
+            var chromeSnapshot = chrome.GetSnapshot();
+            var completion = await _dialogService.ShowTextAsync(
+                new TextDialogRequest(
+                    Title: chromeSnapshot.Title,
+                    Prompt: notice.Message,
+                    DefaultText: noticeBody,
+                    MultiLine: true,
+                    ReadOnlyContent: true,
+                    ConfirmText: chromeSnapshot.ConfirmText ?? RootTexts.GetOrDefault("Main.ConfigRepair.Dialog.Confirm", "I Understand"),
+                    CancelText: chromeSnapshot.CancelText ?? RootTexts.GetOrDefault("Main.ConfigRepair.Dialog.Cancel", "Close"),
+                    Chrome: chrome),
+                "App.Shell.Config.Repair",
+                cancellationToken);
+            await RecordEventAsync(
+                "Config.Repair.Notice",
+                $"removed={notice.RemovedJsonPaths.Count}; rebuiltDefaults={notice.RebuiltDefaults}; backup={notice.BrokenConfigBackupPath ?? "-"}; return={completion.Return}; summary={completion.Summary}",
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await RecordErrorAsync(
+                "Config.Repair.DialogError",
+                "Failed to show config recovery notice dialog.",
+                ex,
+                cancellationToken);
+        }
     }
 
     private async Task ShowSchemaMigrationNoticeIfNeededAsync(

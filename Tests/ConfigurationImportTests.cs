@@ -300,6 +300,308 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task GuiNewImport_DevV2ProfileGuiSections_ShouldMapToLegacyProfileKeys()
+    {
+        // WPF dev-v2 382009b97b moved every per-profile setting into Configurations.<name>.Gui.<Section>;
+        // the inverse map lives in Helper/ConfigConverter.cs at 3badedda9b.
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [],
+                  "Gui": {
+                    "ConnectSettings": {
+                      "Address": "10.6.0.6:7555",
+                      "Config": "MuMuEmulator12",
+                      "AddressHistory": [ "127.0.0.1:5555" ],
+                      "TouchMode": "MiniTouch",
+                      "Extras": {
+                        "MuMuEmulator12": { "IsEnabled": true, "InstanceIndex": 2 }
+                      }
+                    },
+                    "StartUpSettings": {
+                      "StartEmulator": true,
+                      "EmulatorPath": "/tmp/emulator",
+                      "EmulatorWaitSeconds": 90
+                    },
+                    "RuntimeSettings": {
+                      "ClientType": "Bilibili",
+                      "StartGame": true,
+                      "PreRunScript": "start.bat",
+                      "BlockSleep": true
+                    },
+                    "ThirdParty": {
+                      "PenguinId": "42",
+                      "ReportToYituliu": false
+                    },
+                    "PostActions": 5
+                  }
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var profile = service.CurrentConfig.Profiles["Default"];
+        Assert.Equal("10.6.0.6:7555", profile.Values["ConnectAddress"]?.GetValue<string>());
+        Assert.Equal("MuMuEmulator12", profile.Values["ConnectConfig"]?.GetValue<string>());
+        Assert.Equal("minitouch", profile.Values["TouchMode"]?.GetValue<string>());
+        Assert.Equal(
+            ["127.0.0.1:5555"],
+            ReadStringArray(Assert.IsType<JsonArray>(profile.Values["ConnectAddressHistory"])));
+        Assert.True(profile.Values["MuMu12ExtrasEnabled"]?.GetValue<bool>());
+        Assert.Equal("2", profile.Values["MuMu12Index"]?.GetValue<string>());
+
+        Assert.True(profile.Values["Start.OpenEmulatorAfterLaunch"]?.GetValue<bool>());
+        Assert.Equal("/tmp/emulator", profile.Values["Start.EmulatorPath"]?.GetValue<string>());
+        Assert.Equal(90, profile.Values["Start.EmulatorWaitSeconds"]?.GetValue<int>());
+
+        Assert.Equal("Bilibili", profile.Values["ClientType"]?.GetValue<string>());
+        Assert.True(profile.Values["StartGame"]?.GetValue<bool>());
+        Assert.Equal("start.bat", profile.Values["Start.StartsWithScript"]?.GetValue<string>());
+        Assert.True(profile.Values["Start.BlockSleep"]?.GetValue<bool>());
+
+        Assert.Equal("42", profile.Values["PenguinId"]?.GetValue<string>());
+        Assert.False(profile.Values["EnableYituliu"]?.GetValue<bool>());
+
+        // Legacy post action flags (5 = ExitArknights | ExitEmulator) are materialized into the
+        // structured profile config by PostActionLegacyMigration, same as the gui.json path.
+        var postActions = Assert.IsType<JsonObject>(profile.Values["TaskQueue.PostAction"]);
+        Assert.True(postActions["exit_arknights"]?.GetValue<bool>());
+        Assert.True(postActions["exit_emulator"]?.GetValue<bool>());
+        Assert.False(postActions["exit_self"]?.GetValue<bool>());
+        Assert.False(profile.Values.ContainsKey("MainFunction.PostActions"));
+
+        // The dev-v2 section wrapper must not be stored as an opaque profile value.
+        Assert.False(profile.Values.ContainsKey("Gui"));
+        Assert.DoesNotContain(report.Warnings, warning => warning.Contains("Gui.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GuiNewImport_DevV2UnsupportedProfileGuiKeys_ShouldWarnInsteadOfDropping()
+    {
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [],
+                  "Gui": {
+                    "RuntimeSettings": {
+                      "ClientType": "Official",
+                      "EnableRunDurationLimit": true
+                    },
+                    "StartUpSettings": {
+                      "PcClientPath": "/tmp/pc-client"
+                    },
+                    "PostActions": 256
+                  }
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        Assert.Contains(
+            report.Warnings,
+            warning => warning.Contains("Gui.RuntimeSettings.EnableRunDurationLimit", StringComparison.Ordinal));
+        Assert.Contains(
+            report.Warnings,
+            warning => warning.Contains("Gui.StartUpSettings.PcClientPath", StringComparison.Ordinal));
+        Assert.Contains(
+            report.Warnings,
+            warning => warning.Contains("unsupported flags 0x100", StringComparison.Ordinal));
+        Assert.Equal(
+            "Official",
+            service.CurrentConfig.Profiles["Default"].Values["ClientType"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task GuiNewImport_DevV2UpdateSection_ShouldMapRenamedSubKeys()
+    {
+        // dev-v2 382009b97b renamed root `VersionUpdate` to `Update` and renamed
+        // UpdateCheck/UpdateAutoCheck/Package (see Configuration/Global/Update.cs at 3badedda9b).
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        var guiNewPath = Path.Combine(root, "config", "gui.new.json");
+        await File.WriteAllTextAsync(
+            guiNewPath,
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {}
+              },
+              "Update": {
+                "CheckOnStartup": false,
+                "CheckOnSchedule": true,
+                "UpdatePackage": "MAA-v6.21.5-win-x64.zip",
+                "VersionType": "Nightly",
+                "UpdateSource": "MirrorChyan",
+                "MirrorChyanCdk": "cdk-token",
+                "MirrorChyanCdkExpiredTime": 1767225600,
+                "AllowNightlyUpdates": true,
+                "Proxy": "127.0.0.1:7890",
+                "ProxyType": "Http",
+                "ShowUpdaterConsole": true,
+                "GitHubToken": "ghp_secret"
+              }
+            }
+            """);
+
+        var importer = new GuiNewJsonConfigImporter();
+        var target = new UnifiedConfig();
+        var report = new ImportReport();
+        await importer.ImportAsync(
+            LegacyConfigSnapshot.FromPaths(guiNewPath, null),
+            target,
+            report,
+            fillMissingOnly: false);
+
+        Assert.False(target.GlobalValues["VersionUpdate.StartupUpdateCheck"]?.GetValue<bool>());
+        Assert.True(target.GlobalValues["VersionUpdate.ScheduledUpdateCheck"]?.GetValue<bool>());
+        Assert.Equal("MAA-v6.21.5-win-x64.zip", target.GlobalValues["VersionUpdate.package"]?.GetValue<string>());
+        Assert.Equal("Nightly", target.GlobalValues["VersionUpdate.VersionType"]?.GetValue<string>());
+        Assert.Equal("MirrorChyan", target.GlobalValues["VersionUpdate.ResourceUpdateSource"]?.GetValue<string>());
+        Assert.Equal(
+            "cdk-token",
+            target.GlobalValues["VersionUpdate.ResourceUpdateSource.MirrorChyanCdk"]?.GetValue<string>());
+        Assert.Equal(
+            1767225600,
+            target.GlobalValues["VersionUpdate.UpdateSource.MirrorChyanCdkExpired"]?.GetValue<int>());
+        Assert.True(target.GlobalValues["VersionUpdate.AllowNightlyUpdates"]?.GetValue<bool>());
+        Assert.Equal("127.0.0.1:7890", target.GlobalValues["VersionUpdate.Proxy"]?.GetValue<string>());
+        Assert.True(target.GlobalValues["VersionUpdate.ShowUpdaterConsole"]?.GetValue<bool>());
+        Assert.False(target.GlobalValues.ContainsKey("Update"));
+        Assert.Contains(
+            report.Warnings,
+            warning => warning.Contains("Update key `GitHubToken`", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GuiNewImport_DevV2TimerList_ShouldImportEachEntryById()
+    {
+        // dev-v2 382009b97b replaced the `Timers` dictionary with `TimerSettings.List` of
+        // `Timer { Id, IsEnabled, Config, Hour, Minute }`; ids are 0-based (ConfigConverter).
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {},
+                "Night": {}
+              },
+              "Timers": {
+                "ForceScheduledStart": true,
+                "ShowWindowBeforeForceScheduledStart": false,
+                "CustomConfig": true,
+                "List": [
+                  { "Id": 0, "IsEnabled": true, "Config": "Night", "Hour": 7, "Minute": 5 },
+                  { "Id": 3, "IsEnabled": null, "Config": "Default", "Hour": 23, "Minute": 0 }
+                ]
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var globals = service.CurrentConfig.GlobalValues;
+        Assert.True(globals["Timer.ForceScheduledStart"]?.GetValue<bool>());
+        Assert.False(globals["Timer.ShowWindowBeforeForceScheduledStart"]?.GetValue<bool>());
+        Assert.True(globals["Timer.CustomConfig"]?.GetValue<bool>());
+
+        Assert.True(globals["Timer.Timer1"]?.GetValue<bool>());
+        Assert.Equal(7, globals["Timer.Timer1Hour"]?.GetValue<int>());
+        Assert.Equal(5, globals["Timer.Timer1Min"]?.GetValue<int>());
+        Assert.Equal("Night", globals["Timer.Timer1.Config"]?.GetValue<string>());
+
+        // `IsEnabled: null` is the WPF half-checked state; the settings page stores it as an empty string.
+        Assert.Equal(string.Empty, globals["Timer.Timer4"]?.GetValue<string>());
+        Assert.Equal(23, globals["Timer.Timer4Hour"]?.GetValue<int>());
+        Assert.Equal(0, globals["Timer.Timer4Min"]?.GetValue<int>());
+        Assert.Equal("Default", globals["Timer.Timer4.Config"]?.GetValue<string>());
+
+        Assert.DoesNotContain(report.Warnings, warning => warning.Contains("`List`", StringComparison.Ordinal));
+        Assert.DoesNotContain(report.Warnings, warning => warning.Contains("Timer entry `List`", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GuiNewImport_DevV2RootGui_ShouldMapToLegacyGlobalKeys()
+    {
+        // dev-v2 382009b97b renamed root `GUI` to `Gui` and moved Background/Performance into it.
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {}
+              },
+              "Gui": {
+                "Localization": "en-us",
+                "DarkMode": "Dark",
+                "MinimizeOnStartup": true,
+                "TaskQueueInverseMode": true,
+                "GuideStep": 4,
+                "SettingOrders": [ "GUI" ],
+                "Performance": {
+                  "UseGpu": true,
+                  "IgnoreBadModulesAndUseSoftwareRendering": true
+                },
+                "Background": {
+                  "ImagePath": "bg.png",
+                  "Opacity": 70
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var globals = service.CurrentConfig.GlobalValues;
+        Assert.Equal("en-us", globals["GUI.Localization"]?.GetValue<string>());
+        Assert.Equal("Dark", globals["Theme.Mode"]?.GetValue<string>());
+        Assert.True(globals["GUI.MinimizeDirectly"]?.GetValue<bool>());
+        Assert.True(globals["MainFunction.InverseMode"]?.GetValue<bool>());
+        Assert.Equal(4, globals["Guide.StepIndex"]?.GetValue<int>());
+        Assert.True(globals["Performance.UseGpu"]?.GetValue<bool>());
+        Assert.True(globals["GUI.IgnoreBadModulesAndUseSoftwareRendering"]?.GetValue<bool>());
+        Assert.Equal("bg.png", globals["GUI.Background.ImagePath"]?.GetValue<string>());
+        Assert.Equal(70, globals["GUI.Background.Opacity"]?.GetValue<int>());
+        Assert.Contains(
+            report.Warnings,
+            warning => warning.Contains("Root `Gui` key `SettingOrders`", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ManualLegacyImport_FallbackGlobalValues_ShouldFillMissingUiScale()
     {
         var root = CreateTempRoot();
@@ -2225,6 +2527,92 @@ public sealed class ConfigurationImportTests
         Assert.True(tracker.Unlock("Lucky").Success);
         Assert.NotNull(explicitUnlock);
         Assert.True(explicitUnlock!.AutoClose);
+    }
+
+    [Fact]
+    public async Task LoadOrBootstrapAsync_UnreadableFieldValue_RemovesFieldAndKeepsProfiles()
+    {
+        // WPF dev-v2 8c72cac105 deletes the property named by JsonException.Path and retries
+        // instead of dropping the whole configuration.
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "avalonia.json"),
+            """
+            {
+              "SchemaVersion": 3,
+              "CurrentProfile": "Default",
+              "Profiles": {
+                "Default": {
+                  "Values": { "ConnectAddress": "1.1.1.1:5555" },
+                  "TaskQueue": "not-an-array"
+                }
+              },
+              "GlobalValues": { "Theme.Mode": "Dark" },
+              "Migration": {}
+            }
+            """);
+
+        var service = CreateService(root);
+        var result = await service.LoadOrBootstrapAsync();
+
+        Assert.True(result.LoadedFromExistingConfig);
+        var notice = Assert.IsType<ConfigRepairNotice>(result.ConfigRepairNotice);
+        Assert.False(notice.RebuiltDefaults);
+        Assert.Null(notice.BrokenConfigBackupPath);
+        Assert.Contains("$.Profiles.Default.TaskQueue", notice.RemovedJsonPaths);
+
+        Assert.Equal("Default", service.CurrentConfig.CurrentProfile);
+        Assert.Equal(
+            "1.1.1.1:5555",
+            service.CurrentConfig.Profiles["Default"].Values["ConnectAddress"]?.GetValue<string>());
+        Assert.Empty(service.CurrentConfig.Profiles["Default"].TaskQueue);
+        Assert.Equal("Dark", service.CurrentConfig.GlobalValues["Theme.Mode"]?.GetValue<string>());
+
+        // The repaired document is persisted so the same value is not repaired on every start.
+        var persisted = Assert.IsType<JsonObject>(
+            JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "config", "avalonia.json"))));
+        Assert.Equal(JsonValueKind.Array, persisted["Profiles"]?["Default"]?["TaskQueue"]?.GetValueKind());
+        Assert.Equal(
+            "1.1.1.1:5555",
+            persisted["Profiles"]?["Default"]?["Values"]?["ConnectAddress"]?.GetValue<string>());
+        Assert.Contains(
+            service.LogService.Snapshot,
+            log => log.Message.Contains("ConfigRepair.Recovered", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task LoadOrBootstrapAsync_UnreadableFile_PreservesBrokenCopyAndReportsRecovery()
+    {
+        // 8ad75a3760 surfaces the recovery to the user; MAAUnified reuses the startup notice pipeline.
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+        var configPath = Path.Combine(root, "config", "avalonia.json");
+        const string brokenJson = "{ \"SchemaVersion\": 3, \"Profiles\": { \"Default\": ";
+        await File.WriteAllTextAsync(configPath, brokenJson);
+
+        var service = CreateService(root);
+        var result = await service.LoadOrBootstrapAsync();
+
+        Assert.True(result.LoadedFromExistingConfig);
+        var notice = Assert.IsType<ConfigRepairNotice>(result.ConfigRepairNotice);
+        Assert.True(notice.RebuiltDefaults);
+        Assert.NotNull(notice.BrokenConfigBackupPath);
+        Assert.True(File.Exists(notice.BrokenConfigBackupPath));
+        Assert.Equal(brokenJson, await File.ReadAllTextAsync(notice.BrokenConfigBackupPath!));
+        var brokenCopy = Assert.Single(
+            Directory.EnumerateFiles(Path.Combine(root, "config"), "avalonia.json.broken.*"));
+        Assert.Equal(notice.BrokenConfigBackupPath, brokenCopy);
+
+        // Defaults are rebuilt and the file stays loadable.
+        Assert.Equal("Default", service.CurrentConfig.CurrentProfile);
+        Assert.Equal(UnifiedConfig.LatestSchemaVersion, service.CurrentConfig.SchemaVersion);
+        var reloaded = await new AvaloniaJsonConfigStore(root).LoadAsync();
+        Assert.NotNull(reloaded);
+        Assert.Contains(
+            service.LogService.Snapshot,
+            log => log.Message.Contains("ConfigRepair.Recovered", StringComparison.Ordinal));
     }
 
     [Fact]

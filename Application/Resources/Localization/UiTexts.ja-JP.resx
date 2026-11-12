@@ -733,6 +733,20 @@
   <data name="Main.CloseConfirm.Update.Title" xml:space="preserve">
     <value>MAAが更新中です</value>
   </data>
+  <data name="Main.ConfigRepair.Dialog.Cancel" xml:space="preserve">
+    <value>閉じる</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Confirm" xml:space="preserve">
+    <value>了解しました</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Prompt" xml:space="preserve">
+    <value>設定の読み込み中に問題が検出されたため、自動復旧を実行しました。
+{0}
+推奨: {1}</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Title" xml:space="preserve">
+    <value>設定復旧の通知</value>
+  </data>
   <data name="Main.RootPage.Failed.Copilot.Message" xml:space="preserve">
     <value>Copilot ページの初期化を完了できませんでした。</value>
   </data>

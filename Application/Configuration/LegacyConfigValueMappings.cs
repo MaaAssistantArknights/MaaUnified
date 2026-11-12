@@ -51,6 +51,148 @@ internal static class LegacyConfigValueMappings
         ["VersionUpdate.UpdateAutoCheck"] = "VersionUpdate.ScheduledUpdateCheck",
     };
 
+    // dev-v2 (`382009b97b`) rewrote the configuration tree and moved every per-profile setting
+    // into Configurations.<profile>.Gui.<Section>. These entries invert
+    // `src/MaaWpfGui/Helper/ConfigConverter.cs` (dev-v2) so imported values land on the flat
+    // keys MAAUnified still reads and writes.
+    private static readonly Dictionary<string, string> DevV2ProfileGuiKeyAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Gui.ConnectSettings
+        ["ConnectSettings.Address"] = "Connect.Address",
+        ["ConnectSettings.Config"] = "Connect.ConnectConfig",
+        ["ConnectSettings.AdbPath"] = "Connect.AdbPath",
+        ["ConnectSettings.AddressHistory"] = "Connect.AddressHistory",
+        ["ConnectSettings.TouchMode"] = "Connect.TouchMode",
+        ["ConnectSettings.AutoDetect"] = "Connect.AutoDetect",
+        ["ConnectSettings.AlwaysAutoDetect"] = "Connect.AlwaysAutoDetect",
+        ["ConnectSettings.AllowAdbRestart"] = "Connect.AllowADBRestart",
+        ["ConnectSettings.AllowAdbHardRestart"] = "Connect.AllowADBHardRestart",
+        ["ConnectSettings.EnableAdbLite"] = "Connect.AdbLiteEnabled",
+        ["ConnectSettings.KillAdbOnExit"] = "Connect.KillAdbOnExit",
+        ["ConnectSettings.AdbReplaced"] = "Connect.AdbReplaced",
+        ["ConnectSettings.Extras.MuMuEmulator12.IsEnabled"] = "Connect.MuMu12Extras.Enabled",
+        ["ConnectSettings.Extras.MuMuEmulator12.EmulatorPath"] = "Connect.MuMu12EmulatorPath",
+        ["ConnectSettings.Extras.MuMuEmulator12.InstanceIndex"] = "Connect.MuMu12Index",
+        ["ConnectSettings.Extras.MuMuEmulator12.EnableBridgeConnection"] = "Connect.MumuBridgeConnection",
+        ["ConnectSettings.Extras.LDPlayer.IsEnabled"] = "Connect.LdPlayerExtras.Enabled",
+        ["ConnectSettings.Extras.LDPlayer.EmulatorPath"] = "Connect.LdPlayerEmulatorPath",
+        ["ConnectSettings.Extras.LDPlayer.ManualSetIndex"] = "Connect.LdPlayerManualSetIndex",
+        ["ConnectSettings.Extras.LDPlayer.InstanceIndex"] = "Connect.LdPlayerIndex",
+        ["ConnectSettings.Extras.Win32Extra.ScreencapMethod"] = "Connect.AttachWindow.ScreencapMethod",
+        ["ConnectSettings.Extras.Win32Extra.MouseMethod"] = "Connect.AttachWindow.MouseMethod",
+        ["ConnectSettings.Extras.Win32Extra.KeyboardMethod"] = "Connect.AttachWindow.KeyboardMethod",
+
+        // Gui.StartUpSettings
+        ["StartUpSettings.RunDirectly"] = "Start.RunDirectly",
+        ["StartUpSettings.StartEmulator"] = "Start.OpenEmulatorAfterLaunch",
+        ["StartUpSettings.RestartEmulatorWhenAdbFailed"] = "Connect.RetryOnDisconnected",
+        ["StartUpSettings.EmulatorPath"] = "Start.EmulatorPath",
+        ["StartUpSettings.EmulatorAddCommand"] = "Start.EmulatorAddCommand",
+        ["StartUpSettings.EmulatorWaitSeconds"] = "Start.EmulatorWaitSeconds",
+
+        // Gui.RuntimeSettings
+        ["RuntimeSettings.ClientType"] = "Start.ClientType",
+        ["RuntimeSettings.StartGame"] = "Start.StartGame",
+        ["RuntimeSettings.DeployWithPause"] = "Roguelike.DeploymentWithPause",
+        ["RuntimeSettings.RoguelikeDelayAbortUntilCombatComplete"] = "Roguelike.RoguelikeDelayAbortUntilCombatComplete",
+        ["RuntimeSettings.PreRunScript"] = "Start.StartsWithScript",
+        ["RuntimeSettings.PostRunScript"] = "Start.EndsWithScript",
+        ["RuntimeSettings.ExecuteScriptOnCopilot"] = "Start.CopilotWithScript",
+        ["RuntimeSettings.ExecuteScriptOnManualStop"] = "Start.ManualStopWithScript",
+        ["RuntimeSettings.BlockSleep"] = "Start.BlockSleep",
+        ["RuntimeSettings.BlockSleepWithScreenOn"] = "Start.BlockSleepWithScreenOn",
+
+        // Gui.Notification
+        ["Notification.ReminderIntervalMinutes"] = "TimeOut.Timer.ReminderIntervalMinutes",
+
+        // Gui.RemoteControl
+        ["RemoteControl.RemoteControlGetTaskEndpointUri"] = "RemoteControl.RemoteControlGetTaskEndpointUri",
+        ["RemoteControl.RemoteControlReportStatusUri"] = "RemoteControl.RemoteControlReportStatusUri",
+        ["RemoteControl.RemoteControlUserIdentity"] = "RemoteControl.RemoteControlUserIdentity",
+        ["RemoteControl.RemoteControlDeviceIdentity"] = "RemoteControl.RemoteControlDeviceIdentity",
+        ["RemoteControl.RemoteControlPollIntervalMs"] = "RemoteControl.RemoteControlPollIntervalMs",
+
+        // Gui.ThirdParty
+        ["ThirdParty.ReportToPenguin"] = "Penguin.EnablePenguin",
+        ["ThirdParty.PenguinId"] = "Penguin.Id",
+        ["ThirdParty.ReportToYituliu"] = "Yituliu.EnableYituliu",
+
+        // Gui.ExternalNotification (structured `Delivery` section only; channel instances are P1-06/P1-07)
+        ["ExternalNotification.Delivery.Enable"] = "ExternalNotification.Enabled",
+        ["ExternalNotification.Delivery.SendWhenComplete"] = "ExternalNotification.SendWhenComplete",
+        ["ExternalNotification.Delivery.SendWhenError"] = "ExternalNotification.SendWhenError",
+        ["ExternalNotification.Delivery.SendWhenStalled"] = "ExternalNotification.SendWhenStalled",
+
+        // Gui.* scalars
+        ["WindowTitlePrefix"] = "GUI.WindowTitlePrefix",
+        ["PostActions"] = "MainFunction.PostActions",
+        ["AchievementPopupDisabled"] = "Achievement.PopupDisabled",
+        ["AchievementPopupAutoClose"] = "Achievement.PopupAutoClose",
+    };
+
+    // dev-v2 `382009b97b` renamed the root `VersionUpdate` object to `Update` and renamed
+    // several sub keys (`53870a7a52` added the credentials/source fields).
+    private static readonly Dictionary<string, string> DevV2UpdateKeyAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Name"] = "VersionUpdate.name",
+        ["UpdatePackage"] = "VersionUpdate.package",
+        ["IsFirstBoot"] = "VersionUpdate.isfirstboot",
+        ["DoNotShowUpdate"] = "VersionUpdate.doNotShowUpdate",
+        ["VersionType"] = "VersionUpdate.VersionType",
+        ["AllowNightlyUpdates"] = "VersionUpdate.AllowNightlyUpdates",
+        ["HasAcknowledgedNightlyWarning"] = "VersionUpdate.HasAcknowledgedNightlyWarning",
+        ["UpdateSource"] = "VersionUpdate.ResourceUpdateSource",
+        ["MirrorChyanCdk"] = "VersionUpdate.ResourceUpdateSource.MirrorChyanCdk",
+        ["MirrorChyanCdkExpiredTime"] = "VersionUpdate.UpdateSource.MirrorChyanCdkExpired",
+        ["CheckOnStartup"] = "VersionUpdate.StartupUpdateCheck",
+        ["CheckOnSchedule"] = "VersionUpdate.ScheduledUpdateCheck",
+        ["Proxy"] = "VersionUpdate.Proxy",
+        ["ProxyType"] = "VersionUpdate.ProxyType",
+        ["ResourceApi"] = "VersionUpdate.ResourceApi",
+        ["ForceGithubGlobalSource"] = "VersionUpdate.UpdateSource.ForceGithubGlobalSource",
+        ["AutoDownloadUpdatePackage"] = "VersionUpdate.AutoDownloadUpdatePackage",
+        ["AutoInstallUpdatePackage"] = "VersionUpdate.AutoInstallUpdatePackage",
+        ["ShowUpdaterConsole"] = "VersionUpdate.ShowUpdaterConsole",
+        ["ShowUpdaterProgress"] = "VersionUpdate.ShowUpdaterProgress",
+    };
+
+    // dev-v2 root `Gui` object (renamed from v6.3.7 root `GUI`); pairs come from
+    // `src/MaaWpfGui/Helper/ConfigConverter.cs` at `3badedda9b`.
+    private static readonly Dictionary<string, string> DevV2RootGuiKeyAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Localization"] = "GUI.Localization",
+        ["OperNameLanguage"] = "GUI.OperNameLanguage",
+        ["UseTray"] = "GUI.UseTray",
+        ["MinimizeToTray"] = "GUI.MinimizeToTray",
+        ["MinimizeOnStartup"] = "GUI.MinimizeDirectly",
+        ["HideCloseButton"] = "GUI.HideCloseButton",
+        ["WindowTitleScrollable"] = "GUI.WindowTitleScrollable",
+        ["WindowTitleSelectShowList"] = "GUI.WindowTitleSelectShowList",
+        ["LogItemDateFormat"] = "GUI.LogItemDateFormat",
+        ["WindowPlacement"] = "GUI.WindowPlacement",
+        ["LoadWindowPlacement"] = "GUI.LoadWindowPlacement",
+        ["SaveWindowPlacement"] = "GUI.SaveWindowPlacement",
+        ["InverseClearMode"] = "GUI.InverseClearMode",
+        ["DarkMode"] = "GUI.DarkMode",
+        ["TaskQueueInverseMode"] = "MainFunction.InverseMode",
+        ["UseCardLog"] = "GUI.UseCardLog",
+        ["MaxNumberOfLogThumbnails"] = "GUI.MaxNumberOfLogThumbnails",
+        ["SoberLanguage"] = "GUI.SoberLanguage",
+        ["Hangover"] = "GUI.Hangover",
+        ["LastBuyWineTime"] = "GUI.LastBuyWineTime",
+        ["CustomCulture"] = "GUI.CustomCulture",
+        ["GuideStep"] = "Guide.StepIndex",
+        ["Background.ImagePath"] = "GUI.Background.ImagePath",
+        ["Background.StretchMode"] = "GUI.Background.StretchMode",
+        ["Background.Opacity"] = "GUI.Background.Opacity",
+        ["Background.BlurEffectRadius"] = "GUI.Background.BlurEffectRadius",
+        ["Performance.UseGpu"] = "Performance.UseGpu",
+        ["Performance.GpuDescription"] = "Performance.PreferredGpuDescription",
+        ["Performance.GpuInstancePath"] = "Performance.PreferredGpuInstancePath",
+        ["Performance.AllowDeprecatedGpu"] = "Performance.AllowDeprecatedGpu",
+        ["Performance.IgnoreBadModulesAndUseSoftwareRendering"] = "GUI.IgnoreBadModulesAndUseSoftwareRendering",
+    };
+
     private static readonly Dictionary<string, string> ClientTypeAliases = new(StringComparer.OrdinalIgnoreCase)
     {
         ["official"] = "Official",
@@ -161,6 +303,61 @@ internal static class LegacyConfigValueMappings
     public static string NormalizeGlobalKey(string key)
     {
         return GlobalKeyAliases.TryGetValue(key, out var mapped) ? mapped : key;
+    }
+
+    /// <summary>
+    /// Maps a dev-v2 per-profile <c>Gui</c> path (relative to <c>Gui.</c>, dotted) to the flat
+    /// legacy profile key that MAAUnified still reads.
+    /// </summary>
+    public static string? TryMapDevV2ProfileGuiKey(string relativePath)
+    {
+        return DevV2ProfileGuiKeyAliases.TryGetValue(relativePath, out var mapped) ? mapped : null;
+    }
+
+    /// <summary>
+    /// Indicates whether a dev-v2 per-profile <c>Gui</c> path is a section that contains mapped keys.
+    /// </summary>
+    public static bool IsDevV2ProfileGuiSection(string relativePath)
+    {
+        return HasMappedDescendant(DevV2ProfileGuiKeyAliases, relativePath);
+    }
+
+    /// <summary>
+    /// Maps a dev-v2 root <c>Update</c> sub key to the legacy <c>VersionUpdate.*</c> global key.
+    /// </summary>
+    public static string? TryMapDevV2UpdateKey(string key)
+    {
+        return DevV2UpdateKeyAliases.TryGetValue(key, out var mapped) ? mapped : null;
+    }
+
+    /// <summary>
+    /// Maps a dev-v2 root <c>Gui</c> path (relative to <c>Gui.</c>, dotted) to the legacy global key.
+    /// </summary>
+    public static string? TryMapDevV2RootGuiKey(string relativePath)
+    {
+        return DevV2RootGuiKeyAliases.TryGetValue(relativePath, out var mapped) ? mapped : null;
+    }
+
+    /// <summary>
+    /// Indicates whether a dev-v2 root <c>Gui</c> path is a section that contains mapped keys.
+    /// </summary>
+    public static bool IsDevV2RootGuiSection(string relativePath)
+    {
+        return HasMappedDescendant(DevV2RootGuiKeyAliases, relativePath);
+    }
+
+    private static bool HasMappedDescendant(IReadOnlyDictionary<string, string> aliases, string relativePath)
+    {
+        var prefix = relativePath + ".";
+        foreach (var key in aliases.Keys)
+        {
+            if (key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static JsonNode? NormalizeProfileValue(string key, JsonNode? value)
