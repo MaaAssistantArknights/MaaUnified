@@ -406,6 +406,7 @@ public sealed partial class SettingsPageViewModel
             [ConfigurationKeys.ExternalNotificationSendWhenComplete] = ExternalNotificationSendWhenComplete.ToString(),
             [ConfigurationKeys.ExternalNotificationSendWhenError] = ExternalNotificationSendWhenError.ToString(),
             [ConfigurationKeys.ExternalNotificationSendWhenStalled] = ExternalNotificationSendWhenStalled.ToString(),
+            [ConfigurationKeys.ExternalNotificationSendBeforeScheduledStart] = ExternalNotificationSendBeforeScheduledStart.ToString(),
             // Dual-write the WPF legacy key so the toggle choice also travels back to WPF
             // (WPF frozen 23ddd271 only reads/writes ExternalNotification.SendWhenTimeout).
             // Reads stay new-key-first with the legacy key as fallback.

@@ -18,6 +18,7 @@ using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Security;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.Notifications;
 using MAAUnified.Application.Services.ThirdParty;
 using MAAUnified.Compat.Constants;
 using MAAUnified.Compat.Runtime;
@@ -85,6 +86,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private const int SuppressedAutoSaveRetryDelayMs = 100;
     private const int MaxSuppressedAutoSaveWaits = 50;
     private const int TimerSlotCount = 8;
+    private const int DefaultScheduledStartNotificationMinutes = 5;
     private const int TimerHourMin = 0;
     private const int TimerHourMax = 23;
     private const int TimerMinuteMin = 0;
@@ -393,14 +395,20 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private bool _forceScheduledStart;
     private bool _showWindowBeforeForceScheduledStart;
     private bool _customTimerConfig;
+    private bool _notifyBeforeScheduledStart;
+    private int _scheduledStartNotificationMinutes = DefaultScheduledStartNotificationMinutes;
+    private bool _scheduledWakeUp;
     private bool _hasPendingTimerChanges;
     private string _timerValidationMessage = string.Empty;
     private DateTimeOffset? _lastSuccessfulTimerSaveAt;
     private bool _suppressTimerDirtyTracking;
+    private bool _suppressScheduledWakeUpSync;
+    private readonly ScheduledWakeUpCoordinator _scheduledWakeUpCoordinator;
     private bool _externalNotificationEnabled;
     private bool _externalNotificationSendWhenComplete = true;
     private bool _externalNotificationSendWhenError = true;
     private bool _externalNotificationSendWhenStalled = true;
+    private bool _externalNotificationSendBeforeScheduledStart;
     private bool _externalNotificationEnableDetails;
     private string _externalNotificationStatusMessage = string.Empty;
     private string _externalNotificationWarningMessage = string.Empty;
@@ -514,6 +522,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         _openExternalTargetAsync = openExternalTargetAsync ?? OpenExternalTargetAsync;
         _dialogService = dialogService ?? NoOpAppDialogService.Instance;
         _uiLanguageCoordinator = runtime.UiLanguageCoordinator;
+        _scheduledWakeUpCoordinator = new ScheduledWakeUpCoordinator(runtime.Platform.ScheduledWakeUpRegistrar);
+        _scheduledWakeUpCoordinator.SyncCompleted += OnScheduledWakeUpSyncCompleted;
         _coreVersionResolver = coreVersionResolver ?? ResolveCurrentCoreVersion;
         _aboutAnnouncementHttpClient = aboutAnnouncementHttpClient;
         _aboutAnnouncementTimeout = aboutAnnouncementTimeout is { } timeout && timeout > TimeSpan.Zero
@@ -608,6 +618,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         Runtime.ConfigurationService.SensitiveStorageStateChanged -= HandleSensitiveStorageStateChanged;
         Runtime.SessionService.SessionStateChanged -= OnSessionStateChanged;
         ConnectionGameSharedState.PropertyChanged -= OnConnectionGameSharedStateChanged;
+        _scheduledWakeUpCoordinator.SyncCompleted -= OnScheduledWakeUpSyncCompleted;
+        _scheduledWakeUpCoordinator.Dispose();
     }
 
     public RootLocalizationTextMap RootTexts { get; }
@@ -1669,6 +1681,22 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     {
         get => _externalNotificationSendWhenStalled;
         set => SetProperty(ref _externalNotificationSendWhenStalled, value);
+    }
+
+    /// <summary>
+    /// WPF dev-v2 ExternalNotification.SendBeforeScheduledStart (ba602828e6): external delivery
+    /// before a scheduled start, sharing the timer page lead time.
+    /// </summary>
+    public bool ExternalNotificationSendBeforeScheduledStart
+    {
+        get => _externalNotificationSendBeforeScheduledStart;
+        set
+        {
+            if (SetProperty(ref _externalNotificationSendBeforeScheduledStart, value))
+            {
+                OnPropertyChanged(nameof(ShowScheduledStartNotificationMinutes));
+            }
+        }
     }
 
     public bool ExternalNotificationEnableDetails
@@ -3827,6 +3855,67 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             }
         }
     }
+
+    public bool NotifyBeforeScheduledStart
+    {
+        get => _notifyBeforeScheduledStart;
+        set
+        {
+            if (SetProperty(ref _notifyBeforeScheduledStart, value))
+            {
+                OnPropertyChanged(nameof(ShowScheduledStartNotificationMinutes));
+                MarkTimerDirty();
+            }
+        }
+    }
+
+    public int ScheduledStartNotificationMinutes
+    {
+        get => _scheduledStartNotificationMinutes;
+        set
+        {
+            var clamped = ScheduledStartNotificationPlanner.ClampLeadMinutes(value);
+            if (SetProperty(ref _scheduledStartNotificationMinutes, clamped))
+            {
+                MarkTimerDirty();
+            }
+        }
+    }
+
+    /// <summary>
+    /// WPF dev-v2 Timers.ScheduledWakeUp (0b40a31009). The switch is disabled when the platform
+    /// registrar is unsupported (macOS/Linux) so no config value is silently rewritten.
+    /// </summary>
+    public bool ScheduledWakeUp
+    {
+        get => _scheduledWakeUp;
+        set
+        {
+            if (!SetProperty(ref _scheduledWakeUp, value))
+            {
+                return;
+            }
+
+            MarkTimerDirty();
+            if (!_suppressScheduledWakeUpSync)
+            {
+                RequestScheduledWakeUpSync(userInitiated: true);
+            }
+        }
+    }
+
+    public bool IsScheduledWakeUpSupported => _scheduledWakeUpCoordinator.Capability.Supported;
+
+    public bool IsScheduledWakeUpUnsupported => !IsScheduledWakeUpSupported;
+
+    public string ScheduledWakeUpCapabilityText => IsScheduledWakeUpSupported
+        ? string.Empty
+        : LocalizeSettingsText(
+            "Settings.Timer.ScheduledWakeUp.Unsupported",
+            "Scheduled wake-up is unavailable: Windows Task Scheduler is required.");
+
+    public bool ShowScheduledStartNotificationMinutes =>
+        NotifyBeforeScheduledStart || _externalNotificationSendBeforeScheduledStart;
 
     public bool HasPendingTimerChanges
     {
@@ -6247,6 +6336,107 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             SaveTimerSettingsCoreAsync);
     }
 
+    /// <summary>
+    /// Startup reconciliation (WPF TimerSettingsUserControlModel ctor Task.Run(SyncAll)): rebuild
+    /// the wake-up task from the persisted timer list without blocking the first screen.
+    /// </summary>
+    public void ReconcileScheduledWakeUpInBackground() => RequestScheduledWakeUpSync(userInitiated: false);
+
+    internal Task PendingScheduledWakeUpSync => _scheduledWakeUpCoordinator.PendingSync;
+
+    private void RequestScheduledWakeUpSync(bool userInitiated)
+    {
+        if (_disposed || !IsScheduledWakeUpSupported)
+        {
+            return;
+        }
+
+        _scheduledWakeUpCoordinator.RequestSync(BuildScheduledWakeUpPlan(), userInitiated);
+    }
+
+    internal ScheduledWakeUpPlan BuildScheduledWakeUpPlan()
+    {
+        var enabled = IsScheduledWakeUpSupported && ScheduledWakeUp;
+        var slots = enabled
+            ? Timers
+                .Where(static slot => slot.Enabled != false)
+                .Where(static slot => TryParseTimerTime(slot.Time, out _, out _))
+                .Select(static slot => new ScheduledWakeUpSlot(slot.Index, slot.Hour, slot.Minute))
+                .ToArray()
+            : [];
+        if (!enabled)
+        {
+            return ScheduledWakeUpPlan.Disabled;
+        }
+
+        var processPath = Environment.ProcessPath ?? string.Empty;
+        var executablePath = processPath;
+        var arguments = Program.SkipStartupAutoRunArgument;
+        var workingDirectory = string.IsNullOrWhiteSpace(processPath)
+            ? string.Empty
+            : Path.GetDirectoryName(processPath) ?? string.Empty;
+
+        // Framework-dependent runs launch `dotnet`; point the task at the entry assembly instead
+        // of opening a bare host. Published builds are self-contained and keep the direct path.
+        if (!string.IsNullOrWhiteSpace(processPath)
+            && string.Equals(Path.GetFileNameWithoutExtension(processPath), "dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            var entryAssemblyPath = Assembly.GetEntryAssembly()?.Location;
+            if (!string.IsNullOrWhiteSpace(entryAssemblyPath))
+            {
+                arguments = $"\"{entryAssemblyPath}\" {Program.SkipStartupAutoRunArgument}";
+                workingDirectory = Path.GetDirectoryName(entryAssemblyPath) ?? workingDirectory;
+            }
+        }
+
+        return new ScheduledWakeUpPlan(enabled, slots, executablePath, arguments, workingDirectory);
+    }
+
+    private void OnScheduledWakeUpSyncCompleted(object? sender, ScheduledWakeUpSyncResult result)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (result.Result.Success)
+        {
+            Runtime.LogService.Debug($"Scheduled wake-up sync succeeded: {result.Result.Message}");
+            return;
+        }
+
+        Runtime.LogService.Warn($"Scheduled wake-up sync failed: {result.Result.Message}");
+        if (!result.UserInitiated)
+        {
+            // Background reconciliation only logs; a failure dialog on every launch would be noise.
+            return;
+        }
+
+        _ = ReportScheduledWakeUpSyncFailureAsync(result.Result);
+    }
+
+    private async Task ReportScheduledWakeUpSyncFailureAsync(PlatformOperationResult result)
+    {
+        try
+        {
+            var failed = UiOperationResult.Fail(
+                result.ErrorCode ?? UiErrorCode.PlatformOperationFailed,
+                FormatSettingsText(
+                    "Settings.Timer.ScheduledWakeUp.SyncFailed",
+                    "Failed to sync the scheduled wake-up task: {0}",
+                    result.Message));
+            await RecordFailedResultAsync("Settings.Timer.ScheduledWakeUp", failed, CancellationToken.None);
+            await Runtime.DialogFeatureService.ReportErrorAsync(
+                "Settings.Timer.ScheduledWakeUp",
+                failed,
+                CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Runtime.LogService.Warn($"Failed to report scheduled wake-up failure: {ex.Message}");
+        }
+    }
+
     private void MarkConnectionGameDirty()
     {
         if (IsPageAutoSaveSuppressed)
@@ -6611,6 +6801,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             case nameof(ExternalNotificationSendWhenComplete):
             case nameof(ExternalNotificationSendWhenError):
             case nameof(ExternalNotificationSendWhenStalled):
+            case nameof(ExternalNotificationSendBeforeScheduledStart):
             case nameof(ExternalNotificationEnableDetails):
             case nameof(SelectedNotificationProvider):
             case nameof(NotificationProviderParametersText):
@@ -6800,6 +6991,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         SetSelectedLanguageValue(normalized, requestLanguageChange: false);
         RootTexts.Language = normalized;
         OnPropertyChanged(nameof(RootTexts));
+        OnPropertyChanged(nameof(ScheduledWakeUpCapabilityText));
         RefreshNotificationTemplateLocalization(previousLanguage, normalized);
         ConnectionGameSharedState.SetLanguage(normalized);
         Runtime.AchievementTrackerService.SetCurrentLanguage(normalized);
@@ -6876,6 +7068,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         SetSelectedLanguageValue(normalized, requestLanguageChange: false);
         RootTexts.Language = normalized;
         OnPropertyChanged(nameof(RootTexts));
+        OnPropertyChanged(nameof(ScheduledWakeUpCapabilityText));
         RefreshNotificationTemplateLocalization(previousLanguage, normalized);
         ConnectionGameSharedState.SetLanguage(normalized);
         Runtime.AchievementTrackerService.SetCurrentLanguage(normalized);
@@ -6921,6 +7114,16 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             || e.PropertyName == nameof(TimerSlotViewModel.Profile))
         {
             MarkTimerDirty();
+        }
+
+        // WPF TimerSettingsUserControlModel: IsEnabled/Hour/Minute changes rebuild the task after
+        // the 500 ms debounce; Profile changes do not affect the trigger list.
+        if (e.PropertyName == nameof(TimerSlotViewModel.Enabled)
+            || e.PropertyName == nameof(TimerSlotViewModel.Time)
+            || e.PropertyName == nameof(TimerSlotViewModel.Hour)
+            || e.PropertyName == nameof(TimerSlotViewModel.Minute))
+        {
+            RequestScheduledWakeUpSync(userInitiated: false);
         }
     }
 
@@ -8552,6 +8755,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 config,
                 ConfigurationKeys.ExternalNotificationSendWhenStalled,
                 ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true));
+            ExternalNotificationSendBeforeScheduledStart = ReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationSendBeforeScheduledStart,
+                false);
             ExternalNotificationEnableDetails = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnableDetails, false);
             HotkeyShowGui = loadedShowGui;
             HotkeyLinkStart = loadedLinkStart;
@@ -9349,6 +9556,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 config,
                 ConfigurationKeys.ExternalNotificationSendWhenStalled,
                 ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true));
+            ExternalNotificationSendBeforeScheduledStart = ReadProfileBool(
+                config,
+                ConfigurationKeys.ExternalNotificationSendBeforeScheduledStart,
+                false);
             ExternalNotificationEnableDetails = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnableDetails, false);
             LoadExternalNotificationProviderParametersFromConfig(config);
             configurationSummary = BuildExternalNotificationConfigurationSummary(
@@ -10538,6 +10749,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             ForceScheduledStart: ForceScheduledStart,
             ShowWindowBeforeForceScheduledStart: ShowWindowBeforeForceScheduledStart,
             CustomTimerConfig: CustomTimerConfig,
+            NotifyBeforeScheduledStart: NotifyBeforeScheduledStart,
+            ScheduledStartNotificationMinutes: ScheduledStartNotificationMinutes,
+            ScheduledWakeUp: ScheduledWakeUp,
             Slots: slots);
     }
 
@@ -10649,10 +10863,30 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 Profile: profile));
         }
 
+        var rawNotificationMinutes = ReadGlobalIntFlexible(
+            config,
+            LegacyConfigurationKeys.ScheduledStartNotificationMinutes,
+            DefaultScheduledStartNotificationMinutes,
+            out var parsedNotificationMinutes);
+        if (!parsedNotificationMinutes
+            && HasConfigKey(config, LegacyConfigurationKeys.ScheduledStartNotificationMinutes, ConfigValuePreference.GlobalFirst))
+        {
+            warnings.Add(BuildNotificationMinutesParseFallbackWarning(DefaultScheduledStartNotificationMinutes));
+        }
+
+        var notificationMinutes = ScheduledStartNotificationPlanner.ClampLeadMinutes(rawNotificationMinutes);
+        if (rawNotificationMinutes != notificationMinutes)
+        {
+            warnings.Add(BuildNotificationMinutesClampedWarning(notificationMinutes, rawNotificationMinutes));
+        }
+
         return new TimerSettingsSnapshot(
             ForceScheduledStart: ReadGlobalBoolFlexible(config, LegacyConfigurationKeys.ForceScheduledStart, false),
             ShowWindowBeforeForceScheduledStart: ReadGlobalBoolFlexible(config, LegacyConfigurationKeys.ShowWindowBeforeForceScheduledStart, false),
             CustomTimerConfig: ReadGlobalBoolFlexible(config, LegacyConfigurationKeys.CustomConfig, false),
+            NotifyBeforeScheduledStart: ReadGlobalBoolFlexible(config, LegacyConfigurationKeys.NotifyBeforeScheduledStart, false),
+            ScheduledStartNotificationMinutes: notificationMinutes,
+            ScheduledWakeUp: ReadGlobalBoolFlexible(config, LegacyConfigurationKeys.ScheduledWakeUp, false),
             Slots: slots);
     }
 
@@ -10755,14 +10989,35 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             fallbackProfile);
     }
 
+    private string BuildNotificationMinutesParseFallbackWarning(int fallbackMinutes)
+    {
+        return FormatSettingsText(
+            "Settings.Timer.Warning.NotificationMinutesParseFallback",
+            "定时执行前通知的提前时间解析失败，已回退为 {0} 分钟。",
+            fallbackMinutes);
+    }
+
+    private string BuildNotificationMinutesClampedWarning(int clampedMinutes, int rawMinutes)
+    {
+        return FormatSettingsText(
+            "Settings.Timer.Warning.NotificationMinutesClamped",
+            "定时执行前通知的提前时间已从 {0} 限制为 {1} 分钟。",
+            rawMinutes,
+            clampedMinutes);
+    }
+
     private void ApplyTimerSnapshot(TimerSettingsSnapshot snapshot)
     {
         _suppressTimerDirtyTracking = true;
+        _suppressScheduledWakeUpSync = true;
         try
         {
             ForceScheduledStart = snapshot.ForceScheduledStart;
             ShowWindowBeforeForceScheduledStart = snapshot.ShowWindowBeforeForceScheduledStart;
             CustomTimerConfig = snapshot.CustomTimerConfig;
+            NotifyBeforeScheduledStart = snapshot.NotifyBeforeScheduledStart;
+            ScheduledStartNotificationMinutes = snapshot.ScheduledStartNotificationMinutes;
+            ScheduledWakeUp = snapshot.ScheduledWakeUp;
 
             var byIndex = snapshot.Slots.ToDictionary(static s => s.Index);
             foreach (var slot in Timers)
@@ -10780,6 +11035,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         finally
         {
             _suppressTimerDirtyTracking = false;
+            _suppressScheduledWakeUpSync = false;
         }
     }
 
@@ -11279,6 +11535,9 @@ public sealed record TimerSettingsSnapshot(
     bool ForceScheduledStart,
     bool ShowWindowBeforeForceScheduledStart,
     bool CustomTimerConfig,
+    bool NotifyBeforeScheduledStart,
+    int ScheduledStartNotificationMinutes,
+    bool ScheduledWakeUp,
     IReadOnlyList<TimerSlotSettingsSnapshot> Slots)
 {
     public IReadOnlyDictionary<string, string> ToGlobalSettingUpdates()
@@ -11287,6 +11546,12 @@ public sealed record TimerSettingsSnapshot(
         updates[LegacyConfigurationKeys.ForceScheduledStart] = ForceScheduledStart.ToString();
         updates[LegacyConfigurationKeys.ShowWindowBeforeForceScheduledStart] = ShowWindowBeforeForceScheduledStart.ToString();
         updates[LegacyConfigurationKeys.CustomConfig] = CustomTimerConfig.ToString();
+        updates[LegacyConfigurationKeys.NotifyBeforeScheduledStart] = NotifyBeforeScheduledStart.ToString();
+        updates[LegacyConfigurationKeys.ScheduledStartNotificationMinutes] = Math.Clamp(
+            ScheduledStartNotificationMinutes,
+            ScheduledStartNotificationPlanner.MinLeadMinutes,
+            ScheduledStartNotificationPlanner.MaxLeadMinutes).ToString(CultureInfo.InvariantCulture);
+        updates[LegacyConfigurationKeys.ScheduledWakeUp] = ScheduledWakeUp.ToString();
 
         foreach (var slot in Slots.OrderBy(static s => s.Index))
         {

@@ -2302,6 +2302,12 @@
   <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
     <value>タスクログ出力停滞時に通知を送信</value>
   </data>
+  <data name="Settings.ExternalNotification.SendBeforeScheduledStart" xml:space="preserve">
+    <value>定時実行前</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendBeforeScheduledStartTip" xml:space="preserve">
+    <value>定時タスクの開始前に外部通知を送信します。&#10;事前時間は定時設定の事前時間を使用します。</value>
+  </data>
   <data name="Settings.ExternalNotification.Status.OperationFailed" xml:space="preserve">
     <value>外部通知の操作に失敗しました。</value>
   </data>
@@ -2905,6 +2911,33 @@ DEBUGディレクトリに保存される画像には数量制限があり、超
   <data name="Settings.Timer.CustomConfig" xml:space="preserve">
     <value>カスタム構成オプション</value>
   </data>
+  <data name="Settings.Timer.NotifyBeforeScheduledStart" xml:space="preserve">
+    <value>定時実行前にシステム通知を送信</value>
+  </data>
+  <data name="Settings.Timer.NotifyBeforeScheduledStartTip" xml:space="preserve">
+    <value>事前にシステム通知を送信します。&#10;外部通知は外部通知設定で個別に有効化できます。どちらも同じ事前時間を使用します。</value>
+  </data>
+  <data name="Settings.Timer.ScheduledStartNotificationMinutes" xml:space="preserve">
+    <value>事前時間（分）</value>
+  </data>
+  <data name="Settings.Timer.ScheduledWakeUp" xml:space="preserve">
+    <value>定時実行前にコンピューターを起動して MAA を起動</value>
+  </data>
+  <data name="Settings.Timer.ScheduledWakeUpTip" xml:space="preserve">
+    <value>Windows タスク スケジューラにタスクを登録し、有効な各タイマーの 5 分前にコンピューターを起動して MAA を開始します。以降はアプリ内の定時起動処理が引き継ぎます。&#10;この方法で起動した場合は、スタートアップ設定の自動実行項目をスキップします。&#10;MAA 終了後もスケジュールされたタスクは残り、このスイッチをオフにすると削除されます。&#10;スリープからの起動はデバイスのファームウェアに依存し、スリープからの起動のみ対応するデバイスもあります。</value>
+  </data>
+  <data name="Settings.Timer.ScheduledWakeUp.Unsupported" xml:space="preserve">
+    <value>このプラットフォームではスケジュールされた起動は利用できません（Windows タスク スケジューラが必要です）。</value>
+  </data>
+  <data name="Settings.Timer.ScheduledWakeUp.SyncFailed" xml:space="preserve">
+    <value>スケジュールされた起動タスクの同期に失敗しました: {0}</value>
+  </data>
+  <data name="Settings.Timer.Warning.NotificationMinutesClamped" xml:space="preserve">
+    <value>定時実行前通知の事前時間を {0} 分から {1} 分に制限しました。</value>
+  </data>
+  <data name="Settings.Timer.Warning.NotificationMinutesParseFallback" xml:space="preserve">
+    <value>定時実行前通知の事前時間を解析できませんでした。{0} 分を使用します。</value>
+  </data>
   <data name="Timer.Schedule.ForceCountdown.Title" xml:space="preserve">
     <value>スケジュール起動</value>
   </data>
@@ -2919,6 +2952,12 @@ DEBUGディレクトリに保存される画像には数量制限があり、超
   </data>
   <data name="Timer.Schedule.ProfileMismatchWarning" xml:space="preserve">
     <value>スケジュール起動をスキップしました：現在の構成がタイマーの構成と一致しません。</value>
+  </data>
+  <data name="Timer.Schedule.Notification.Content" xml:space="preserve">
+    <value>定時 {0} は {1}（{2} 分後）に実行予定です。ゲームのログイン状態にご注意ください。</value>
+  </data>
+  <data name="Timer.Schedule.Notification.Title" xml:space="preserve">
+    <value>定時タスクがまもなく実行されます</value>
   </data>
   <data name="Timer.Schedule.CloseDownFailed" xml:space="preserve">
     <value>ゲームの終了に失敗しました。</value>

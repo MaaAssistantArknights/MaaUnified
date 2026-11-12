@@ -106,6 +106,10 @@
           <CheckBox Classes="app-checkbox"
                     Content="{Binding RootTexts[Settings.ExternalNotification.SendWhenStalled]}"
                     IsChecked="{Binding ExternalNotificationSendWhenStalled}" />
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding RootTexts[Settings.ExternalNotification.SendBeforeScheduledStart]}"
+                    IsChecked="{Binding ExternalNotificationSendBeforeScheduledStart}"
+                    ToolTip.Tip="{Binding RootTexts[Settings.ExternalNotification.SendBeforeScheduledStartTip]}" />
         </controls:AdaptiveSpacingStackPanel>
       </controls:AdaptiveSpacingStackPanel>
 

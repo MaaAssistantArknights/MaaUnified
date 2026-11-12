@@ -33,6 +33,11 @@ public static class PlatformErrorCodes
     public const string AutostartVerificationFailed = "AutostartVerificationFailed";
     public const string AutostartExecutableMissing = "AutostartExecutableMissing";
 
+    public const string ScheduledWakeUpUnsupported = "ScheduledWakeUpUnsupported";
+    public const string ScheduledWakeUpRegisterFailed = "ScheduledWakeUpRegisterFailed";
+    public const string ScheduledWakeUpRemoveFailed = "ScheduledWakeUpRemoveFailed";
+    public const string ScheduledWakeUpExecutableMissing = "ScheduledWakeUpExecutableMissing";
+
     public const string OverlayUnsupported = "OverlayUnsupported";
     public const string OverlayPreviewMode = "OverlayPreviewMode";
     public const string OverlayTargetInvalid = "OverlayTargetInvalid";

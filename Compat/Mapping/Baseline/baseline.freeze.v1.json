@@ -3661,16 +3661,19 @@
     {
       "key": "ExternalNotification.SendBeforeScheduledStart",
       "owner_item_id": "Settings.ExternalNotification",
-      "parity_status": "Gap",
+      "parity_status": "Aligned",
       "priority": "P0",
-      "notes": "dev-v2 新增配置键（v6.3.7 冻结基线之外）。dev-v2 定点前通知开关；消费点属 P1-09，尚未接线。",
+      "notes": "WPF dev-v2 ba602828e6 pre-start external notification switch. The delivery policy reads it from the active profile and the task queue dispatch consumes it for the ScheduledStart trigger. Executed evidence: TaskQueueNotificationTests.ScheduledStartExternalNotification_FollowsDeliverySwitch.",
       "evidence": {
         "ui_path": "App/Features/Settings/ExternalNotificationSettingsView.axaml",
         "log_path": "debug/avalonia-ui-events.log",
         "scope": "Config.ExternalNotification.SendBeforeScheduledStart",
         "case_id": "CFG-311"
       },
-      "mapping_target": null
+      "mapping_target": "ExternalNotificationDeliveryPolicy",
+      "read_path": "Application/Services/Notifications/ExternalNotificationDeliveryPolicy.cs::FromConfig",
+      "write_path": "App/ViewModels/Settings/SettingsPageViewModel.RemoteNotification.cs::SaveExternalNotificationCoreAsync",
+      "waiver": null
     },
     {
       "key": "ExternalNotification.SendWhenComplete",
@@ -6416,6 +6419,57 @@
       }
     },
     {
+      "key": "Timer.NotifyBeforeScheduledStart",
+      "owner_item_id": "Settings.Timer",
+      "parity_status": "Aligned",
+      "priority": "P0",
+      "notes": "WPF dev-v2 ba602828e6 sends a system notification before a scheduled start. The settings page loads and persists the global switch, and the timer scheduler consumes it through the existing notification pipeline. Executed evidence: SettingsModuleAK3FeatureTests.Timer_NotificationMinutes_ClampAndPersist.",
+      "evidence": {
+        "ui_path": "App/Features/Settings/TimerSettingsView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.Timer.NotifyBeforeScheduledStart",
+        "case_id": "CFG-321"
+      },
+      "waiver": null,
+      "mapping_target": "TimerSettingsSnapshot",
+      "read_path": "App/ViewModels/Settings/SettingsPageViewModel.cs::ReadTimerSnapshot",
+      "write_path": "App/ViewModels/Settings/SettingsPageViewModel.cs::ToGlobalSettingUpdates"
+    },
+    {
+      "key": "Timer.ScheduledStartNotificationMinutes",
+      "owner_item_id": "Settings.Timer",
+      "parity_status": "Aligned",
+      "priority": "P0",
+      "notes": "WPF dev-v2 ba602828e6 lead time for the pre-start notification: 1..1439 minutes, clamped on read and write. Executed evidence: SettingsModuleAK3FeatureTests.Timer_NotificationMinutes_ClampAndPersist.",
+      "evidence": {
+        "ui_path": "App/Features/Settings/TimerSettingsView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.Timer.ScheduledStartNotificationMinutes",
+        "case_id": "CFG-322"
+      },
+      "waiver": null,
+      "mapping_target": "TimerSettingsSnapshot",
+      "read_path": "App/ViewModels/Settings/SettingsPageViewModel.cs::ReadTimerSnapshot",
+      "write_path": "App/ViewModels/Settings/SettingsPageViewModel.cs::ToGlobalSettingUpdates"
+    },
+    {
+      "key": "Timer.ScheduledWakeUp",
+      "owner_item_id": "Settings.Timer",
+      "parity_status": "Aligned",
+      "priority": "P0",
+      "notes": "WPF dev-v2 0b40a31009 wake-up switch. The settings page rebuilds the OS task through IScheduledWakeUpRegistrar and disables the switch when the platform is unsupported. Executed evidence: SettingsModuleAK3FeatureTests.Timer_ScheduledWakeUp_PlanReflectsSlotsAndCapability.",
+      "evidence": {
+        "ui_path": "App/Features/Settings/TimerSettingsView.axaml",
+        "log_path": "debug/avalonia-ui-events.log",
+        "scope": "Config.Timer.ScheduledWakeUp",
+        "case_id": "CFG-323"
+      },
+      "waiver": null,
+      "mapping_target": "TimerSettingsSnapshot",
+      "read_path": "App/ViewModels/Settings/SettingsPageViewModel.cs::ReadTimerSnapshot",
+      "write_path": "App/ViewModels/Settings/SettingsPageViewModel.cs::ToGlobalSettingUpdates"
+    },
+    {
       "key": "Timer.ShowWindowBeforeForceScheduledStart",
       "owner_item_id": "Settings.Timer",
       "parity_status": "Gap",
@@ -7230,10 +7284,10 @@
   "metadata": {
     "feature_item_count": 38,
     "system_item_count": 12,
-    "config_key_count": 321,
+    "config_key_count": 324,
     "fallback_record_count": 15,
     "wpf_config_key_count": 292,
-    "avalonia_extension_config_key_count": 29,
+    "avalonia_extension_config_key_count": 32,
     "wpf_config_key_set_sha256": "566082d9e031b813dd5806d73baa6c319b0e44db24a2a6001be3b16eae94a0cd"
   }
 }

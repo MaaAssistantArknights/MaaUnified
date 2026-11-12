@@ -3415,6 +3415,12 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
     <value>Send notification when task log output stalls</value>
   </data>
+  <data name="Settings.ExternalNotification.SendBeforeScheduledStart" xml:space="preserve">
+    <value>Before scheduled start</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendBeforeScheduledStartTip" xml:space="preserve">
+    <value>Send an external notification before a scheduled task starts.&#10;The lead time is configured in Timer settings.</value>
+  </data>
   <data name="Settings.ExternalNotification.Status.OperationFailed" xml:space="preserve">
     <value>External notification operation failed.</value>
   </data>
@@ -4231,6 +4237,33 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.Timer.CustomConfig" xml:space="preserve">
     <value>Use custom configuration</value>
   </data>
+  <data name="Settings.Timer.NotifyBeforeScheduledStart" xml:space="preserve">
+    <value>Send a system notification before scheduled tasks</value>
+  </data>
+  <data name="Settings.Timer.NotifyBeforeScheduledStartTip" xml:space="preserve">
+    <value>Sends a system notification in advance.&#10;External push can be enabled separately in External Notification settings; both share the lead time.</value>
+  </data>
+  <data name="Settings.Timer.ScheduledStartNotificationMinutes" xml:space="preserve">
+    <value>Lead time (minutes)</value>
+  </data>
+  <data name="Settings.Timer.ScheduledWakeUp" xml:space="preserve">
+    <value>Wake the computer and start MAA before scheduled tasks</value>
+  </data>
+  <data name="Settings.Timer.ScheduledWakeUpTip" xml:space="preserve">
+    <value>Registers a Windows Task Scheduler task that wakes the computer and starts MAA 5 minutes before each enabled timer; the in-app timer then takes over.&#10;Startup auto-run options are skipped when launched this way.&#10;The scheduled task remains after MAA exits and is removed when this switch is turned off.&#10;Waking from sleep depends on the device firmware; some devices only support waking from sleep.</value>
+  </data>
+  <data name="Settings.Timer.ScheduledWakeUp.Unsupported" xml:space="preserve">
+    <value>Scheduled wake-up is unavailable on this platform (Windows Task Scheduler is required).</value>
+  </data>
+  <data name="Settings.Timer.ScheduledWakeUp.SyncFailed" xml:space="preserve">
+    <value>Failed to sync the scheduled wake-up task: {0}</value>
+  </data>
+  <data name="Settings.Timer.Warning.NotificationMinutesClamped" xml:space="preserve">
+    <value>The scheduled-start notification lead time was clamped from {0} to {1} minutes.</value>
+  </data>
+  <data name="Settings.Timer.Warning.NotificationMinutesParseFallback" xml:space="preserve">
+    <value>Failed to parse the scheduled-start notification lead time; using {0} minutes.</value>
+  </data>
   <data name="Timer.Schedule.ForceCountdown.Title" xml:space="preserve">
     <value>Scheduled Start</value>
   </data>
@@ -4245,6 +4278,12 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   </data>
   <data name="Timer.Schedule.ProfileMismatchWarning" xml:space="preserve">
     <value>Scheduled start skipped: the current configuration does not match the timer configuration.</value>
+  </data>
+  <data name="Timer.Schedule.Notification.Content" xml:space="preserve">
+    <value>Scheduled task {0} starts at {1} (in {2} minutes). Check your game login status.</value>
+  </data>
+  <data name="Timer.Schedule.Notification.Title" xml:space="preserve">
+    <value>Scheduled task starting soon</value>
   </data>
   <data name="Timer.Schedule.CloseDownFailed" xml:space="preserve">
     <value>Failed to close the game.</value>

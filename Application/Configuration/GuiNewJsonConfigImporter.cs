@@ -419,7 +419,12 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         if (trimmed.StartsWith("Timer", StringComparison.OrdinalIgnoreCase)
             || string.Equals(trimmed, "ForceScheduledStart", StringComparison.OrdinalIgnoreCase)
             || string.Equals(trimmed, "ShowWindowBeforeForceScheduledStart", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(trimmed, "CustomConfig", StringComparison.OrdinalIgnoreCase))
+            || string.Equals(trimmed, "CustomConfig", StringComparison.OrdinalIgnoreCase)
+            // dev-v2 Timers.NotifyBeforeScheduledStart / ScheduledStartNotificationMinutes /
+            // ScheduledWakeUp (ba602828e6, 0b40a31009) live next to List in the nested object.
+            || string.Equals(trimmed, "NotifyBeforeScheduledStart", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trimmed, "ScheduledStartNotificationMinutes", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trimmed, "ScheduledWakeUp", StringComparison.OrdinalIgnoreCase))
         {
             return $"Timer.{trimmed}";
         }

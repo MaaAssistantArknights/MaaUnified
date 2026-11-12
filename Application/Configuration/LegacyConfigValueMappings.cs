@@ -134,6 +134,8 @@ internal static class LegacyConfigValueMappings
         ["ExternalNotification.Delivery.SendWhenComplete"] = "ExternalNotification.SendWhenComplete",
         ["ExternalNotification.Delivery.SendWhenError"] = "ExternalNotification.SendWhenError",
         ["ExternalNotification.Delivery.SendWhenStalled"] = "ExternalNotification.SendWhenStalled",
+        // WPF ba602828e6: pre-start external notification switch.
+        ["ExternalNotification.Delivery.SendBeforeScheduledStart"] = "ExternalNotification.SendBeforeScheduledStart",
 
         // Gui.* scalars
         ["WindowTitlePrefix"] = "GUI.WindowTitlePrefix",

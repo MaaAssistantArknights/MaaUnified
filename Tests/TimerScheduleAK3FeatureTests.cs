@@ -584,6 +584,38 @@ public sealed class TimerScheduleAK3FeatureTests
         Assert.True(await WaitForLogContainsAsync(fixture.Runtime.DiagnosticsService.EventLogPath, "Timer.Schedule.CloseDown"));
     }
 
+    [Fact]
+    public async Task Timer_Schedule_NotifyBeforeScheduledStart_SendsOncePerMinute()
+    {
+        var notification = new RecordingNotificationService();
+        await using var fixture = await TestFixture.CreateAsync(preconnect: false, notificationService: notification);
+        var scheduledAt = BuildScheduleTime(9, 0);
+        await fixture.ConfigureSingleTimerAsync(scheduledAt, force: false, custom: false, profile: "Default");
+
+        var settings = fixture.Shell.SettingsPage;
+        settings.NotifyBeforeScheduledStart = true;
+        settings.ScheduledStartNotificationMinutes = 5;
+        await settings.SaveTimerSettingsAsync();
+        Assert.False(settings.HasPendingTimerChanges, settings.TimerValidationMessage);
+
+        var notificationMinute = scheduledAt.AddMinutes(-5);
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, notificationMinute.AddSeconds(10));
+        await WaitForNotificationCountAsync(notification, 1);
+
+        Assert.Contains("09:00", notification.LastMessage, StringComparison.Ordinal);
+        Assert.Contains("5", notification.LastMessage, StringComparison.Ordinal);
+
+        // The scheduler ticks more than once per minute; each slot must notify only once.
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, notificationMinute.AddSeconds(40));
+        await Task.Delay(100);
+        Assert.Equal(1, notification.CallCount);
+
+        // Outside the lead window no notification is sent.
+        await InvokeEvaluateTimerScheduleAsync(fixture.Shell, scheduledAt.AddMinutes(-5).AddMinutes(-1));
+        await Task.Delay(100);
+        Assert.Equal(1, notification.CallCount);
+    }
+
     private static DateTimeOffset BuildScheduleTime(int hour, int minute)
     {
         return new DateTimeOffset(2026, 1, 1, hour, minute, 20, TimeSpan.FromHours(8));
@@ -603,6 +635,25 @@ public sealed class TimerScheduleAK3FeatureTests
         var task = method!.Invoke(shell, [now, CancellationToken.None]) as Task;
         Assert.NotNull(task);
         return task!;
+    }
+
+    private static async Task WaitForNotificationCountAsync(
+        RecordingNotificationService notification,
+        int expected,
+        int retry = 40,
+        int delayMs = 25)
+    {
+        for (var i = 0; i < retry; i++)
+        {
+            if (notification.CallCount >= expected)
+            {
+                return;
+            }
+
+            await Task.Delay(delayMs);
+        }
+
+        Assert.Equal(expected, notification.CallCount);
     }
 
     private static async Task<bool> WaitForLogContainsAsync(string path, string expected, int retry = 20, int delayMs = 30)
@@ -714,7 +765,9 @@ public sealed class TimerScheduleAK3FeatureTests
         public static async Task<TestFixture> CreateAsync(
             IAppDialogService? dialogService = null,
             bool preconnect = true,
-            Func<CancellationToken, Task>? beforeProfileSwitch = null)        {
+            Func<CancellationToken, Task>? beforeProfileSwitch = null,
+            INotificationService? notificationService = null)
+        {
             var root = Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
 
@@ -745,12 +798,12 @@ public sealed class TimerScheduleAK3FeatureTests
             var platform = new PlatformServiceBundle
             {
                 TrayService = new NoOpTrayService(),
-                NotificationService = new NoOpNotificationService(),
                 HotkeyService = new NoOpGlobalHotkeyService(),
                 AutostartService = new NoOpAutostartService(),
                 FileDialogService = new NoOpFileDialogService(),
                 OverlayService = new NoOpOverlayCapabilityService(),
                 PostActionExecutorService = new NoOpPostActionExecutorService(),
+                NotificationService = notificationService ?? new NoOpNotificationService(),
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
@@ -856,6 +909,36 @@ public sealed class TimerScheduleAK3FeatureTests
             {
                 // ignore cleanup failures in temporary test directories
             }
+        }
+    }
+
+    private sealed class RecordingNotificationService : INotificationService
+    {
+        public PlatformCapabilityStatus Capability { get; } = new(
+            Supported: true,
+            Message: "recording",
+            Provider: "test");
+
+        public int CallCount { get; private set; }
+
+        public string LastTitle { get; private set; } = string.Empty;
+
+        public string LastMessage { get; private set; } = string.Empty;
+
+        public Task<PlatformOperationResult> NotifyAsync(
+            string title,
+            string message,
+            CancellationToken cancellationToken = default)
+            => NotifyAsync(new SystemNotificationRequest(title, message), cancellationToken);
+
+        public Task<PlatformOperationResult> NotifyAsync(
+            SystemNotificationRequest notification,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            LastTitle = notification.Title;
+            LastMessage = notification.Message;
+            return Task.FromResult(PlatformOperation.NativeSuccess("test", "notified", "notify"));
         }
     }
 

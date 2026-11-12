@@ -9,7 +9,7 @@
 - Locales: `zh-cn, zh-tw, en-us, ja-jp, ko-kr, pallas`
 - Feature items: `38`
 - System items: `12`
-- Config keys: `321`
+- Config keys: `324`
 - Fallback records: `15`
 
 ## Feature Parity
@@ -75,8 +75,8 @@
 | `System.PageErrorChannel` | Aligned | `App/ViewModels/Infrastructure/PageViewModelBase.cs` |
 
 ## Config Key Mapping Summary
-- Aligned: `63`
-- Gap: `258`
+- Aligned: `67`
+- Gap: `257`
 - Waived: `0`
 
 ### Aligned Config Keys
@@ -95,6 +95,7 @@
 - `Current` -> `UnifiedConfig.CurrentProfile`
 - `Default` -> `UnifiedConfig.Profiles[Default]`
 - `Depot.DepotResult` -> `ToolboxPageViewModel.DepotResult`
+- `ExternalNotification.SendBeforeScheduledStart` -> `ExternalNotificationDeliveryPolicy`
 - `GUI.Background.BlurEffectRadius` -> `SettingsPageViewModel.BackgroundBlur`
 - `GUI.Background.ImagePath` -> `SettingsPageViewModel.BackgroundImagePath`
 - `GUI.Background.Opacity` -> `SettingsPageViewModel.BackgroundOpacity`
@@ -119,6 +120,9 @@
 - `TimeOut.Timer.ReminderIntervalMinutes` -> `SettingsPageViewModel.ReminderIntervalMinutes`
 - `TimeOut.Timer.StallTimeoutEnabled` -> `SettingsPageViewModel.EnableStallTimeout`
 - `TimeOut.Timer.StallTimeoutMinutes` -> `SettingsPageViewModel.StallTimeoutMinutes`
+- `Timer.NotifyBeforeScheduledStart` -> `TimerSettingsSnapshot`
+- `Timer.ScheduledStartNotificationMinutes` -> `TimerSettingsSnapshot`
+- `Timer.ScheduledWakeUp` -> `TimerSettingsSnapshot`
 - `Toolbox.Recruit.ChooseLevel3.Time` -> `ToolboxPageViewModel.RecruitLevel3Time`
 - `Toolbox.Recruit.ChooseLevel4.Time` -> `ToolboxPageViewModel.RecruitLevel4Time`
 - `Toolbox.Recruit.ChooseLevel5.Time` -> `ToolboxPageViewModel.RecruitLevel5Time`

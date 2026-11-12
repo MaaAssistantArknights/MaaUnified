@@ -25,6 +25,7 @@ using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.Notifications;
 using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
@@ -61,6 +62,7 @@ public sealed class MainShellViewModel : ObservableObject
     private readonly OverlaySharedState _overlaySharedState;
     private readonly Dictionary<int, string> _timerSlotMinuteDedup = [];
     private readonly Dictionary<int, string> _timerSlotPreSwitchMinuteDedup = [];
+    private readonly Dictionary<int, string> _timerSlotNotificationDedup = [];
     private readonly Queue<AchievementUnlockedEvent> _pendingAchievementToasts = [];
     private readonly TaskCompletionSource<bool> _startupAchievementToastAnnouncementGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private Task _pendingLanguageApplyTask = Task.CompletedTask;
@@ -1014,6 +1016,13 @@ public sealed class MainShellViewModel : ObservableObject
         await RefreshCapabilitySummaryAsync(cancellationToken);
         RefreshRootTextState();
         await SyncTrayMenuStateAsync(cancellationToken);
+        if (settingsLoaded && TryGetSettingsPage(out var timerSettingsPage))
+        {
+            // WPF TimerSettingsUserControlModel ctor: reconcile the OS wake-up task once in the
+            // background so a manually removed/edited task is restored without user action.
+            timerSettingsPage.ReconcileScheduledWakeUpInBackground();
+        }
+
         StartTimerScheduler();
         if (settingsLoaded && TryGetSettingsPage(out var versionUpdateSettingsPage))
         {
@@ -3713,6 +3722,10 @@ public sealed class MainShellViewModel : ObservableObject
             var nowHour = now.Hour;
             var nowMinute = now.Minute;
 
+            // WPF ba602828e6 HandleScheduledStartNotifications: runs before CheckTimers and only
+            // when the queue is idle (or a forced start may interrupt the running session).
+            await EvaluateScheduledStartNotificationsAsync(now, cancellationToken);
+
             foreach (var slot in SettingsPage.Timers.OrderBy(static slot => slot.Index))
             {
                 if (slot.Enabled == false)
@@ -3770,6 +3783,73 @@ public sealed class MainShellViewModel : ObservableObject
         finally
         {
             Volatile.Write(ref _timerScheduleProcessing, 0);
+        }
+    }
+
+    private async Task EvaluateScheduledStartNotificationsAsync(
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var notifyDesktop = SettingsPage.NotifyBeforeScheduledStart;
+        var policy = ExternalNotificationDeliveryPolicy.FromConfig(_runtime.ConfigurationService.CurrentConfig);
+        var notifyExternal = policy.Enable && policy.SendBeforeScheduledStart;
+        if (!notifyDesktop && !notifyExternal)
+        {
+            return;
+        }
+
+        CurrentSessionState = _runtime.SessionService.CurrentState;
+        var hasActiveOperation = _connectionGameSharedState.IsSessionOperationActive;
+        var sessionBlocked = hasActiveOperation
+            || CurrentSessionState is SessionState.Connecting
+                or SessionState.Running
+                or SessionState.Stopping;
+        if (sessionBlocked && !SettingsPage.ForceScheduledStart)
+        {
+            return;
+        }
+
+        var leadMinutes = ScheduledStartNotificationPlanner.ClampLeadMinutes(
+            SettingsPage.ScheduledStartNotificationMinutes);
+        var slots = SettingsPage.Timers
+            .Where(static slot => slot.Enabled != false)
+            .Where(static slot => TryParseTimerTime(slot.Time, out _, out _))
+            .Select(static slot => new ScheduledWakeUpSlot(slot.Index, slot.Hour, slot.Minute))
+            .ToArray();
+        var dueSlots = ScheduledStartNotificationPlanner.SelectDue(now, leadMinutes, slots);
+        if (dueSlots.Count == 0)
+        {
+            return;
+        }
+
+        var minuteKey = now.ToString("yyyyMMddHHmm", CultureInfo.InvariantCulture);
+        var startTime = now.AddMinutes(leadMinutes);
+        var title = RootTexts.GetOrDefault(
+            "Timer.Schedule.Notification.Title",
+            "定时任务即将执行");
+        var contentTemplate = RootTexts.GetOrDefault(
+            "Timer.Schedule.Notification.Content",
+            "定时 {0} 计划于 {1}（{2} 分钟后）开始执行，请留意游戏登录状态。");
+        foreach (var slot in dueSlots)
+        {
+            if (_timerSlotNotificationDedup.TryGetValue(slot.Index, out var lastMinuteKey)
+                && string.Equals(lastMinuteKey, minuteKey, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            _timerSlotNotificationDedup[slot.Index] = minuteKey;
+            var content = string.Format(
+                CultureInfo.CurrentCulture,
+                contentTemplate,
+                slot.Index,
+                startTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+                leadMinutes);
+            await RecordEventAsync(
+                "Timer.Schedule.Notify",
+                $"slot={slot.Index}; time={startTime:HH:mm}; lead={leadMinutes}; desktop={notifyDesktop}; external={notifyExternal}",
+                cancellationToken);
+            TaskQueuePage.NotifyScheduledStart(title, content, notifyDesktop, notifyExternal);
         }
     }
 

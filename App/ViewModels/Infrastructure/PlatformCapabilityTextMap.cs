@@ -230,6 +230,11 @@ public static class PlatformCapabilityTextMap
             PlatformErrorCodes.AutostartVerificationFailed => ("PlatformCapability.Error.AutostartVerificationFailed", "Autostart verification failed"),
             PlatformErrorCodes.AutostartExecutableMissing => ("PlatformCapability.Error.AutostartExecutableMissing", "Autostart target executable is missing"),
 
+            PlatformErrorCodes.ScheduledWakeUpUnsupported => ("PlatformCapability.Error.ScheduledWakeUpUnsupported", "Scheduled wake-up is unsupported in the current environment"),
+            PlatformErrorCodes.ScheduledWakeUpRegisterFailed => ("PlatformCapability.Error.ScheduledWakeUpRegisterFailed", "Failed to register the scheduled wake-up task"),
+            PlatformErrorCodes.ScheduledWakeUpRemoveFailed => ("PlatformCapability.Error.ScheduledWakeUpRemoveFailed", "Failed to remove the scheduled wake-up task"),
+            PlatformErrorCodes.ScheduledWakeUpExecutableMissing => ("PlatformCapability.Error.ScheduledWakeUpExecutableMissing", "Scheduled wake-up target executable is missing"),
+
             PlatformErrorCodes.OverlayUnsupported => ("PlatformCapability.Error.OverlayUnsupported", "Overlay is unsupported in the current environment"),
             PlatformErrorCodes.OverlayPreviewMode => ("PlatformCapability.Error.OverlayPreviewMode", "Overlay is running in preview mode"),
             PlatformErrorCodes.OverlayTargetInvalid => ("PlatformCapability.Error.OverlayTargetInvalid", "Overlay target is invalid"),

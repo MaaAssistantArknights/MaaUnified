@@ -45,6 +45,31 @@
                   Content="{Binding RootTexts[Settings.Timer.ShowWindowBeforeForceScheduledStart]}"
                   IsChecked="{Binding ShowWindowBeforeForceScheduledStart}"
                   IsVisible="{Binding ForceScheduledStart}" />
+
+        <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.Timer.ScheduledWakeUp]}"
+                                    Tip="{Binding RootTexts[Settings.Timer.ScheduledWakeUpTip]}"
+                                    IsChecked="{Binding ScheduledWakeUp}"
+                                    IsEnabled="{Binding IsScheduledWakeUpSupported}" />
+        <TextBlock Margin="{DynamicResource MAA.Thickness.Settings.BranchIndent}"
+                   Classes="app-caption state-warning"
+                   IsVisible="{Binding IsScheduledWakeUpUnsupported}"
+                   Text="{Binding ScheduledWakeUpCapabilityText}" />
+
+        <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.Timer.NotifyBeforeScheduledStart]}"
+                                    Tip="{Binding RootTexts[Settings.Timer.NotifyBeforeScheduledStartTip]}"
+                                    IsChecked="{Binding NotifyBeforeScheduledStart}" />
+
+        <Grid Classes="settings-page-labeled-row"
+              controls:SettingsLabelWidthCoordinator.GroupKey="Settings.Timer.NotificationMinutes"
+              ColumnDefinitions="Auto,*"
+              IsVisible="{Binding ShowScheduledStartNotificationMinutes}">
+          <controls:SettingsLabel Text="{Binding RootTexts[Settings.Timer.ScheduledStartNotificationMinutes]}" />
+          <controls:AppNumberInput Grid.Column="1"
+                                   Width="96"
+                                   Minimum="1"
+                                   Maximum="1439"
+                                   Value="{Binding ScheduledStartNotificationMinutes}" />
+        </Grid>
       </controls:AdaptiveSpacingStackPanel>
 
       <ItemsControl IsVisible="False"

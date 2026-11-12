@@ -408,6 +408,58 @@ public interface IAutostartService
     Task<PlatformOperationResult> SetEnabledAsync(bool enabled, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Registers or removes the OS-level wake-up task that starts MAA shortly before an in-app
+/// scheduled timer. WPF (0b40a31009) always rebuilds one Windows Task Scheduler task with one
+/// daily trigger per enabled timer; platforms without a supported scheduler must report
+/// <see cref="PlatformCapabilityStatus.Supported"/> = false so the settings switch is disabled.
+/// </summary>
+public interface IScheduledWakeUpRegistrar
+{
+    PlatformCapabilityStatus Capability { get; }
+
+    /// <summary>
+    /// Rebuilds the wake-up registration to match <paramref name="plan"/>. A disabled plan (or
+    /// one without slots) removes the existing task instead of registering a new one.
+    /// </summary>
+    /// <param name="plan">Target wake-up state derived from the in-app timer settings.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The platform operation result.</returns>
+    Task<PlatformOperationResult> SyncAsync(ScheduledWakeUpPlan plan, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// One enabled in-app timer slot that should wake the computer.
+/// </summary>
+/// <param name="Index">1-based in-app slot index (used in log and trigger ids).</param>
+/// <param name="Hour">Scheduled hour (0-23).</param>
+/// <param name="Minute">Scheduled minute (0-59).</param>
+public sealed record ScheduledWakeUpSlot(int Index, int Hour, int Minute);
+
+/// <summary>
+/// Wake-up registration target. The executable and arguments are explicit so platform
+/// implementations stay testable and never read process state indirectly.
+/// </summary>
+/// <param name="Enabled">Whether the global in-app switch is on and the platform supports it.</param>
+/// <param name="Slots">Enabled timer slots; empty removes the registration.</param>
+/// <param name="ExecutablePath">Executable that the scheduled task launches.</param>
+/// <param name="Arguments">Command-line arguments for the wake-up launch.</param>
+/// <param name="WorkingDirectory">Working directory for the wake-up launch.</param>
+public sealed record ScheduledWakeUpPlan(
+    bool Enabled,
+    IReadOnlyList<ScheduledWakeUpSlot> Slots,
+    string ExecutablePath,
+    string Arguments,
+    string WorkingDirectory)
+{
+    public static ScheduledWakeUpPlan Disabled { get; } = new(
+        false,
+        [],
+        string.Empty,
+        string.Empty,
+        string.Empty);
+}
+
 public interface IFileDialogService
 {
     PlatformCapabilityStatus Capability { get; }

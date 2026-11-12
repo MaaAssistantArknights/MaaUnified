@@ -394,6 +394,12 @@ public static class ConfigurationKeys
     public const string ShowWindowBeforeForceScheduledStart = "Timer.ShowWindowBeforeForceScheduledStart";
     public const string CustomConfig = "Timer.CustomConfig";
 
+    // WPF dev-v2 Timers (0b40a31009, ba602828e6). MAAUnified keeps the flat Timer.* vocabulary
+    // used by the other timer settings; the importer maps the nested dev-v2 object onto it.
+    public const string NotifyBeforeScheduledStart = "Timer.NotifyBeforeScheduledStart";
+    public const string ScheduledStartNotificationMinutes = "Timer.ScheduledStartNotificationMinutes";
+    public const string ScheduledWakeUp = "Timer.ScheduledWakeUp";
+
     public const string DebugTaskName = "Debug.TaskName";
 
     public const string MiniGameTaskName = "MiniGame.TaskName";

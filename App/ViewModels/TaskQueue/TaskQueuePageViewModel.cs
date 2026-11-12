@@ -7735,6 +7735,38 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         await RecordErrorAsync(scope, message, exception);
     }
 
+    /// <summary>
+    /// Sends the pre-start notification through the existing system/external pipelines.
+    /// WPF ba602828e6 keeps the desktop toast and external delivery independently switchable.
+    /// </summary>
+    /// <param name="title">Localized notification title.</param>
+    /// <param name="message">Localized notification body.</param>
+    /// <param name="sendSystemNotification">Whether to request the OS notification.</param>
+    /// <param name="sendExternalNotification">Whether to dispatch through external providers.</param>
+    internal void NotifyScheduledStart(
+        string title,
+        string message,
+        bool sendSystemNotification,
+        bool sendExternalNotification)
+    {
+        var notification = new TaskQueueSystemNotification(
+            title,
+            message,
+            "TaskQueue.Notification.ScheduledStart",
+            "scheduled start");
+        NotificationDispatch.Notify(
+            NotificationSource.TaskQueue,
+            new NotificationMessage(NotificationKind.ScheduledStart, title, message),
+            new NotificationDispatchOptions
+            {
+                Scope = "TaskQueue.Notification.ScheduledStart",
+                Reason = "scheduled start",
+                ShowSystemNotification = sendSystemNotification,
+                SendExternal = sendExternalNotification,
+                DedupeKey = "TaskQueue.ScheduledStart",
+            });
+    }
+
     private async Task HandleExternalNotificationFailureAsync(string scope, string message, Exception? exception)
     {
         if (exception is null)

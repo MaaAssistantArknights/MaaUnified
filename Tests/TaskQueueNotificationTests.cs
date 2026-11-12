@@ -112,6 +112,42 @@ public sealed class TaskQueueNotificationTests
     }
 
     [Fact]
+    public void ScheduledStartExternalNotification_FollowsDeliverySwitch()
+    {
+        var config = new UnifiedConfig
+        {
+            CurrentProfile = "Default",
+        };
+        config.Profiles["Default"] = new UnifiedProfile();
+        var profile = config.Profiles["Default"];
+        profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Telegram");
+        var notification = new TaskQueuePageViewModel.TaskQueueSystemNotification(
+            "title",
+            "content",
+            "TaskQueue.Notification.ScheduledStart",
+            "scheduled start");
+
+        profile.Values[ConfigurationKeys.ExternalNotificationSendBeforeScheduledStart] = JsonValue.Create(true);
+        Assert.Single(TaskQueuePageViewModel.BuildAutomaticExternalNotificationRequests(
+            "ScheduledStart",
+            notification,
+            config));
+
+        profile.Values[ConfigurationKeys.ExternalNotificationSendBeforeScheduledStart] = JsonValue.Create(false);
+        Assert.Empty(TaskQueuePageViewModel.BuildAutomaticExternalNotificationRequests(
+            "ScheduledStart",
+            notification,
+            config));
+
+        // Other callback names must not be gated by the scheduled-start switch.
+        profile.Values[ConfigurationKeys.ExternalNotificationSendWhenComplete] = JsonValue.Create(true);
+        Assert.Single(TaskQueuePageViewModel.BuildAutomaticExternalNotificationRequests(
+            "AllTasksCompleted",
+            notification,
+            config));
+    }
+
+    [Fact]
     public async Task TaskChainError_SendsExternalNotification_WhenConfigured()
     {
         var notificationProvider = new ScriptedNotificationProviderFeatureService();

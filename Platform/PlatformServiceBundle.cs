@@ -21,6 +21,12 @@ public sealed class PlatformServiceBundle
     public ITaskbarProgressService TaskbarProgressService { get; init; } = new NoOpTaskbarProgressService();
 
     public IKeepAwakeService KeepAwakeService { get; init; } = NoOpKeepAwakeService.Instance;
+
+    /// <summary>
+    /// OS-level wake-up registration used by the timer settings page. Defaults to the
+    /// capability-declaring unsupported implementation so existing test bundles keep working.
+    /// </summary>
+    public IScheduledWakeUpRegistrar ScheduledWakeUpRegistrar { get; init; } = new UnsupportedScheduledWakeUpRegistrar();
 }
 
 public static class PlatformServicesFactory
@@ -45,6 +51,8 @@ public static class PlatformServicesFactory
         IGpuCapabilityService gpuCapabilityService;
         ITaskbarProgressService taskbarProgressService;
         IKeepAwakeService keepAwakeService;
+
+        IScheduledWakeUpRegistrar scheduledWakeUpRegistrar;
 
         try
         {
@@ -208,6 +216,17 @@ public static class PlatformServicesFactory
             keepAwakeService = NoOpKeepAwakeService.Instance;
         }
 
+        try
+        {
+            scheduledWakeUpRegistrar = !forceFallback && OperatingSystem.IsWindows()
+                ? new WindowsScheduledWakeUpRegistrar(new SchtasksScheduledTaskClient())
+                : new UnsupportedScheduledWakeUpRegistrar();
+        }
+        catch
+        {
+            scheduledWakeUpRegistrar = new UnsupportedScheduledWakeUpRegistrar();
+        }
+
         return new PlatformServiceBundle {
             TrayService = trayService,
             NotificationService = notificationService,
@@ -219,6 +238,8 @@ public static class PlatformServicesFactory
             GpuCapabilityService = gpuCapabilityService,
             TaskbarProgressService = taskbarProgressService,
             KeepAwakeService = keepAwakeService,
+
+            ScheduledWakeUpRegistrar = scheduledWakeUpRegistrar,
         };
     }
 }

@@ -285,6 +285,113 @@ public sealed class SettingsModuleAK3FeatureTests
         Assert.Contains("回退", vm.TimerValidationMessage, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Timer_NotificationMinutes_ClampAndPersist()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        vm.ScheduledStartNotificationMinutes = 0;
+        Assert.Equal(1, vm.ScheduledStartNotificationMinutes);
+        vm.ScheduledStartNotificationMinutes = 5000;
+        Assert.Equal(1439, vm.ScheduledStartNotificationMinutes);
+        vm.ScheduledStartNotificationMinutes = 30;
+        vm.NotifyBeforeScheduledStart = true;
+        await vm.SaveTimerSettingsAsync();
+
+        Assert.False(vm.HasPendingTimerChanges, vm.TimerValidationMessage);
+        Assert.Equal("30", ReadGlobalString(fixture.Config, LegacyConfigurationKeys.ScheduledStartNotificationMinutes));
+        Assert.Equal("True", ReadGlobalString(fixture.Config, LegacyConfigurationKeys.NotifyBeforeScheduledStart));
+        Assert.Equal("False", ReadGlobalString(fixture.Config, LegacyConfigurationKeys.ScheduledWakeUp));
+
+        // A value persisted by another build is clamped on load and reported in the page warning.
+        fixture.Config.CurrentConfig.GlobalValues[LegacyConfigurationKeys.ScheduledStartNotificationMinutes] =
+            JsonValue.Create(5000);
+        await fixture.Config.SaveAsync();
+        var reloaded = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await reloaded.InitializeAsync();
+
+        Assert.Equal(1439, reloaded.ScheduledStartNotificationMinutes);
+        Assert.Contains("限制为", reloaded.TimerValidationMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Timer_ScheduledWakeUp_PlanReflectsSlotsAndCapability()
+    {
+        var registrar = new RecordingScheduledWakeUpRegistrar();
+        await using var fixture = await RuntimeFixture.CreateAsync(scheduledWakeUpRegistrar: registrar);
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.True(vm.IsScheduledWakeUpSupported);
+        vm.Timers[0].Enabled = true;
+        vm.Timers[0].Time = "07:05";
+        vm.Timers[1].Enabled = false;
+        vm.ScheduledWakeUp = true;
+
+        var plan = vm.BuildScheduledWakeUpPlan();
+        Assert.True(plan.Enabled);
+        var slot = Assert.Single(plan.Slots);
+        Assert.Equal(1, slot.Index);
+        Assert.Equal(7, slot.Hour);
+        Assert.Equal(5, slot.Minute);
+        Assert.False(string.IsNullOrWhiteSpace(plan.ExecutablePath));
+        Assert.Contains("--skip-startup-auto-run", plan.Arguments, StringComparison.Ordinal);
+
+        await vm.PendingScheduledWakeUpSync.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Single(registrar.Calls);
+
+        // The in-app timer list change is debounced into one more rebuild (WPF TimerList change).
+        vm.Timers[0].Time = "08:30";
+        await vm.PendingScheduledWakeUpSync.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(2, registrar.Calls.Count);
+        Assert.Equal(8, registrar.Calls[^1].Slots[0].Hour);
+        Assert.Equal(30, registrar.Calls[^1].Slots[0].Minute);
+    }
+
+    [Fact]
+    public async Task Timer_ScheduledWakeUp_BackgroundReconcileRegistersPersistedPlan()
+    {
+        var registrar = new RecordingScheduledWakeUpRegistrar();
+        await using var fixture = await RuntimeFixture.CreateAsync(scheduledWakeUpRegistrar: registrar);
+        fixture.Config.CurrentConfig.GlobalValues[LegacyConfigurationKeys.ScheduledWakeUp] = JsonValue.Create(true);
+        fixture.Config.CurrentConfig.GlobalValues[TimerEnabledKey(1)] = JsonValue.Create(true);
+        fixture.Config.CurrentConfig.GlobalValues[TimerHourKey(1)] = JsonValue.Create(6);
+        fixture.Config.CurrentConfig.GlobalValues[TimerMinuteKey(1)] = JsonValue.Create(15);
+        await fixture.Config.SaveAsync();
+
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        Assert.True(vm.ScheduledWakeUp);
+        Assert.Empty(registrar.Calls);
+
+        vm.ReconcileScheduledWakeUpInBackground();
+        await vm.PendingScheduledWakeUpSync.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var plan = Assert.Single(registrar.Calls);
+        var slot = Assert.Single(plan.Slots);
+        Assert.Equal(6, slot.Hour);
+        Assert.Equal(15, slot.Minute);
+    }
+
+    [Fact]
+    public async Task Timer_ScheduledWakeUp_UnsupportedPlatformDisablesSwitch()
+    {
+        await using var fixture = await RuntimeFixture.CreateAsync();
+        var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        Assert.False(vm.IsScheduledWakeUpSupported);
+        Assert.True(vm.IsScheduledWakeUpUnsupported);
+        Assert.False(string.IsNullOrWhiteSpace(vm.ScheduledWakeUpCapabilityText));
+
+        vm.ScheduledWakeUp = true;
+        var plan = vm.BuildScheduledWakeUpPlan();
+        Assert.False(plan.Enabled);
+        Assert.Empty(plan.Slots);
+    }
+
     private static string TimerEnabledKey(int index) => $"Timer.Timer{index}";
 
     private static string TimerHourKey(int index) => $"Timer.Timer{index}Hour";
@@ -330,7 +437,10 @@ public sealed class SettingsModuleAK3FeatureTests
 
         public UnifiedConfigurationService Config { get; }
 
-        public static async Task<RuntimeFixture> CreateAsync(string? root = null, bool cleanupRoot = true)
+        public static async Task<RuntimeFixture> CreateAsync(
+            string? root = null,
+            bool cleanupRoot = true,
+            IScheduledWakeUpRegistrar? scheduledWakeUpRegistrar = null)
         {
             root ??= Path.Combine(Path.GetTempPath(), "maa-unified-tests", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -356,6 +466,7 @@ public sealed class SettingsModuleAK3FeatureTests
                 FileDialogService = new NoOpFileDialogService(),
                 OverlayService = new NoOpOverlayCapabilityService(),
                 PostActionExecutorService = new NoOpPostActionExecutorService(),
+                ScheduledWakeUpRegistrar = scheduledWakeUpRegistrar ?? new UnsupportedScheduledWakeUpRegistrar(),
             };
 
             var capability = new PlatformCapabilityFeatureService(platform, diagnostics);
@@ -406,6 +517,27 @@ public sealed class SettingsModuleAK3FeatureTests
             {
                 // ignore cleanup failures in temporary test directories
             }
+        }
+    }
+
+    private sealed class RecordingScheduledWakeUpRegistrar : MAAUnified.Platform.IScheduledWakeUpRegistrar
+    {
+        public MAAUnified.Platform.PlatformCapabilityStatus Capability { get; } = new(
+            Supported: true,
+            Message: "test registrar",
+            Provider: "test");
+
+        public List<MAAUnified.Platform.ScheduledWakeUpPlan> Calls { get; } = [];
+
+        public Task<MAAUnified.Platform.PlatformOperationResult> SyncAsync(
+            MAAUnified.Platform.ScheduledWakeUpPlan plan,
+            CancellationToken cancellationToken = default)
+        {
+            Calls.Add(plan);
+            return Task.FromResult(MAAUnified.Platform.PlatformOperation.NativeSuccess(
+                "test",
+                "synced",
+                "scheduledWakeUp.sync"));
         }
     }
 

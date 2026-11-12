@@ -2194,6 +2194,12 @@
   <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
     <value>任務日誌輸出停滯時發送通知</value>
   </data>
+  <data name="Settings.ExternalNotification.SendBeforeScheduledStart" xml:space="preserve">
+    <value>定時執行前</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendBeforeScheduledStartTip" xml:space="preserve">
+    <value>在定時工作開始前傳送外部通知。&#10;提前時間使用定時設定中的提前時間。</value>
+  </data>
   <data name="Settings.ExternalNotification.Status.OperationFailed" xml:space="preserve">
     <value>外部通知操作失敗。</value>
   </data>
@@ -2797,6 +2803,33 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="Settings.Timer.CustomConfig" xml:space="preserve">
     <value>自定義配置選擇</value>
   </data>
+  <data name="Settings.Timer.NotifyBeforeScheduledStart" xml:space="preserve">
+    <value>定時執行前傳送系統通知</value>
+  </data>
+  <data name="Settings.Timer.NotifyBeforeScheduledStartTip" xml:space="preserve">
+    <value>依提前時間傳送系統通知。&#10;外部推送可在外部通知設定中單獨開啟，兩者共用提前時間。</value>
+  </data>
+  <data name="Settings.Timer.ScheduledStartNotificationMinutes" xml:space="preserve">
+    <value>提前時間（分鐘）</value>
+  </data>
+  <data name="Settings.Timer.ScheduledWakeUp" xml:space="preserve">
+    <value>定時啟動前嘗試喚醒電腦並啟動 MAA</value>
+  </data>
+  <data name="Settings.Timer.ScheduledWakeUpTip" xml:space="preserve">
+    <value>此功能透過 Windows 工作排程器註冊排程工作，在每個啟用的定時項目前 5 分鐘嘗試喚醒電腦並啟動 MAA，之後由定時啟動邏輯接手。&#10;喚醒啟動時會跳過啟動設定中的啟動自動執行項。&#10;MAA 結束後排程工作仍會保留，關閉本開關時刪除。&#10;休眠狀態的定時喚醒取決於裝置韌體支援，部分裝置僅支援從睡眠喚醒。</value>
+  </data>
+  <data name="Settings.Timer.ScheduledWakeUp.Unsupported" xml:space="preserve">
+    <value>目前平台不支援排程工作喚醒（需要 Windows 工作排程器）。</value>
+  </data>
+  <data name="Settings.Timer.ScheduledWakeUp.SyncFailed" xml:space="preserve">
+    <value>定時喚醒排程工作同步失敗：{0}</value>
+  </data>
+  <data name="Settings.Timer.Warning.NotificationMinutesClamped" xml:space="preserve">
+    <value>定時執行前通知的提前時間已從 {0} 限制為 {1} 分鐘。</value>
+  </data>
+  <data name="Settings.Timer.Warning.NotificationMinutesParseFallback" xml:space="preserve">
+    <value>定時執行前通知的提前時間解析失敗，已回退為 {0} 分鐘。</value>
+  </data>
   <data name="Timer.Schedule.ForceCountdown.Title" xml:space="preserve">
     <value>定時啟動</value>
   </data>
@@ -2811,6 +2844,12 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   </data>
   <data name="Timer.Schedule.ProfileMismatchWarning" xml:space="preserve">
     <value>定時啟動已跳過：目前配置與定時配置不一致。</value>
+  </data>
+  <data name="Timer.Schedule.Notification.Content" xml:space="preserve">
+    <value>定時 {0} 計畫於 {1}（{2} 分鐘後）開始執行，請留意遊戲登入狀態。</value>
+  </data>
+  <data name="Timer.Schedule.Notification.Title" xml:space="preserve">
+    <value>定時工作即將執行</value>
   </data>
   <data name="Timer.Schedule.CloseDownFailed" xml:space="preserve">
     <value>關閉遊戲失敗。</value>

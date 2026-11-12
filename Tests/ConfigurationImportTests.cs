@@ -340,6 +340,11 @@ public sealed class ConfigurationImportTests
                       "PenguinId": "42",
                       "ReportToYituliu": false
                     },
+                    "ExternalNotification": {
+                      "Delivery": {
+                        "SendBeforeScheduledStart": true
+                      }
+                    },
                     "PostActions": 5
                   }
                 }
@@ -372,6 +377,7 @@ public sealed class ConfigurationImportTests
 
         Assert.Equal("42", profile.Values["PenguinId"]?.GetValue<string>());
         Assert.False(profile.Values["EnableYituliu"]?.GetValue<bool>());
+        Assert.True(profile.Values["ExternalNotification.SendBeforeScheduledStart"]?.GetValue<bool>());
 
         // Legacy post action flags (5 = ExitArknights | ExitEmulator) are materialized into the
         // structured profile config by PostActionLegacyMigration, same as the gui.json path.
@@ -646,6 +652,9 @@ public sealed class ConfigurationImportTests
                 "ForceScheduledStart": true,
                 "ShowWindowBeforeForceScheduledStart": false,
                 "CustomConfig": true,
+                "NotifyBeforeScheduledStart": true,
+                "ScheduledStartNotificationMinutes": 15,
+                "ScheduledWakeUp": true,
                 "List": [
                   { "Id": 0, "IsEnabled": true, "Config": "Night", "Hour": 7, "Minute": 5 },
                   { "Id": 3, "IsEnabled": null, "Config": "Default", "Hour": 23, "Minute": 0 }
@@ -662,6 +671,9 @@ public sealed class ConfigurationImportTests
         Assert.True(globals["Timer.ForceScheduledStart"]?.GetValue<bool>());
         Assert.False(globals["Timer.ShowWindowBeforeForceScheduledStart"]?.GetValue<bool>());
         Assert.True(globals["Timer.CustomConfig"]?.GetValue<bool>());
+        Assert.True(globals["Timer.NotifyBeforeScheduledStart"]?.GetValue<bool>());
+        Assert.Equal(15, globals["Timer.ScheduledStartNotificationMinutes"]?.GetValue<int>());
+        Assert.True(globals["Timer.ScheduledWakeUp"]?.GetValue<bool>());
 
         Assert.True(globals["Timer.Timer1"]?.GetValue<bool>());
         Assert.Equal(7, globals["Timer.Timer1Hour"]?.GetValue<int>());

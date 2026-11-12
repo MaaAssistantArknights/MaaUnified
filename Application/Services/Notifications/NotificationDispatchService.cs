@@ -24,6 +24,7 @@ public enum NotificationKind
     TaskComplete,
     TaskError,
     Stalled,
+    ScheduledStart,
 }
 
 /// <summary>
@@ -180,6 +181,7 @@ public sealed class NotificationDispatchService : INotificationDispatchService
         "AllTasksCompleted" => NotificationKind.TaskComplete,
         "TaskChainError" => NotificationKind.TaskError,
         "TaskStalled" => NotificationKind.Stalled,
+        "ScheduledStart" => NotificationKind.ScheduledStart,
         _ => null,
     };
 
@@ -326,6 +328,7 @@ public sealed class NotificationDispatchService : INotificationDispatchService
         NotificationKind.TaskComplete => policy.SendWhenComplete,
         NotificationKind.TaskError => policy.SendWhenError,
         NotificationKind.Stalled => policy.SendWhenStalled,
+        NotificationKind.ScheduledStart => policy.SendBeforeScheduledStart,
         _ => false,
     };
 
@@ -334,6 +337,7 @@ public sealed class NotificationDispatchService : INotificationDispatchService
         NotificationKind.TaskComplete => ExternalNotificationKind.TaskComplete,
         NotificationKind.TaskError => ExternalNotificationKind.TaskError,
         NotificationKind.Stalled => ExternalNotificationKind.Stalled,
+        NotificationKind.ScheduledStart => ExternalNotificationKind.TaskComplete,
         _ => ExternalNotificationKind.TaskComplete,
     };
 
