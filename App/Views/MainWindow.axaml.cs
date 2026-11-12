@@ -389,7 +389,10 @@ public partial class MainWindow : Window
             "App.Startup.LaunchBehavior",
             async () =>
             {
-                await vm.ExecuteStartupLaunchBehaviorAsync(minimizeWindowAsync: MinimizeFromStartupAsync);
+                // WPF 60cf643a2d：启动自动运行/自动开模拟器前先走倒计时确认。
+                await vm.ExecuteStartupLaunchBehaviorAsync(
+                    minimizeWindowAsync: MinimizeFromStartupAsync,
+                    confirmStartupAutoRunAsync: vm.ConfirmStartupAutoRunCountdownAsync);
             });
 
         vm.BeginAchievementToastStartupRelease();

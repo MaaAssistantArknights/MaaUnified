@@ -100,6 +100,12 @@ public static class ConfigurationKeys
     public const string ClientType = "Start.ClientType";
     public const string AccountName = "Start.AccountName"; // 已迁移
     public const string RunDirectly = "Start.RunDirectly";
+
+    // WPF 60cf643a2d：更新后「立即重启」时跳过启动自动运行（默认开启）
+    public const string SkipStartupAutoRunAfterUpdate = "Start.SkipStartupAutoRunAfterUpdate";
+
+    // 启动自动运行前的倒计时确认秒数（0 = 关闭确认；默认 10，对齐 WPF 启动自动运行倒计时）
+    public const string StartupAutoRunCountdownSeconds = "Start.StartupAutoRunCountdownSeconds";
     public const string MinimizeDirectly = "Start.MinimizeDirectly";
     public const string StartEmulator = "Start.OpenEmulatorAfterLaunch";
     public const string EmulatorPath = "Start.EmulatorPath";
@@ -252,6 +258,14 @@ public static class ConfigurationKeys
 
     public const string AutoDownloadUpdatePackage = "VersionUpdate.AutoDownloadUpdatePackage";
     public const string AutoInstallUpdatePackage = "VersionUpdate.AutoInstallUpdatePackage";
+
+    // WPF 53870a7a52：GitHub Token 凭据（走 SensitiveStorage，不出现在明文配置里）与过期时间
+    public const string GitHubToken = "VersionUpdate.GitHubToken";
+    public const string GitHubTokenExpiredTime = "VersionUpdate.GitHubTokenExpired";
+
+    // WPF 84b560d3cd：外部更新器输出开关（Windows 外部更新器链路；进程内应用不读取）
+    public const string ShowUpdaterConsole = "VersionUpdate.ShowUpdaterConsole";
+    public const string ShowUpdaterProgress = "VersionUpdate.ShowUpdaterProgress";
 
     public const string PenguinId = "Penguin.Id";
     public const string IsDrGrandet = "Penguin.IsDrGrandet"; // 已迁移

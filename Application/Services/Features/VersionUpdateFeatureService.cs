@@ -109,7 +109,11 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
             VersionBody: ReadString(config, ConfigurationKeys.VersionUpdateBody, string.Empty),
             IsFirstBoot: ReadBool(config, ConfigurationKeys.VersionUpdateIsFirstBoot, false),
             VersionPackage: ReadString(config, ConfigurationKeys.VersionUpdatePackage, string.Empty),
-            DoNotShowUpdate: ReadBool(config, ConfigurationKeys.VersionUpdateDoNotShowUpdate, false)));
+            DoNotShowUpdate: ReadBool(config, ConfigurationKeys.VersionUpdateDoNotShowUpdate, false),
+            GitHubToken: ReadString(config, ConfigurationKeys.GitHubToken, string.Empty),
+            GitHubTokenExpiresAt: ReadString(config, ConfigurationKeys.GitHubTokenExpiredTime, string.Empty),
+            ShowUpdaterConsole: ReadBool(config, ConfigurationKeys.ShowUpdaterConsole, true),
+            ShowUpdaterProgress: ReadBool(config, ConfigurationKeys.ShowUpdaterProgress, true)));
         return Task.FromResult(UiOperationResult<VersionUpdatePolicy>.Ok(policy, "Loaded version update policy."));
     }
 

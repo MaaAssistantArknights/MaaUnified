@@ -22,7 +22,11 @@ public sealed record VersionUpdatePolicy(
     string VersionBody,
     bool IsFirstBoot,
     string VersionPackage,
-    bool DoNotShowUpdate)
+    bool DoNotShowUpdate,
+    string GitHubToken = "",
+    string GitHubTokenExpiresAt = "",
+    bool ShowUpdaterConsole = true,
+    bool ShowUpdaterProgress = true)
 {
     public static VersionUpdatePolicy Default { get; } = new(
         Proxy: string.Empty,
@@ -44,7 +48,11 @@ public sealed record VersionUpdatePolicy(
         VersionBody: string.Empty,
         IsFirstBoot: false,
         VersionPackage: string.Empty,
-        DoNotShowUpdate: false);
+        DoNotShowUpdate: false,
+        GitHubToken: string.Empty,
+        GitHubTokenExpiresAt: string.Empty,
+        ShowUpdaterConsole: true,
+        ShowUpdaterProgress: true);
 
     public IReadOnlyDictionary<string, string> ToGlobalSettingUpdates()
     {
@@ -70,6 +78,8 @@ public sealed record VersionUpdatePolicy(
             [ConfigurationKeys.VersionUpdateIsFirstBoot] = IsFirstBoot.ToString(),
             [ConfigurationKeys.VersionUpdatePackage] = VersionPackage,
             [ConfigurationKeys.VersionUpdateDoNotShowUpdate] = DoNotShowUpdate.ToString(),
+            [ConfigurationKeys.ShowUpdaterConsole] = ShowUpdaterConsole.ToString(),
+            [ConfigurationKeys.ShowUpdaterProgress] = ShowUpdaterProgress.ToString(),
         };
     }
 
@@ -94,6 +104,8 @@ public sealed record VersionUpdatePolicy(
             [ConfigurationKeys.VersionUpdateIsFirstBoot] = IsFirstBoot.ToString(),
             [ConfigurationKeys.VersionUpdatePackage] = VersionPackage,
             [ConfigurationKeys.VersionUpdateDoNotShowUpdate] = DoNotShowUpdate.ToString(),
+            [ConfigurationKeys.ShowUpdaterConsole] = ShowUpdaterConsole.ToString(),
+            [ConfigurationKeys.ShowUpdaterProgress] = ShowUpdaterProgress.ToString(),
         };
     }
 

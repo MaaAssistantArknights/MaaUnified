@@ -1691,13 +1691,14 @@ public static class VersionUpdateHttpClientFactory
 {
     public static HttpClient Create(VersionUpdatePolicy? policy, TimeSpan timeout)
     {
-        var handler = new HttpClientHandler();
-        if (policy is not null && TryBuildProxy(policy, out var proxy))
+        HttpMessageHandler handler = new HttpClientHandler();
+        if (policy is not null && TryBuildProxy(policy, out var proxy) && handler is HttpClientHandler proxyHandler)
         {
-            handler.UseProxy = true;
-            handler.Proxy = proxy;
+            proxyHandler.UseProxy = true;
+            proxyHandler.Proxy = proxy;
         }
 
+        handler = GitHubApiAuthorizationHandler.Wrap(handler, policy);
         var client = new HttpClient(handler, disposeHandler: true)
         {
             Timeout = timeout,
@@ -1731,5 +1732,41 @@ public static class VersionUpdateHttpClientFactory
 
         proxy = new WebProxy(proxyUri);
         return true;
+    }
+}
+
+/// <summary>
+/// GitHub API 凭据附带处理器（WPF <c>53870a7a52</c>）。只在 <see cref="GitHubApiRequestAuthorizer.IsEligibleUri"/>
+/// 通过时附带 <c>Authorization</c>，其余请求（含下载链接、镜像站、自定义 ResourceApi）保持匿名。
+/// </summary>
+internal sealed class GitHubApiAuthorizationHandler : DelegatingHandler
+{
+    private readonly string? _token;
+    private readonly DateTimeOffset? _expiresAt;
+
+    internal GitHubApiAuthorizationHandler(HttpMessageHandler innerHandler, string? token, DateTimeOffset? expiresAt)
+        : base(innerHandler)
+    {
+        _token = token;
+        _expiresAt = expiresAt;
+    }
+
+    internal static HttpMessageHandler Wrap(HttpMessageHandler innerHandler, VersionUpdatePolicy? policy)
+    {
+        if (policy is null || string.IsNullOrWhiteSpace(policy.GitHubToken))
+        {
+            return innerHandler;
+        }
+
+        return new GitHubApiAuthorizationHandler(
+            innerHandler,
+            policy.GitHubToken,
+            GitHubApiRequestAuthorizer.TryParseExpiration(policy.GitHubTokenExpiresAt));
+    }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        GitHubApiRequestAuthorizer.TryApplyAuthorization(request, _token, _expiresAt);
+        return base.SendAsync(request, cancellationToken);
     }
 }

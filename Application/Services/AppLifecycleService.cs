@@ -13,6 +13,15 @@ public interface IAppLifecycleService
     Task<UiOperationResult> RestartWithoutArgumentsAsync(CancellationToken cancellationToken = default)
         => RestartAsync(cancellationToken);
 
+    /// <summary>
+    /// 带附加启动参数重启（WPF <c>Bootstrapper.GetUpdateRestartArgsIfEnabled</c>）：更新后「立即重启」链追加
+    /// <c>--skip-startup-auto-run</c> 等参数，原参数集合保持不变。不支持附加参数的实现退化为普通重启。
+    /// </summary>
+    Task<UiOperationResult> RestartWithAdditionalArgumentsAsync(
+        IReadOnlyList<string> additionalArguments,
+        CancellationToken cancellationToken = default)
+        => RestartAsync(cancellationToken);
+
     Task<UiOperationResult> ExitAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -37,6 +46,19 @@ public sealed class ProcessAppLifecycleService : IAppLifecycleService
 
     public Task<UiOperationResult> RestartWithoutArgumentsAsync(CancellationToken cancellationToken = default)
         => RestartCoreAsync([], cancellationToken);
+
+    public Task<UiOperationResult> RestartWithAdditionalArgumentsAsync(
+        IReadOnlyList<string> additionalArguments,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(additionalArguments);
+        var arguments = Environment.GetCommandLineArgs()
+            .Skip(1)
+            .Concat(additionalArguments)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return RestartCoreAsync(arguments, cancellationToken);
+    }
 
     internal static IReadOnlyList<string> BuildRestartArguments(IEnumerable<string> arguments)
     {

@@ -32,10 +32,19 @@ internal static class Program
     private const string AvaloniaConfigFileName = "avalonia.json";
     private const string GuiNewConfigFileName = "gui.new.json";
     internal const string RestartWaitForInstanceArgument = ProcessAppLifecycleService.RestartWaitForInstanceArgument;
+    /// <summary>
+    /// 更新后「立即重启」链写入的启动参数（WPF <c>60cf643a2d</c>）：本次进程跳过启动后自动运行/自动开模拟器。
+    /// </summary>
+    internal const string SkipStartupAutoRunArgument = "--skip-startup-auto-run";
     private static readonly TimeSpan RestartInstanceWaitTimeout = TimeSpan.FromSeconds(15);
     private static readonly Stopwatch StartupElapsedSinceEntry = Stopwatch.StartNew();
 
     internal static string? RequestedConfigurationName { get; private set; }
+
+    /// <summary>
+    /// 当前进程是否因更新重启链要求跳过启动自动运行（WPF <c>Bootstrapper.ShouldSkipStartupAutoRun</c>）。
+    /// </summary>
+    internal static bool ShouldSkipStartupAutoRun { get; private set; }
 
     [STAThread]
     public static int Main(string[] args)
@@ -49,6 +58,7 @@ internal static class Program
 
         var startupArguments = ParseStartupArguments(args);
         RequestedConfigurationName = startupArguments.ConfigurationName;
+        ShouldSkipStartupAutoRun = startupArguments.SkipStartupAutoRun;
         args = startupArguments.AvaloniaArguments;
         var runtimeBaseDirectory = RuntimeLayout.ResolveRuntimeBaseDirectory();
         RecordStartupStage("Main.Entry", BuildStartupEnvironmentSnapshot(args));
@@ -106,6 +116,10 @@ internal static class Program
         {
             RecordStartupStage("Main.PendingUpdate.Failed", pendingUpdateResult.Message);
         }
+
+        // P0-12：失败标记跨启动保留，安装目录再对照 filelist.txt 做一次完整性检查；
+        // 任一成立即提示用户用完整包修复（提示不删除标记，用户下次启动仍会看到）。
+        ReportUpdateHealthIfNeeded(runtimeBaseDirectory);
 
         if (OperatingSystem.IsLinux() && !HasLinuxDesktopDisplay())
         {
@@ -518,6 +532,7 @@ internal static class Program
         ArgumentNullException.ThrowIfNull(args);
         string? configurationName = null;
         var waitForSingleInstance = false;
+        var skipStartupAutoRun = false;
         var avaloniaArguments = new List<string>();
 
         for (var index = 0; index < args.Length; index++)
@@ -526,6 +541,12 @@ internal static class Program
             if (string.Equals(argument, RestartWaitForInstanceArgument, StringComparison.Ordinal))
             {
                 waitForSingleInstance = true;
+                continue;
+            }
+
+            if (string.Equals(argument, SkipStartupAutoRunArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                skipStartupAutoRun = true;
                 continue;
             }
 
@@ -554,11 +575,96 @@ internal static class Program
             avaloniaArguments.Add(argument);
         }
 
-        return new StartupArguments(configurationName, waitForSingleInstance, avaloniaArguments.ToArray());
+        return new StartupArguments(configurationName, waitForSingleInstance, skipStartupAutoRun, avaloniaArguments.ToArray());
     }
 
     internal static string BuildStartupFailurePromptMessage()
         => "MAAUnified could not start. Review the startup error log in the debug directory for details.";
+
+    /// <summary>
+    /// 启动期更新健康度提示（P0-12 / WPF <c>217db38484</c>、<c>da79ff88ad</c>）：
+    /// 上次更新失败标记仍在或安装目录对照 <c>filelist.txt</c> 有缺失文件时给出修复提示。
+    /// 只读探测，失败标记不会被删除，用户忽略后下次启动仍会看到。
+    /// </summary>
+    internal static void ReportUpdateHealthIfNeeded(string runtimeBaseDirectory)
+    {
+        var caps = UpdateApplyPlatform.Detect(runtimeBaseDirectory);
+        if (!string.IsNullOrEmpty(caps.DegradationReason))
+        {
+            RecordStartupStage("Main.UpdateApply.Degraded", caps.DegradationReason);
+        }
+
+        var report = UpdateStartupHealthInspector.Inspect(runtimeBaseDirectory);
+        if (!report.RequiresRepair)
+        {
+            return;
+        }
+
+        var summary = BuildUpdateRepairSummary(report);
+        RecordStartupStage(
+            "Main.UpdateHealth.RepairRequired",
+            $"updateFailure={report.HasPersistedUpdateFailure}; missingFiles={report.MissingFiles.Count}; reason={DiagnosticDataSanitizer.Sanitize(report.UpdateFailureReason ?? "<none>")}; {summary}");
+        StartupPrompt.Show(
+            LocalizeStartupText(runtimeBaseDirectory, "Startup.UpdateRepair.Title", "Update repair required"),
+            LocalizeStartupText(runtimeBaseDirectory, "Startup.UpdateRepair.Message", summary),
+            StartupPromptSeverity.Warning);
+    }
+
+    /// <summary>
+    /// 组装修复提示正文：缺失文件数与失败原因；失败原因按 WPF <c>GetDelegatedUpdateFailureDescription</c>
+    /// 的三档归类（文件占用 / 更新包异常 / 未知），只展示归类结果，技术细节留在启动日志。
+    /// </summary>
+    internal static string BuildUpdateRepairSummary(UpdateStartupHealthReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        var lines = new List<string>();
+        if (report.HasPersistedUpdateFailure)
+        {
+            var reason = DescribeUpdateFailureReason(report.UpdateFailureReason);
+            lines.Add($"The previous update did not finish cleanly. {reason}");
+        }
+
+        if (report.HasMissingInstallationFiles)
+        {
+            var preview = string.Join(", ", report.MissingFiles.Take(5));
+            if (report.MissingFiles.Count > 5)
+            {
+                preview += ", ...";
+            }
+
+            lines.Add($"Installation files are missing ({report.MissingFiles.Count}): {preview}");
+        }
+
+        lines.Add("Download or drop a full package to repair the installation, then restart MAAUnified.");
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    internal static string DescribeUpdateFailureReason(string? failureReason)
+    {
+        if (string.IsNullOrWhiteSpace(failureReason))
+        {
+            return "The update failed for an unknown reason.";
+        }
+
+        if (failureReason.Contains("Failed to move", StringComparison.Ordinal)
+            || failureReason.Contains("Failed to back up", StringComparison.Ordinal))
+        {
+            return "A file was locked by another process (antivirus scan or another program).";
+        }
+
+        if (failureReason.Contains("Illegal path", StringComparison.Ordinal)
+            || failureReason.Contains("Plan file", StringComparison.Ordinal)
+            || failureReason.Contains("Failed to open file", StringComparison.Ordinal)
+            || failureReason.Contains("Failed to read file", StringComparison.Ordinal))
+        {
+            return "The update package itself is invalid.";
+        }
+
+        // 更新器写入的面向用户文案可能含非 ASCII 字符（多实例互斥等），原样展示。
+        return failureReason.Any(c => c > 0x7f)
+            ? failureReason
+            : "The update failed for an unknown reason.";
+    }
 
     private static void ReportStartupFailure(string code, string message, Exception? exception = null)
     {
@@ -645,4 +751,5 @@ internal static class Program
 internal sealed record StartupArguments(
     string? ConfigurationName,
     bool WaitForSingleInstance,
+    bool SkipStartupAutoRun,
     string[] AvaloniaArguments);

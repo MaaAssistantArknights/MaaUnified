@@ -560,6 +560,108 @@ public sealed class MainShellViewModelTests
     }
 
     [Fact]
+    public async Task ExecuteStartupLaunchBehaviorAsync_WhenUpdateRestartRequestedSkip_ShouldNotAutoRun()
+    {
+        // WPF 60cf643a2d：更新后「立即重启」链带 --skip-startup-auto-run，仅保留最小化，不自动开模拟器/任务。
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateLaunchBehaviorConfigJson(
+                runDirectly: true,
+                minimizeDirectly: true,
+                openEmulatorAfterLaunch: true));
+        await fixture.ViewModel.InitializeAsync();
+        var calls = new List<string>();
+
+        await fixture.ViewModel.ExecuteStartupLaunchBehaviorAsync(
+            startEmulatorAsync: _ =>
+            {
+                calls.Add("emulator");
+                return Task.FromResult(true);
+            },
+            startTaskQueueAsync: _ =>
+            {
+                calls.Add("start");
+                return Task.CompletedTask;
+            },
+            minimizeWindowAsync: _ =>
+            {
+                calls.Add("minimize");
+                return Task.CompletedTask;
+            },
+            skipStartupAutoRun: true);
+
+        Assert.Equal(["minimize"], calls);
+    }
+
+    [Fact]
+    public async Task ExecuteStartupLaunchBehaviorAsync_WhenCountdownCancelled_ShouldNotAutoRun()
+    {
+        // WPF 60cf643a2d：启动自动运行前的倒计时确认可被用户取消。
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateLaunchBehaviorConfigJson(
+                runDirectly: true,
+                minimizeDirectly: false,
+                openEmulatorAfterLaunch: true));
+        await fixture.ViewModel.InitializeAsync();
+        var calls = new List<string>();
+        var countdownCalls = 0;
+
+        await fixture.ViewModel.ExecuteStartupLaunchBehaviorAsync(
+            startEmulatorAsync: _ =>
+            {
+                calls.Add("emulator");
+                return Task.FromResult(true);
+            },
+            startTaskQueueAsync: _ =>
+            {
+                calls.Add("start");
+                return Task.CompletedTask;
+            },
+            confirmStartupAutoRunAsync: _ =>
+            {
+                countdownCalls++;
+                return Task.FromResult(false);
+            },
+            skipStartupAutoRun: false);
+
+        Assert.Equal(1, countdownCalls);
+        Assert.Empty(calls);
+    }
+
+    [Fact]
+    public async Task ExecuteStartupLaunchBehaviorAsync_WhenCountdownConfirmed_ShouldAutoRun()
+    {
+        await using var fixture = await TestFixture.CreateAsync(
+            existingAvaloniaJson: CreateLaunchBehaviorConfigJson(
+                runDirectly: true,
+                minimizeDirectly: false,
+                openEmulatorAfterLaunch: true));
+        await fixture.ViewModel.InitializeAsync();
+        var calls = new List<string>();
+        var countdownCalls = 0;
+
+        await fixture.ViewModel.ExecuteStartupLaunchBehaviorAsync(
+            startEmulatorAsync: _ =>
+            {
+                calls.Add("emulator");
+                return Task.FromResult(true);
+            },
+            startTaskQueueAsync: _ =>
+            {
+                calls.Add("start");
+                return Task.CompletedTask;
+            },
+            confirmStartupAutoRunAsync: _ =>
+            {
+                countdownCalls++;
+                return Task.FromResult(true);
+            },
+            skipStartupAutoRun: false);
+
+        Assert.Equal(1, countdownCalls);
+        Assert.Equal(["emulator", "start"], calls);
+    }
+
+    [Fact]
     public async Task InitializeAsync_CoreInitFailure_ShouldKeepDeferredPagesLoaded()
     {
         await using var fixture = await TestFixture.CreateAsync(

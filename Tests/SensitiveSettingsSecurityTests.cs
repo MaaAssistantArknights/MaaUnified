@@ -520,10 +520,11 @@ public sealed class SensitiveSettingsSecurityTests
     [Fact]
     public void RegistryContainsExactlyWpfSensitiveSet()
     {
-        Assert.Equal(31, SensitiveSettingKeyRegistry.Definitions.Count);
+        Assert.Equal(32, SensitiveSettingKeyRegistry.Definitions.Count);
         Assert.Equal(30, SensitiveSettingKeyRegistry.Definitions.Count(value => value.Scope == SensitiveSettingScope.Profile));
-        Assert.Single(SensitiveSettingKeyRegistry.Definitions, value => value.Scope == SensitiveSettingScope.Global);
-        Assert.Equal(31, SensitiveSettingKeyRegistry.Definitions.Select(value => value.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        // P1-13（WPF 53870a7a52）：GitHub Token 与 Mirror 酱 CDK 同为全局凭据。
+        Assert.Equal(2, SensitiveSettingKeyRegistry.Definitions.Count(value => value.Scope == SensitiveSettingScope.Global));
+        Assert.Equal(32, SensitiveSettingKeyRegistry.Definitions.Select(value => value.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.All(SensitiveSettingKeyRegistry.Definitions, definition =>
         {
             Assert.False(string.IsNullOrWhiteSpace(definition.DisplayName));

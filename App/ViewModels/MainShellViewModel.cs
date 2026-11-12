@@ -663,7 +663,9 @@ public sealed class MainShellViewModel : ObservableObject
         Func<CancellationToken, Task<bool>>? startEmulatorAsync = null,
         Func<CancellationToken, Task>? startTaskQueueAsync = null,
         Func<CancellationToken, Task>? minimizeWindowAsync = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Func<CancellationToken, Task<bool>>? confirmStartupAutoRunAsync = null,
+        bool? skipStartupAutoRun = null)
     {
         if (_startupLaunchBehaviorExecuted)
         {
@@ -680,7 +682,7 @@ public sealed class MainShellViewModel : ObservableObject
 
         RecordStartupPhase(
             "LaunchBehavior.Begin",
-            $"runDirectly={snapshot.RunDirectly}; minimizeDirectly={snapshot.MinimizeDirectly}; openEmulator={snapshot.OpenEmulatorAfterLaunch}");
+            $"runDirectly={snapshot.RunDirectly}; minimizeDirectly={snapshot.MinimizeDirectly}; openEmulator={snapshot.OpenEmulatorAfterLaunch}; skipAutoRun={skipStartupAutoRun ?? Program.ShouldSkipStartupAutoRun}");
 
         try
         {
@@ -688,6 +690,31 @@ public sealed class MainShellViewModel : ObservableObject
             {
                 await minimizeWindowAsync(cancellationToken);
                 RecordStartupPhase("LaunchBehavior.Minimize", "Main window minimized by startup behavior.");
+            }
+
+            // WPF 60cf643a2d：更新后「立即重启」链写入 --skip-startup-auto-run，本次进程只保留最小化，
+            // 不再自动开模拟器 / 自动运行任务。
+            if (skipStartupAutoRun ?? Program.ShouldSkipStartupAutoRun)
+            {
+                RecordStartupPhase(
+                    "LaunchBehavior.SkipAutoRun",
+                    "Startup auto-run skipped because the update restart chain requested it.");
+                return;
+            }
+
+            // WPF 60cf643a2d：会自动运行任务或开模拟器时先给倒计时确认，用户可在倒计时内取消。
+            if ((snapshot.RunDirectly || snapshot.OpenEmulatorAfterLaunch)
+                && snapshot.StartupAutoRunCountdownSeconds > 0
+                && confirmStartupAutoRunAsync is not null)
+            {
+                var confirmed = await confirmStartupAutoRunAsync(cancellationToken);
+                if (!confirmed)
+                {
+                    RecordStartupPhase(
+                        "LaunchBehavior.AutoRunCancelled",
+                        "Startup auto-run cancelled by the user during the countdown.");
+                    return;
+                }
             }
 
             if (snapshot.OpenEmulatorAfterLaunch)
@@ -725,6 +752,42 @@ public sealed class MainShellViewModel : ObservableObject
         {
             RecordStartupPhase("LaunchBehavior.End", "Startup launch behavior finished.");
         }
+    }
+
+    /// <summary>
+    /// 启动自动运行前的倒计时确认（WPF <c>60cf643a2d</c>：10 s 反悔倒计时，倒计时结束自动确认）。
+    /// 返回 <c>true</c> 表示继续自动运行，<c>false</c> 表示用户在倒计时内取消。
+    /// 倒计时秒数由配置 <c>Start.StartupAutoRunCountdownSeconds</c> 决定（0 = 关闭确认）。
+    /// </summary>
+    internal async Task<bool> ConfirmStartupAutoRunCountdownAsync(CancellationToken cancellationToken = default)
+    {
+        var snapshot = StartupLaunchBehaviorSnapshot.FromConfig(_runtime.ConfigurationService.CurrentConfig);
+        var seconds = snapshot.StartupAutoRunCountdownSeconds;
+        if (seconds <= 0)
+        {
+            return true;
+        }
+
+        var tipKey = (snapshot.RunDirectly, snapshot.OpenEmulatorAfterLaunch) switch
+        {
+            (true, true) => "Startup.AutoRunCountdown.TaskAndEmulator",
+            (true, false) => "Startup.AutoRunCountdown.TaskOnly",
+            _ => "Startup.AutoRunCountdown.EmulatorOnly",
+        };
+        var result = await _dialogService.ShowWarningConfirmAsync(
+            new WarningConfirmDialogRequest(
+                Title: RootTexts.GetOrDefault("Startup.AutoRunCountdown.Title", "Startup auto-run"),
+                Message: RootTexts.GetOrDefault(
+                    tipKey,
+                    "MAAUnified will start automatically. Cancel to stay idle."),
+                ConfirmText: RootTexts.GetOrDefault("Startup.AutoRunCountdown.Continue", "Start now"),
+                CancelText: RootTexts.GetOrDefault("Startup.AutoRunCountdown.Cancel", "Cancel auto-run"),
+                Language: CurrentShellLanguage,
+                CountdownSeconds: seconds,
+                ShowConfirmButton: false),
+            "App.Startup.AutoRunCountdown",
+            cancellationToken);
+        return result.Return == DialogReturnSemantic.Confirm;
     }
 
     public void CancelStartupInitialization()

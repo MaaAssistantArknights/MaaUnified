@@ -1,6 +1,7 @@
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
@@ -22,7 +23,21 @@ public sealed record PendingAppUpdateInfo(
 public sealed record PendingAppUpdateApplyResult(
     PendingAppUpdateStatus Status,
     string Message,
-    string? PackagePath = null);
+    string? PackagePath = null,
+    bool RequiresManualRecovery = false);
+
+/// <summary>
+/// 本地更新包注册结果。
+/// </summary>
+/// <param name="Registered">已写入待安装更新包状态。</param>
+/// <param name="Message">诊断信息（英文，进日志）。</param>
+/// <param name="TargetVersion">识别出的目标版本。</param>
+/// <param name="SameVersionReinstall">本次注册为同版本重装（完整性修复）。</param>
+public sealed record PendingUpdateRegistrationResult(
+    bool Registered,
+    string Message,
+    string? TargetVersion = null,
+    bool SameVersionReinstall = false);
 
 public static class PendingAppUpdateService
 {
@@ -54,6 +69,104 @@ public static class PendingAppUpdateService
             versionName,
             resolvedPackagePath);
     }
+
+    /// <summary>
+    /// 完整包修复入口：校验本地更新包文件名（平台 / 架构 / 版本方向）后注册为待安装更新包，
+    /// 并清掉跨启动保留的失败标记（注册即代表用户已着手修复，WPF <c>217db38484</c> 的
+    /// <c>ClearDelegatedUpdateFailureState</c> 语义）。
+    /// </summary>
+    /// <param name="baseDirectory">安装根目录。</param>
+    /// <param name="packagePath">本地完整包 / OTA 包路径。</param>
+    /// <param name="currentVersion">当前版本（用于版本方向校验）。</param>
+    /// <param name="allowSameVersionReinstall">允许同版本重装（资源损坏 / 更新失败后的完整包修复）。</param>
+    public static PendingUpdateRegistrationResult TryRegisterPendingUpdatePackage(
+        string baseDirectory,
+        string packagePath,
+        string currentVersion,
+        bool allowSameVersionReinstall = false)
+        => TryRegisterPendingUpdatePackage(
+            baseDirectory,
+            MAAUnifiedRuntimeFactory.CreateConfigStore(baseDirectory),
+            packagePath,
+            currentVersion,
+            allowSameVersionReinstall);
+
+    internal static PendingUpdateRegistrationResult TryRegisterPendingUpdatePackage(
+        string baseDirectory,
+        IUnifiedConfigStore configStore,
+        string packagePath,
+        string currentVersion,
+        bool allowSameVersionReinstall = false)
+    {
+        if (!File.Exists(packagePath))
+        {
+            return new PendingUpdateRegistrationResult(false, $"Update package does not exist: {packagePath}");
+        }
+
+        if (!UpdatePackageNameRecognizer.TryRecognize(packagePath, out var identity))
+        {
+            // 包名不符合任何已知更新包布局：显式拒绝，避免把资源包或无关压缩包注册成待安装更新。
+            return new PendingUpdateRegistrationResult(
+                false,
+                $"Package name does not match a known update package layout: {Path.GetFileName(packagePath)}");
+        }
+
+        var validation = UpdatePackageNameRecognizer.Validate(
+            identity,
+            currentVersion,
+            ResolveCurrentPlatform(),
+            ResolveCurrentArchitecture(),
+            allowSameVersionReinstall);
+        if (!validation.Supported)
+        {
+            return new PendingUpdateRegistrationResult(false, validation.Reason, identity.TargetVersion);
+        }
+
+        var fullPackagePath = Path.GetFullPath(packagePath);
+        var commitLock = configStore.AcquireCommitLockAsync().AsTask().GetAwaiter().GetResult();
+        try
+        {
+            var config = TryLoadConfig(configStore);
+            if (config is null)
+            {
+                return new PendingUpdateRegistrationResult(false, "No Avalonia config was found.");
+            }
+
+            config.GlobalValues[ConfigurationKeys.VersionName] = JsonValue.Create(identity.TargetVersion);
+            config.GlobalValues[ConfigurationKeys.VersionUpdatePackage] = JsonValue.Create(fullPackagePath);
+            config.GlobalValues[ConfigurationKeys.VersionUpdateIsFirstBoot] = JsonValue.Create(bool.FalseString);
+            SaveConfig(configStore, config);
+        }
+        finally
+        {
+            commitLock.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+
+        PendingUpdateFailureState.Clear(baseDirectory);
+        var sameVersion = UpdatePackageNameRecognizer.CompareVersions(identity.TargetVersion, currentVersion) == 0;
+        return new PendingUpdateRegistrationResult(
+            true,
+            $"Registered pending update package `{Path.GetFileName(fullPackagePath)}` (target {identity.TargetVersion}).",
+            identity.TargetVersion,
+            SameVersionReinstall: sameVersion);
+    }
+
+    private static string ResolveCurrentPlatform()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return "windows";
+        }
+
+        return OperatingSystem.IsMacOS() ? "macos" : "linux";
+    }
+
+    private static string ResolveCurrentArchitecture()
+        => RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.Arm64 => "arm64",
+            _ => "x64",
+        };
 
     public static PendingAppUpdateApplyResult TryApplyPendingUpdatePackage(string baseDirectory)
         => TryApplyPendingUpdatePackage(baseDirectory, MAAUnifiedRuntimeFactory.CreateConfigStore(baseDirectory));
@@ -181,7 +294,7 @@ public static class PendingAppUpdateService
                 {
                     DeleteFileWithBackup(file.BackupPath);
                     EnsureParentDirectoryExists(file.BackupPath);
-                    File.Move(file.TargetPath, file.BackupPath);
+                    MoveFileWithRetry(file.TargetPath, file.BackupPath);
                     rollbackActions.Add(new PendingUpdateRollbackAction(file.BackupPath, file.TargetPath));
                 }
                 else
@@ -189,7 +302,7 @@ public static class PendingAppUpdateService
                     EnsureParentDirectoryExists(file.TargetPath);
                 }
 
-                File.Move(file.SourcePath, file.TargetPath);
+                MoveFileWithRetry(file.SourcePath, file.TargetPath);
                 rollbackActions.Add(new PendingUpdateRollbackAction(file.TargetPath, file.SourcePath));
             }
 
@@ -200,16 +313,33 @@ public static class PendingAppUpdateService
             config.GlobalValues[ConfigurationKeys.VersionUpdateIsFirstBoot] = JsonValue.Create(bool.TrueString);
             SaveConfig(configStore, config);
 
+            // 成功应用后清掉跨启动保留的失败标记，避免下次启动继续提示修复。
+            PendingUpdateFailureState.Clear(baseDirectory);
+
             return new PendingAppUpdateApplyResult(
                 PendingAppUpdateStatus.Applied,
                 $"Applied pending software update package `{Path.GetFileName(pendingUpdate.PackagePath)}`.",
                 pendingUpdate.PackagePath);
         }
-        catch (InvalidDataException)
+        catch (InvalidDataException ex)
         {
+            // 清单/路径校验在搬移过程中也可能抛出（例如已删若干文件后才遇到非法路径），
+            // 因此这里同样先回滚；回滚失败才落跨启动保留的失败标记（WPF 217db38484）。
+            var rollbackError = TryRollback(rollbackActions);
             TryDeleteFile(pendingUpdate.PackagePath);
             ClearPendingPackageState(config);
             SaveConfig(configStore, config);
+            if (rollbackError is not null)
+            {
+                var recoveryReason = $"Invalid update package `{Path.GetFileName(pendingUpdate.PackagePath)}`: {ex.Message} Rollback also failed: {rollbackError.Message}";
+                PendingUpdateFailureState.Write(baseDirectory, recoveryReason);
+                return new PendingAppUpdateApplyResult(
+                    PendingAppUpdateStatus.Failed,
+                    $"Pending software update package is invalid and the installation could not be fully restored: {pendingUpdate.PackagePath}",
+                    pendingUpdate.PackagePath,
+                    RequiresManualRecovery: true);
+            }
+
             return new PendingAppUpdateApplyResult(
                 PendingAppUpdateStatus.Failed,
                 $"Pending software update package is invalid: {pendingUpdate.PackagePath}",
@@ -221,10 +351,19 @@ public static class PendingAppUpdateService
             var message = rollbackError is null
                 ? $"Failed to apply pending software update package: {ex.Message}"
                 : $"Failed to apply pending software update package: {ex.Message} Rollback also failed: {rollbackError.Message}";
+            if (rollbackError is not null)
+            {
+                // 安装内容已变动且无法回滚：落盘跨启动保留的失败标记，下次启动提示并走完整包修复（P0-12）。
+                PendingUpdateFailureState.Write(
+                    baseDirectory,
+                    $"Failed to apply pending software update package `{Path.GetFileName(pendingUpdate.PackagePath)}`: {ex.Message} Rollback also failed: {rollbackError.Message}");
+            }
+
             return new PendingAppUpdateApplyResult(
                 PendingAppUpdateStatus.Failed,
                 message,
-                pendingUpdate.PackagePath);
+                pendingUpdate.PackagePath,
+                RequiresManualRecovery: rollbackError is not null);
         }
         finally
         {
@@ -469,8 +608,18 @@ public static class PendingAppUpdateService
     {
         DeleteFileWithBackup(backupPath);
         EnsureParentDirectoryExists(backupPath);
-        File.Move(sourcePath, backupPath);
+        MoveFileWithRetry(sourcePath, backupPath);
     }
+
+    /// <summary>
+    /// 搬移文件时按占用重试：Windows 上杀软扫描新解压文件或句柄短暂占用会让 <see cref="File.Move(string, string)"/>
+    /// 抛 <see cref="IOException"/>（WPF <c>208d28d6fa</c> 的占用重试语义）；macOS/Linux 等价于一次成功。
+    /// </summary>
+    private static void MoveFileWithRetry(string sourcePath, string destinationPath)
+        => FileOperationRetry.Execute(() => File.Move(sourcePath, destinationPath));
+
+    private static void MoveDirectoryWithRetry(string sourceDirectory, string destinationDirectory)
+        => FileOperationRetry.Execute(() => Directory.Move(sourceDirectory, destinationDirectory));
 
     private static void DeleteFileWithBackup(string filePath)
     {
@@ -503,7 +652,7 @@ public static class PendingAppUpdateService
     {
         SafeDeleteDirectory(backupDirectory);
         EnsureParentDirectoryExists(backupDirectory);
-        Directory.Move(sourceDirectory, backupDirectory);
+        MoveDirectoryWithRetry(sourceDirectory, backupDirectory);
     }
 
     private static Exception? TryRollback(IReadOnlyList<PendingUpdateRollbackAction> rollbackActions)
@@ -536,11 +685,11 @@ public static class PendingAppUpdateService
         EnsureParentDirectoryExists(destinationPath);
         if (Directory.Exists(sourcePath))
         {
-            Directory.Move(sourcePath, destinationPath);
+            MoveDirectoryWithRetry(sourcePath, destinationPath);
         }
         else
         {
-            File.Move(sourcePath, destinationPath);
+            MoveFileWithRetry(sourcePath, destinationPath);
         }
     }
 

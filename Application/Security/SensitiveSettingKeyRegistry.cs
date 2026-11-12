@@ -54,6 +54,7 @@ public static class SensitiveSettingKeyRegistry
         Profile(ConfigurationKeys.ExternalNotificationCustomWebhookBody, "自定义 Webhook 消息体模板", "ExternalNotificationCustomWebhookBody"),
         Profile(ExternalNotificationCustomWebhookHeaders, "自定义 Webhook 请求头", "ExternalNotificationCustomWebhookHeaders"),
         Global(ConfigurationKeys.MirrorChyanCdk, "Mirror 酱 CDK", "Settings.VersionUpdate.MirrorCdk"),
+        Global(ConfigurationKeys.GitHubToken, "GitHub Token", "Settings.VersionUpdate.GitHubToken"),
     ];
 
     private static readonly IReadOnlyDictionary<string, SensitiveSettingDefinition> _byKey =

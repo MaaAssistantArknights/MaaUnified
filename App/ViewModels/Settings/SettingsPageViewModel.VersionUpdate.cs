@@ -417,7 +417,26 @@ public sealed partial class SettingsPageViewModel
             VersionBody: VersionUpdateBody,
             IsFirstBoot: VersionUpdateIsFirstBoot,
             VersionPackage: VersionUpdatePackage,
-            DoNotShowUpdate: VersionUpdateDoNotShow);
+            DoNotShowUpdate: VersionUpdateDoNotShow,
+            // WPF 53870a7a52：GitHub Token 存 SensitiveStorage，读取时从内存配置取回；
+            // 这里只透传，保存链路按 ToGlobalSettingUpdates 原样写回，不会把凭据清空。
+            GitHubToken: ReadGlobalString(
+                Runtime.ConfigurationService.CurrentConfig,
+                ConfigurationKeys.GitHubToken,
+                string.Empty),
+            GitHubTokenExpiresAt: ReadGlobalString(
+                Runtime.ConfigurationService.CurrentConfig,
+                ConfigurationKeys.GitHubTokenExpiredTime,
+                string.Empty),
+            // WPF 84b560d3cd：外部更新器输出开关（Windows 外部更新器链路）。
+            ShowUpdaterConsole: ReadGlobalBool(
+                Runtime.ConfigurationService.CurrentConfig,
+                ConfigurationKeys.ShowUpdaterConsole,
+                true),
+            ShowUpdaterProgress: ReadGlobalBool(
+                Runtime.ConfigurationService.CurrentConfig,
+                ConfigurationKeys.ShowUpdaterProgress,
+                true));
     }
 
     private void ApplyVersionUpdatePolicy(VersionUpdatePolicy policy)
@@ -857,7 +876,19 @@ public sealed partial class SettingsPageViewModel
         CancellationToken cancellationToken)
     {
         Runtime.LogService.Info("[update] Restart requested to apply the downloaded software update package.");
-        var restartResult = await Runtime.AppLifecycleService.RestartAsync(cancellationToken);
+
+        // WPF 60cf643a2d：更新后「立即重启」链按设置追加 --skip-startup-auto-run，
+        // 让下一个进程只启动 GUI 而不自动开模拟器 / 自动运行任务。
+        var skipStartupAutoRun = StartupLaunchBehaviorSnapshot.FromConfig(
+            Runtime.ConfigurationService.CurrentConfig).SkipStartupAutoRunAfterUpdate;
+        var restartArguments = skipStartupAutoRun
+            ? new[] { Program.SkipStartupAutoRunArgument }
+            : [];
+        Runtime.LogService.Info(
+            $"[update] Restart with skipStartupAutoRun={skipStartupAutoRun}.");
+        var restartResult = restartArguments.Length == 0
+            ? await Runtime.AppLifecycleService.RestartAsync(cancellationToken)
+            : await Runtime.AppLifecycleService.RestartWithAdditionalArgumentsAsync(restartArguments, cancellationToken);
         if (!await ApplyResultAsync(restartResult, scope, cancellationToken))
         {
             VersionUpdateErrorMessage = restartResult.Message;

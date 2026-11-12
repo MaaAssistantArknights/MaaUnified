@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.X11;
 using MAAUnified.App;
+using MAAUnified.Application.Services.VersionUpdate;
 
 namespace MAAUnified.Tests;
 
@@ -103,6 +104,60 @@ public sealed class StartupProgramTests
         Assert.Equal("Night profile", parsed.ConfigurationName);
         Assert.True(parsed.WaitForSingleInstance);
         Assert.Equal(["--trace"], parsed.AvaloniaArguments);
+    }
+
+    [Fact]
+    public void ParseStartupArguments_ConsumesUpdateRestartSkipAutoRunArgument()
+    {
+        // WPF 60cf643a2d：更新重启链写入 --skip-startup-auto-run，本次进程跳过启动自动运行。
+        var parsed = Program.ParseStartupArguments(
+            [Program.SkipStartupAutoRunArgument, "--wait-for-single-instance", "--trace"]);
+
+        Assert.True(parsed.SkipStartupAutoRun);
+        Assert.True(parsed.WaitForSingleInstance);
+        Assert.Equal(["--trace"], parsed.AvaloniaArguments);
+    }
+
+    [Fact]
+    public void ParseStartupArguments_WithoutSkipArgument_DoesNotSkipStartupAutoRun()
+    {
+        var parsed = Program.ParseStartupArguments(["--trace"]);
+
+        Assert.False(parsed.SkipStartupAutoRun);
+    }
+
+    [Fact]
+    public void BuildUpdateRepairSummary_MentionsMissingFilesAndReason()
+    {
+        var report = new UpdateStartupHealthReport(
+            HasPersistedUpdateFailure: true,
+            UpdateFailureReason: "Failed to move file into place: app.txt",
+            HasMissingInstallationFiles: true,
+            MissingFiles: ["resource/a.json", "resource/b.json"]);
+
+        var summary = Program.BuildUpdateRepairSummary(report);
+
+        Assert.Contains("previous update did not finish cleanly", summary, StringComparison.Ordinal);
+        Assert.Contains("file was locked", summary, StringComparison.Ordinal);
+        Assert.Contains("Installation files are missing (2)", summary, StringComparison.Ordinal);
+        Assert.Contains("resource/a.json", summary, StringComparison.Ordinal);
+        Assert.Contains("full package", summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DescribeUpdateFailureReason_ClassifiesPackageErrorsAndKeepsLocalizedText()
+    {
+        Assert.Contains(
+            "package itself is invalid",
+            Program.DescribeUpdateFailureReason("Illegal path in update package: ../evil.txt"),
+            StringComparison.Ordinal);
+        Assert.Equal(
+            "另一个实例正在应用更新",
+            Program.DescribeUpdateFailureReason("另一个实例正在应用更新"));
+        Assert.Contains(
+            "unknown reason",
+            Program.DescribeUpdateFailureReason("Failed to start updater process"),
+            StringComparison.Ordinal);
     }
 
     [Fact]
