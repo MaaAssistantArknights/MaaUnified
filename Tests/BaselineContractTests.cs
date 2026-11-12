@@ -345,6 +345,22 @@ internal static class BaselineTestSupport
         "RuntimeSettings.EnableRunDurationLimit",
         "RuntimeSettings.RunDurationLimitMinutes",
         "RuntimeSettings.RunDurationLimitExecutePostActions",
+        "ExternalNotification.Blacklist",
+        "ExternalNotification.FilterPreviousLogs",
+        "ExternalNotification.IncludePreviousLogs",
+        "ExternalNotification.MaxEntries",
+        "ExternalNotification.NewLogCount",
+        "ExternalNotification.SendAfterLogCount",
+        "ExternalNotification.SendBeforeScheduledStart",
+        "ExternalNotification.SendWhenContentMatches",
+        "ExternalNotification.TimeMinutes",
+        "ExternalNotification.Whitelist",
+        "Start.SkipStartupAutoRunAfterUpdate",
+        "Start.StartupAutoRunCountdownSeconds",
+        "VersionUpdate.GitHubToken",
+        "VersionUpdate.GitHubTokenExpired",
+        "VersionUpdate.ShowUpdaterConsole",
+        "VersionUpdate.ShowUpdaterProgress",
     };
 
     // Maps each frozen configuration key value to its ConfigurationKeys constant identifier
