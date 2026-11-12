@@ -5777,6 +5777,90 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.Peep.TargetFps" xml:space="preserve">
     <value>Target FPS</value>
   </data>
+  <data name="Toolbox.PixelPaint.Brightness" xml:space="preserve">
+    <value>Brightness</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Contrast" xml:space="preserve">
+    <value>Contrast</value>
+  </data>
+  <data name="Toolbox.PixelPaint.ConvertFailed" xml:space="preserve">
+    <value>Conversion failed</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Dither" xml:space="preserve">
+    <value>Dither</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DitherAtkinson" xml:space="preserve">
+    <value>Dither - Soft</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DitherFS" xml:space="preserve">
+    <value>Dither - Photo</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DitherIllustration" xml:space="preserve">
+    <value>Illustration</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DitherNone" xml:space="preserve">
+    <value>No dithering</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DropHint" xml:space="preserve">
+    <value>Drop an image, paste an image or text, or pick one below</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Fit" xml:space="preserve">
+    <value>Fit</value>
+  </data>
+  <data name="Toolbox.PixelPaint.FitContain" xml:space="preserve">
+    <value>Contain</value>
+  </data>
+  <data name="Toolbox.PixelPaint.FitCrop" xml:space="preserve">
+    <value>Crop</value>
+  </data>
+  <data name="Toolbox.PixelPaint.FitStretch" xml:space="preserve">
+    <value>Stretch</value>
+  </data>
+  <data name="Toolbox.PixelPaint.GridDelay" xml:space="preserve">
+    <value>Paint delay (ms)</value>
+  </data>
+  <data name="Toolbox.PixelPaint.GridDelay.Tip" xml:space="preserve">
+    <value>Extra per-cell wait: after clicks and added to drag duration. Each touch mode has its own base interval, so 0 works by default; low-performance devices may have issues, adjust as needed.</value>
+  </data>
+  <data name="Toolbox.PixelPaint.LoadFailed" xml:space="preserve">
+    <value>Failed to load image</value>
+  </data>
+  <data name="Toolbox.PixelPaint.NeedImage" xml:space="preserve">
+    <value>Import an image and generate a preview first</value>
+  </data>
+  <data name="Toolbox.PixelPaint.PaintWhite" xml:space="preserve">
+    <value>Paint white too</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Paste" xml:space="preserve">
+    <value>Paste</value>
+  </data>
+  <data name="Toolbox.PixelPaint.PickImage" xml:space="preserve">
+    <value>Pick Image</value>
+  </data>
+  <data name="Toolbox.PixelPaint.ReadyStatus" xml:space="preserve">
+    <value>{0} cells / {1} colors</value>
+  </data>
+  <data name="Toolbox.PixelPaint.ResetParams" xml:space="preserve">
+    <value>Reset Params</value>
+  </data>
+  <data name="Toolbox.PixelPaint.ResetView" xml:space="preserve">
+    <value>Reset View</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Saturation" xml:space="preserve">
+    <value>Saturation</value>
+  </data>
+  <data name="Toolbox.PixelPaint.StartLog" xml:space="preserve">
+    <value>Start pixel paint: {0} cells, {1} colors</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Swipe" xml:space="preserve">
+    <value>Enable swipe drawing</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Swipe.Tip" xml:space="preserve">
+    <value>Draws consecutive cells of the same color in a single drag for much faster painting. Some touch modes may behave abnormally; disable if you run into issues.</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Tip" xml:space="preserve">
+    <value>Enter the in-game 24×24 pixel editor first, then start.&#10;Drag/scroll the preview to reframe; white is skipped by default.&#10;Parameters lock while running; see the log for progress.</value>
+  </data>
   <data name="Toolbox.Recruit.AutoSelect3" xml:space="preserve">
     <value>Auto select 3★ tags</value>
   </data>
@@ -5885,6 +5969,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.Tab.Peep" xml:space="preserve">
     <value>Peep</value>
   </data>
+  <data name="Toolbox.Tab.PixelPaint" xml:space="preserve">
+    <value>Pixel Paint</value>
+  </data>
   <data name="Toolbox.Tab.Recruit" xml:space="preserve">
     <value>Recruit Recognition</value>
   </data>
@@ -5920,6 +6007,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.ToolName.OperBox" xml:space="preserve">
     <value>Operator Recognition</value>
+  </data>
+  <data name="Toolbox.ToolName.PixelPaint" xml:space="preserve">
+    <value>Pixel Paint</value>
   </data>
   <data name="Toolbox.ToolName.Recruit" xml:space="preserve">
     <value>Recruit Recognition</value>

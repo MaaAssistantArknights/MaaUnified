@@ -25,6 +25,7 @@ using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.PixelPaint;
 using MAAUnified.Application.Services.ThirdParty;
 using MAAUnified.CoreBridge;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
@@ -88,6 +89,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         [3] = ToolboxToolKind.Gacha,
         [4] = ToolboxToolKind.VideoRecognition,
         [5] = ToolboxToolKind.MiniGame,
+        [6] = ToolboxToolKind.PixelPaint,
     };
 
     private static readonly HashSet<string> MiniGameSecretFrontEndings = new(StringComparer.Ordinal)
@@ -122,6 +124,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         nameof(GachaTabTitle),
         nameof(PeepTabTitle),
         nameof(MiniGameTabTitle),
+        nameof(PixelPaintTabTitle),
         nameof(RecruitAutoSetTimeText),
         nameof(RecruitShowPotentialText),
         nameof(RecruitAutoSelect3Text),
@@ -307,6 +310,9 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         _texts = CreateTexts(_currentLanguage);
         _rootTexts = CreateRootTexts(_currentLanguage);
 
+        // 像素画页签：与页面共享同一份文本表，语言切换由 RefreshLocalizedUiState 统一驱动。
+        PixelPaint = new ToolboxPixelPaintViewModel(_texts);
+
         Tabs =
         [
             "recruit",
@@ -315,6 +321,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             "gacha",
             "peep",
             "minigame",
+            "pixelpaint",
         ];
 
         _resultText = T("Toolbox.Status.WaitingForExecution", "Waiting to execute tool.");
@@ -378,6 +385,11 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     public IReadOnlyList<string> Tabs { get; }
 
+    /// <summary>
+    /// Gets 像素画页签的视图模型（参数、预览与取景状态都在其中）。
+    /// </summary>
+    public ToolboxPixelPaintViewModel PixelPaint { get; }
+
     public ObservableCollection<ToolExecutionRecord> ExecutionHistory { get; }
 
     public ToolboxLocalizationTextMap Texts => _texts;
@@ -395,6 +407,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public string PeepTabTitle => T("Toolbox.Tab.Peep", "Peep");
 
     public string MiniGameTabTitle => T("Toolbox.Tab.MiniGame", "Mini-Game");
+
+    public string PixelPaintTabTitle => T("Toolbox.Tab.PixelPaint", "Pixel Paint");
 
     public string RecruitAutoSetTimeText => T("Toolbox.Recruit.AutoSetTime", "Auto set time");
 
@@ -549,6 +563,22 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public bool CanStartGacha => !IsToolboxBusy && !IsOtherSessionActivityActive;
 
     public bool CanStartMiniGame => IsMiniGameRunning || (!IsToolboxBusy && !IsOtherSessionActivityActive);
+
+    /// <summary>Gets a value indicating whether 像素画页签可以启动（或在运行中允许停止）。</summary>
+    public bool CanStartPixelPaint => IsPixelPaintRunning || (!IsToolboxBusy && !IsOtherSessionActivityActive);
+
+    /// <summary>Gets a value indicating whether 像素画任务正在运行。</summary>
+    public bool IsPixelPaintRunning => _activeTool == ToolboxToolKind.PixelPaint && IsExecuting;
+
+    /// <summary>Gets a value indicating whether 像素画参数可编辑（运行中锁定，与 WPF <c>Run.Idle</c> 一致）。</summary>
+    public bool CanEditPixelPaintOptions => !IsPixelPaintRunning;
+
+    /// <summary>Gets 像素画启动/停止按钮文案。</summary>
+    public string PixelPaintCommandText => IsPixelPaintRunning
+        ? IsToolActionStopHovered(ToolboxToolKind.PixelPaint)
+            ? StopActionText
+            : T("Toolbox.Action.Running", "Running...")
+        : T("Toolbox.Action.LinkStart", "Link Start!");
 
     public bool CanExportOperBox => _hasOperBoxRecognitionData;
 
@@ -2124,6 +2154,30 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     }
 
     /// <summary>
+    /// 启动像素画：把当前分组点列作为 Core 自定义任务提交（WPF <c>ToolboxViewModel.StartPixelPaint</c>）。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>Task</returns>
+    public async Task StartPixelPaintAsync(CancellationToken cancellationToken = default)
+    {
+        if (!PixelPaint.HasPaintableCells)
+        {
+            await ApplyFailureAsync(
+                ToolboxToolKind.PixelPaint,
+                UiOperationResult.Fail(UiErrorCode.ToolboxInvalidParameters, PixelPaint.NeedImageText),
+                "pixel-paint-empty",
+                cancellationToken);
+            return;
+        }
+
+        await DispatchToolAsync(
+            ToolboxToolKind.PixelPaint,
+            BuildPixelPaintDispatchRequest(),
+            PreparePixelPaintForStart,
+            cancellationToken);
+    }
+
+    /// <summary>
     /// WPF dev-v2 (66e003377c / 8a6ca5f276 / 1bc83ba6e6) 的顺序分派：
     /// Reclamation 走任务类型编译，AutoRaisePotential 与活动商店走带附加参数的 Custom 任务，
     /// 其余小游戏沿用 <c>task_names</c>。
@@ -2151,6 +2205,17 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             ToolboxToolKind.MiniGame,
             MiniGame: new ToolboxMiniGameRequest(GetMiniGameTask(), BuildEventShopBlackList()),
             ParameterSummary: parameterSummary);
+    }
+
+    private ToolboxDispatchRequest BuildPixelPaintDispatchRequest()
+    {
+        return new ToolboxDispatchRequest(
+            ToolboxToolKind.PixelPaint,
+            PixelPaint: new ToolboxPixelPaintRequest(
+                PixelPaint.Groups,
+                PixelPaint.SwipeEnabled,
+                PixelPaint.GridDelay),
+            ParameterSummary: PixelPaint.BuildParameterSummary());
     }
 
     private ReclamationTaskParamsDto BuildReclamationParameters()
@@ -2716,6 +2781,15 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         ResultText = T("Toolbox.Status.MiniGameStarting", "Starting mini-game task...");
     }
 
+    private void PreparePixelPaintForStart()
+    {
+        ResultText = string.Format(
+            CultureInfo.InvariantCulture,
+            T("Toolbox.PixelPaint.StartLog", "Start pixel paint: {0} cells, {1} colors"),
+            PixelPaintTaskPayload.CountPaintedCells(PixelPaint.Groups),
+            PixelPaint.Groups.Count);
+    }
+
     private ToolboxDispatchRequest BuildRecruitRequest()
     {
         var selectedLevels = new List<int>();
@@ -2758,9 +2832,13 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         ExecutionState = ToolboxExecutionState.Executing;
         LastExecutionErrorCode = string.Empty;
         LastExecutionAt = null;
+        PixelPaint.SetRunning(tool == ToolboxToolKind.PixelPaint);
         OnPropertyChanged(nameof(IsMiniGameRunning));
         OnPropertyChanged(nameof(CanEditMiniGameOptions));
         OnPropertyChanged(nameof(MiniGameCommandText));
+        OnPropertyChanged(nameof(IsPixelPaintRunning));
+        OnPropertyChanged(nameof(CanEditPixelPaintOptions));
+        OnPropertyChanged(nameof(PixelPaintCommandText));
         NotifyToolActionTextChanged(tool);
         NotifyToolboxBusyStateChanged();
     }
@@ -2776,9 +2854,13 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             }
 
             _lastDispatchedParameterSummary = string.Empty;
+            PixelPaint.SetRunning(false);
             OnPropertyChanged(nameof(IsMiniGameRunning));
             OnPropertyChanged(nameof(CanEditMiniGameOptions));
             OnPropertyChanged(nameof(MiniGameCommandText));
+            OnPropertyChanged(nameof(IsPixelPaintRunning));
+            OnPropertyChanged(nameof(CanEditPixelPaintOptions));
+            OnPropertyChanged(nameof(PixelPaintCommandText));
             NotifyToolActionTextChanged(expectedTool);
         }
 
@@ -2789,9 +2871,13 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         }
 
         _lastDispatchedParameterSummary = string.Empty;
+        PixelPaint.SetRunning(false);
         OnPropertyChanged(nameof(IsMiniGameRunning));
         OnPropertyChanged(nameof(CanEditMiniGameOptions));
         OnPropertyChanged(nameof(MiniGameCommandText));
+        OnPropertyChanged(nameof(IsPixelPaintRunning));
+        OnPropertyChanged(nameof(CanEditPixelPaintOptions));
+        OnPropertyChanged(nameof(PixelPaintCommandText));
         NotifyToolActionTextChanged(expectedTool);
         ReleaseToolActivity();
         NotifyToolboxBusyStateChanged();
@@ -2810,6 +2896,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(CanStartDepotRecognition));
         OnPropertyChanged(nameof(CanStartGacha));
         OnPropertyChanged(nameof(CanStartMiniGame));
+        OnPropertyChanged(nameof(CanStartPixelPaint));
         NotifyToolboxExecutionStateChanged();
     }
 
@@ -2823,6 +2910,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(CanStartDepotRecognition));
         OnPropertyChanged(nameof(CanStartGacha));
         OnPropertyChanged(nameof(CanStartMiniGame));
+        OnPropertyChanged(nameof(CanStartPixelPaint));
+        OnPropertyChanged(nameof(PixelPaintCommandText));
         OnPropertyChanged(nameof(RecruitStartRecognitionText));
         OnPropertyChanged(nameof(OperBoxStartRecognitionText));
         OnPropertyChanged(nameof(DepotStartRecognitionText));
@@ -3107,6 +3196,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private void RefreshLocalizedUiState()
     {
+        PixelPaint.RefreshLocalization(_currentLanguage);
         RefreshLocalizedBindingProperties();
         RefreshLocalizedStatusTexts();
         RefreshLocalizedCollections();
@@ -4739,6 +4829,22 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 }
 
                 return UiOperationResult.Ok("Gacha parameters validated.");
+            case ToolboxToolKind.PixelPaint:
+                if (!PixelPaint.HasPaintableCells)
+                {
+                    return UiOperationResult.Fail(
+                        UiErrorCode.ToolboxInvalidParameters,
+                        PixelPaint.NeedImageText);
+                }
+
+                if (PixelPaint.GridDelay is < 0 or > PixelPaintTaskPayload.MaxGridDelay)
+                {
+                    return UiOperationResult.Fail(
+                        UiErrorCode.ToolboxInvalidParameters,
+                        T("Toolbox.Validation.PixelPaintGridDelayInvalid", "Pixel paint delay must be between 0 and 500 ms."));
+                }
+
+                return UiOperationResult.Ok("Pixel paint parameters validated.");
             case ToolboxToolKind.VideoRecognition:
                 if (!TryParseInt(VideoRecognitionTargetFpsInput, 1, MaxPeepTargetFps, out _))
                 {
@@ -5591,6 +5697,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             ToolboxToolKind.Gacha => $"drawCount={NormalizeToken(GachaDrawCountInput)};showDisclaimerNoMore={GachaShowDisclaimerNoMore.ToString().ToLowerInvariant()}",
             ToolboxToolKind.VideoRecognition => $"targetFps={PeepTargetFps}",
             ToolboxToolKind.MiniGame => BuildMiniGameParameterSummary(),
+            ToolboxToolKind.PixelPaint => PixelPaint.BuildParameterSummary(),
             _ => string.Empty,
         };
     }
@@ -6143,6 +6250,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             ToolboxToolKind.Gacha => texts.GetOrDefault("Toolbox.ToolName.Gacha", "Gacha"),
             ToolboxToolKind.VideoRecognition => texts.GetOrDefault("Toolbox.ToolName.VideoRecognition", "Peep"),
             ToolboxToolKind.MiniGame => texts.GetOrDefault("Toolbox.ToolName.MiniGame", "Mini-Game"),
+            ToolboxToolKind.PixelPaint => texts.GetOrDefault("Toolbox.ToolName.PixelPaint", "Pixel Paint"),
             _ => tool.ToString(),
         };
     }

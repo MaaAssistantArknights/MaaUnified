@@ -1,0 +1,221 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             x:Class="MAAUnified.App.Features.Advanced.ToolboxPixelPaintView">
+  <UserControl.Styles>
+    <Style Selector="Border.toolbox-pixelpaint-preview-frame">
+      <Setter Property="Width" Value="218" />
+      <Setter Property="Height" Value="218" />
+      <Setter Property="CornerRadius" Value="{DynamicResource MAA.App.CornerRadius.Card}" />
+      <Setter Property="Background" Value="{DynamicResource MAA.Brush.App.Surface.Subtle}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource MAA.Brush.App.Border.Default}" />
+      <Setter Property="BorderThickness" Value="{DynamicResource MAA.BorderThickness.Thin}" />
+      <Setter Property="Cursor" Value="SizeAll" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-pixelpaint-drop-hint">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="MaxWidth" Value="180" />
+      <Setter Property="Opacity" Value="0.65" />
+      <Setter Property="FontSize" Value="12.5" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-pixelpaint-field-label">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-pixelpaint-status-text">
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+    </Style>
+
+    <Style Selector="TextBlock.toolbox-pixelpaint-tip-text">
+      <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.Text.Secondary}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
+
+    <Style Selector="Button.toolbox-pixelpaint-action">
+      <Setter Property="MinWidth" Value="136" />
+      <Setter Property="Height" Value="46" />
+      <Setter Property="Padding" Value="20,0" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+
+    <Style Selector="Button.toolbox-pixelpaint-tool-button">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="10,6" />
+    </Style>
+  </UserControl.Styles>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Width="{DynamicResource MAA.Size.Toolbox.FormPanelWidth}"
+                Margin="4,8"
+                HorizontalAlignment="Center"
+                Spacing="12">
+      <Grid ColumnDefinitions="Auto,*">
+        <Border x:Name="PixelPaintPreviewFrame"
+                Grid.Column="0"
+                Classes="toolbox-pixelpaint-preview-frame"
+                DragDrop.DragOver="OnPixelPaintDragOver"
+                DragDrop.Drop="OnPixelPaintDrop"
+                PointerMoved="OnPixelPaintPreviewPointerMoved"
+                PointerPressed="OnPixelPaintPreviewPointerPressed"
+                PointerReleased="OnPixelPaintPreviewPointerReleased"
+                PointerWheelChanged="OnPixelPaintPreviewWheelChanged">
+          <Grid>
+            <Image RenderOptions.BitmapInterpolationMode="None"
+                   Source="{Binding PixelPaint.Preview}"
+                   Stretch="None" />
+            <TextBlock Classes="toolbox-pixelpaint-drop-hint"
+                       IsVisible="{Binding !PixelPaint.HasPreview}"
+                       Text="{Binding PixelPaint.DropHintText}" />
+          </Grid>
+        </Border>
+
+        <StackPanel Grid.Column="1"
+                    Margin="14,0,0,0"
+                    IsEnabled="{Binding PixelPaint.CanEdit}"
+                    Spacing="10">
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Classes="toolbox-pixelpaint-field-label"
+                       Text="{Binding PixelPaint.FitLabel}" />
+            <controls:AppSelect Grid.Column="1"
+                                Margin="12,0,0,0"
+                                HorizontalAlignment="Stretch"
+                                ItemsSource="{Binding PixelPaint.FitOptions.Items}"
+                                SelectedValue="{Binding PixelPaint.Fit}"
+                                SelectedValueBinding="{Binding Value}">
+              <controls:AppSelect.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding Display}" />
+                </DataTemplate>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
+          </Grid>
+
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Classes="toolbox-pixelpaint-field-label"
+                       Text="{Binding PixelPaint.DitherLabel}" />
+            <controls:AppSelect Grid.Column="1"
+                                Margin="12,0,0,0"
+                                HorizontalAlignment="Stretch"
+                                ItemsSource="{Binding PixelPaint.DitherOptions.Items}"
+                                SelectedValue="{Binding PixelPaint.Dither}"
+                                SelectedValueBinding="{Binding Value}">
+              <controls:AppSelect.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding Display}" />
+                </DataTemplate>
+              </controls:AppSelect.ItemTemplate>
+            </controls:AppSelect>
+          </Grid>
+
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Classes="toolbox-pixelpaint-field-label"
+                       Text="{Binding PixelPaint.ContrastLabel}" />
+            <controls:AppNumberInput Grid.Column="1"
+                                     Margin="12,0,0,0"
+                                     HorizontalAlignment="Left"
+                                     Increment="5"
+                                     Maximum="200"
+                                     Minimum="50"
+                                     Value="{Binding PixelPaint.Contrast}" />
+          </Grid>
+
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Classes="toolbox-pixelpaint-field-label"
+                       Text="{Binding PixelPaint.BrightnessLabel}" />
+            <controls:AppNumberInput Grid.Column="1"
+                                     Margin="12,0,0,0"
+                                     HorizontalAlignment="Left"
+                                     Increment="5"
+                                     Maximum="200"
+                                     Minimum="50"
+                                     Value="{Binding PixelPaint.Brightness}" />
+          </Grid>
+
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Classes="toolbox-pixelpaint-field-label"
+                       Text="{Binding PixelPaint.SaturationLabel}" />
+            <controls:AppNumberInput Grid.Column="1"
+                                     Margin="12,0,0,0"
+                                     HorizontalAlignment="Left"
+                                     Increment="5"
+                                     Maximum="200"
+                                     Minimum="0"
+                                     Value="{Binding PixelPaint.Saturation}" />
+          </Grid>
+
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding PixelPaint.PaintWhiteLabel}"
+                    IsChecked="{Binding PixelPaint.PaintWhite}" />
+
+          <CheckBox Classes="app-checkbox"
+                    Content="{Binding PixelPaint.SwipeLabel}"
+                    IsChecked="{Binding PixelPaint.SwipeEnabled}" />
+
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Classes="toolbox-pixelpaint-field-label"
+                       Text="{Binding PixelPaint.GridDelayLabel}" />
+            <controls:AppNumberInput Grid.Column="1"
+                                     Margin="12,0,0,0"
+                                     HorizontalAlignment="Left"
+                                     Increment="50"
+                                     Maximum="500"
+                                     Minimum="0"
+                                     Value="{Binding PixelPaint.GridDelay}" />
+          </Grid>
+        </StackPanel>
+      </Grid>
+
+      <Grid ColumnDefinitions="*,*,*,*">
+        <Button Grid.Column="0"
+                Classes="app-button toolbox-pixelpaint-tool-button"
+                Click="OnPickImageClick"
+                Content="{Binding PixelPaint.PickImageText}"
+                IsEnabled="{Binding PixelPaint.CanEdit}" />
+        <Button Grid.Column="1"
+                Classes="app-button toolbox-pixelpaint-tool-button"
+                Click="OnPasteClick"
+                Content="{Binding PixelPaint.PasteText}"
+                IsEnabled="{Binding PixelPaint.CanEdit}" />
+        <Button Grid.Column="2"
+                Classes="app-button toolbox-pixelpaint-tool-button"
+                Click="OnResetViewClick"
+                Content="{Binding PixelPaint.ResetViewText}"
+                IsEnabled="{Binding PixelPaint.CanEdit}" />
+        <Button Grid.Column="3"
+                Classes="app-button toolbox-pixelpaint-tool-button"
+                Click="OnResetParametersClick"
+                Content="{Binding PixelPaint.ResetParamsText}"
+                IsEnabled="{Binding PixelPaint.CanEdit}" />
+      </Grid>
+
+      <TextBlock Classes="toolbox-pixelpaint-status-text"
+                 IsVisible="{Binding PixelPaint.HasStatusText}"
+                 Text="{Binding PixelPaint.StatusText}" />
+
+      <TextBlock Classes="app-body long-wrap toolbox-pixelpaint-tip-text"
+                 Text="{Binding PixelPaint.TipText}" />
+
+      <Button x:Name="PixelPaintCommandButton"
+              Classes="app-button app-primary toolbox-pixelpaint-action"
+              Classes.locked="{Binding PixelPaint.IsRunning}"
+              Click="OnPixelPaintCommandClick"
+              Content="{Binding PixelPaintCommandText}"
+              IsEnabled="{Binding CanStartPixelPaint}"
+              PointerEntered="OnPixelPaintCommandPointerEntered"
+              PointerExited="OnPixelPaintCommandPointerExited" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

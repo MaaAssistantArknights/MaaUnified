@@ -32,6 +32,10 @@
       <TabItem Header="{Binding MiniGameTabTitle}">
         <views:ToolboxMiniGameView />
       </TabItem>
+
+      <TabItem Header="{Binding PixelPaintTabTitle}">
+        <views:ToolboxPixelPaintView />
+      </TabItem>
     </TabControl>
   </Grid>
 </UserControl>

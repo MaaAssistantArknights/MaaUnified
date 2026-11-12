@@ -14,6 +14,7 @@ using MAAUnified.Application.Models.TaskParams;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.PixelPaint;
 using MAAUnified.Application.Services.TaskParams;
 using MAAUnified.CoreBridge;
 using MAAUnified.Compat.Constants;
@@ -5122,6 +5123,40 @@ public sealed class ToolboxFeatureService : IToolboxFeatureService
                         ? $"taskName={taskName};blacklist={string.Join('|', eventShopBlackList)}"
                         : $"taskName={taskName}");
                 coreTask = new CoreTaskRequest(taskType, "Toolbox.MiniGame", true, payload.ToJsonString());
+                return true;
+            }
+            case ToolboxToolKind.PixelPaint:
+            {
+                if (request.PixelPaint is null)
+                {
+                    error = (
+                        UiErrorCode.ToolboxInvalidParameters,
+                        "Pixel paint request is missing groups.",
+                        null);
+                    return false;
+                }
+
+                var issue = PixelPaintTaskPayload.Validate(request.PixelPaint.Groups, request.PixelPaint.GridDelay);
+                if (issue != PixelPaintPayloadIssue.None)
+                {
+                    error = (
+                        UiErrorCode.ToolboxInvalidParameters,
+                        $"Pixel paint parameters are invalid: {issue}.",
+                        null);
+                    return false;
+                }
+
+                var payload = PixelPaintTaskPayload.Build(
+                    request.PixelPaint.Groups,
+                    request.PixelPaint.SwipeEnabled,
+                    request.PixelPaint.GridDelay);
+                taskType = TaskModuleTypes.Custom;
+                parameterSummary = request.ParameterSummary
+                    ?? PixelPaintTaskPayload.BuildParameterSummary(
+                        request.PixelPaint.Groups,
+                        request.PixelPaint.SwipeEnabled,
+                        request.PixelPaint.GridDelay);
+                coreTask = new CoreTaskRequest(taskType, "Toolbox.PixelPaint", true, payload.ToJsonString());
                 return true;
             }
             case ToolboxToolKind.VideoRecognition:

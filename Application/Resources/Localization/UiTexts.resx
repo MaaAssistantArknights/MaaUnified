@@ -5766,6 +5766,90 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Toolbox.Peep.TargetFps" xml:space="preserve">
     <value>目标帧率</value>
   </data>
+  <data name="Toolbox.PixelPaint.Brightness" xml:space="preserve">
+    <value>亮度</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Contrast" xml:space="preserve">
+    <value>对比度</value>
+  </data>
+  <data name="Toolbox.PixelPaint.ConvertFailed" xml:space="preserve">
+    <value>转换失败</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Dither" xml:space="preserve">
+    <value>抖动</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DitherAtkinson" xml:space="preserve">
+    <value>抖动 - 柔和</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DitherFS" xml:space="preserve">
+    <value>抖动 - 照片</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DitherIllustration" xml:space="preserve">
+    <value>插画优先</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DitherNone" xml:space="preserve">
+    <value>不抖动</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DropHint" xml:space="preserve">
+    <value>拖入图片、粘贴图片或文字，或在下方选图</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Fit" xml:space="preserve">
+    <value>适配</value>
+  </data>
+  <data name="Toolbox.PixelPaint.FitContain" xml:space="preserve">
+    <value>完整装入</value>
+  </data>
+  <data name="Toolbox.PixelPaint.FitCrop" xml:space="preserve">
+    <value>裁切铺满</value>
+  </data>
+  <data name="Toolbox.PixelPaint.FitStretch" xml:space="preserve">
+    <value>拉伸</value>
+  </data>
+  <data name="Toolbox.PixelPaint.GridDelay" xml:space="preserve">
+    <value>绘制间隔 (ms)</value>
+  </data>
+  <data name="Toolbox.PixelPaint.GridDelay.Tip" xml:space="preserve">
+    <value>每格额外等待时长：点击后 sleep，拖动时长按格累加。各触控方式自带基础间隔，默认 0 即可；某些低性能设备可能遇到问题，可按需调整。</value>
+  </data>
+  <data name="Toolbox.PixelPaint.LoadFailed" xml:space="preserve">
+    <value>图片加载失败</value>
+  </data>
+  <data name="Toolbox.PixelPaint.NeedImage" xml:space="preserve">
+    <value>请先导入图片并生成预览</value>
+  </data>
+  <data name="Toolbox.PixelPaint.PaintWhite" xml:space="preserve">
+    <value>也画白色</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Paste" xml:space="preserve">
+    <value>粘贴</value>
+  </data>
+  <data name="Toolbox.PixelPaint.PickImage" xml:space="preserve">
+    <value>选择图片</value>
+  </data>
+  <data name="Toolbox.PixelPaint.ReadyStatus" xml:space="preserve">
+    <value>可画 {0} 格 / {1} 色</value>
+  </data>
+  <data name="Toolbox.PixelPaint.ResetParams" xml:space="preserve">
+    <value>重置参数</value>
+  </data>
+  <data name="Toolbox.PixelPaint.ResetView" xml:space="preserve">
+    <value>重置取景</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Saturation" xml:space="preserve">
+    <value>饱和度</value>
+  </data>
+  <data name="Toolbox.PixelPaint.StartLog" xml:space="preserve">
+    <value>开始像素画：{0} 格，{1} 色</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Swipe" xml:space="preserve">
+    <value>启用滑动绘制</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Swipe.Tip" xml:space="preserve">
+    <value>同色同行的连续格用拖动一次画完，可显著加快画图速度。部分触控模式下可能异常，如遇问题请关闭。</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Tip" xml:space="preserve">
+    <value>请先手动进入游戏内 24×24 像素画编辑页，再开始。&#10;中间预览可拖动/滚轮取景；默认跳过白色。&#10;开始后参数锁定，进度见日志。</value>
+  </data>
   <data name="Toolbox.Recruit.AutoSelect3" xml:space="preserve">
     <value>自动选择 3 星 Tags</value>
   </data>
@@ -5865,6 +5949,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Toolbox.Tab.Peep" xml:space="preserve">
     <value>窥屏</value>
   </data>
+  <data name="Toolbox.Tab.PixelPaint" xml:space="preserve">
+    <value>像素画</value>
+  </data>
   <data name="Toolbox.Tab.Recruit" xml:space="preserve">
     <value>招募识别</value>
   </data>
@@ -5900,6 +5987,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Toolbox.ToolName.OperBox" xml:space="preserve">
     <value>干员识别</value>
+  </data>
+  <data name="Toolbox.ToolName.PixelPaint" xml:space="preserve">
+    <value>像素画</value>
   </data>
   <data name="Toolbox.ToolName.Recruit" xml:space="preserve">
     <value>招募识别</value>

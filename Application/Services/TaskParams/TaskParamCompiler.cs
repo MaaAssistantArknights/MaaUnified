@@ -1908,9 +1908,46 @@ public static class TaskParamCompiler
         var dto = new CustomTaskParamsDto
         {
             TaskNames = taskNames,
+            Params = ReadCustomAttachedParams(parameters, strict, issues),
         };
 
         return (dto, issues);
+    }
+
+    /// <summary>
+    /// 读取自定义任务的附加 <c>params</c>（如像素画的 <c>params.pixel_paint</c>）。
+    /// 之前这里只读 <c>task_names</c>，附加参数在读取/编译往返中被静默丢弃，
+    /// 导致像素画这类 ｢短任务名 + 附加参数｣ 的条目保存后丢参数（WPF <c>AsstCustomTask.Params</c>，<c>1f39c29587</c>）。
+    /// </summary>
+    /// <param name="parameters">任务参数对象。</param>
+    /// <param name="strict">是否把缺失字段视为问题。</param>
+    /// <param name="issues">问题收集器。</param>
+    /// <returns>附加参数对象；未提供时 <see langword="null"/>。</returns>
+    private static JsonObject? ReadCustomAttachedParams(
+        JsonObject parameters,
+        bool strict,
+        ICollection<TaskValidationIssue> issues)
+    {
+        if (!parameters.TryGetPropertyValue("params", out var node))
+        {
+            return null;
+        }
+
+        if (node is JsonObject attached)
+        {
+            return attached.DeepClone() as JsonObject;
+        }
+
+        if (node is not null)
+        {
+            issues.Add(new TaskValidationIssue(
+                "TaskFieldTypeInvalid",
+                "custom.params",
+                "Custom task params must be an object.",
+                Blocking: strict));
+        }
+
+        return null;
     }
 
     public static TaskCompileOutput CompileCustom(
@@ -1940,6 +1977,13 @@ public static class TaskParamCompiler
         {
             ["task_names"] = taskNamesJson,
         };
+
+        // Attached params (for example pixel paint groups) belong to the same short
+        // task entry and must survive the compile round-trip unchanged.
+        if (dto.Params is { Count: > 0 } attached)
+        {
+            parameters["params"] = attached.DeepClone();
+        }
 
         return new TaskCompileOutput
         {

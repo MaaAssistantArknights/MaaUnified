@@ -1,4 +1,5 @@
 using MAAUnified.Application.Models.TaskParams;
+using MAAUnified.Application.Services.PixelPaint;
 
 namespace MAAUnified.Application.Models;
 
@@ -10,6 +11,7 @@ public enum ToolboxToolKind
     Gacha = 3,
     VideoRecognition = 4,
     MiniGame = 5,
+    PixelPaint = 6,
 }
 
 public sealed record ToolboxRecruitRequest(
@@ -39,6 +41,15 @@ public sealed record ToolboxReclamationRequest(ReclamationTaskParamsDto Paramete
 /// </summary>
 public sealed record ToolboxAutoRaisePotentialRequest(bool UseNormalToken);
 
+/// <summary>
+/// 像素画（<c>MiniGame@PixelPaint@Begin</c>）：分组点列 + 滑动绘制开关 + 每格额外等待。
+/// 参数结构与 WPF <c>AsstProxy.AsstPixelPaint</c> 一致（<c>params.pixel_paint</c>）。
+/// </summary>
+public sealed record ToolboxPixelPaintRequest(
+    IReadOnlyList<PixelPaintColorGroup> Groups,
+    bool SwipeEnabled,
+    int GridDelay);
+
 public sealed record ToolboxDispatchRequest(
     ToolboxToolKind Tool,
     ToolboxRecruitRequest? Recruit = null,
@@ -46,6 +57,7 @@ public sealed record ToolboxDispatchRequest(
     ToolboxMiniGameRequest? MiniGame = null,
     ToolboxReclamationRequest? Reclamation = null,
     ToolboxAutoRaisePotentialRequest? AutoRaisePotential = null,
+    ToolboxPixelPaintRequest? PixelPaint = null,
     string? ParameterSummary = null);
 
 public sealed record ToolboxDispatchResult(

@@ -4096,6 +4096,90 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="Toolbox.Peep.TargetFps" xml:space="preserve">
     <value>目標FPS</value>
   </data>
+  <data name="Toolbox.PixelPaint.Brightness" xml:space="preserve">
+    <value>明るさ</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Contrast" xml:space="preserve">
+    <value>コントラスト</value>
+  </data>
+  <data name="Toolbox.PixelPaint.ConvertFailed" xml:space="preserve">
+    <value>変換に失敗</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Dither" xml:space="preserve">
+    <value>ディザ</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DitherAtkinson" xml:space="preserve">
+    <value>ディザ - 柔らかめ</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DitherFS" xml:space="preserve">
+    <value>ディザ - 写真</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DitherIllustration" xml:space="preserve">
+    <value>イラスト優先</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DitherNone" xml:space="preserve">
+    <value>ディザなし</value>
+  </data>
+  <data name="Toolbox.PixelPaint.DropHint" xml:space="preserve">
+    <value>画像をドロップ、画像またはテキストを貼り付け、または下のボタンで選択</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Fit" xml:space="preserve">
+    <value>フィット</value>
+  </data>
+  <data name="Toolbox.PixelPaint.FitContain" xml:space="preserve">
+    <value>全体表示</value>
+  </data>
+  <data name="Toolbox.PixelPaint.FitCrop" xml:space="preserve">
+    <value>クロップ</value>
+  </data>
+  <data name="Toolbox.PixelPaint.FitStretch" xml:space="preserve">
+    <value>ストレッチ</value>
+  </data>
+  <data name="Toolbox.PixelPaint.GridDelay" xml:space="preserve">
+    <value>描画間隔 (ms)</value>
+  </data>
+  <data name="Toolbox.PixelPaint.GridDelay.Tip" xml:space="preserve">
+    <value>マスごとの追加待機時間。クリック後の待機とドラッグ時間の両方に加算されます。各タッチ方式に基礎間隔があるためデフォルト 0 で問題ありません。低性能デバイスでは問題が出ることがあるため、必要に応じて調整してください。</value>
+  </data>
+  <data name="Toolbox.PixelPaint.LoadFailed" xml:space="preserve">
+    <value>画像の読み込みに失敗</value>
+  </data>
+  <data name="Toolbox.PixelPaint.NeedImage" xml:space="preserve">
+    <value>先に画像を読み込んでプレビューを生成してください</value>
+  </data>
+  <data name="Toolbox.PixelPaint.PaintWhite" xml:space="preserve">
+    <value>白も描く</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Paste" xml:space="preserve">
+    <value>貼り付け</value>
+  </data>
+  <data name="Toolbox.PixelPaint.PickImage" xml:space="preserve">
+    <value>画像を選択</value>
+  </data>
+  <data name="Toolbox.PixelPaint.ReadyStatus" xml:space="preserve">
+    <value>描画可能 {0} マス / {1} 色</value>
+  </data>
+  <data name="Toolbox.PixelPaint.ResetParams" xml:space="preserve">
+    <value>パラメータをリセット</value>
+  </data>
+  <data name="Toolbox.PixelPaint.ResetView" xml:space="preserve">
+    <value>構図をリセット</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Saturation" xml:space="preserve">
+    <value>彩度</value>
+  </data>
+  <data name="Toolbox.PixelPaint.StartLog" xml:space="preserve">
+    <value>ピクセル画を開始：{0} マス、{1} 色</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Swipe" xml:space="preserve">
+    <value>スワイプ描画を有効化</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Swipe.Tip" xml:space="preserve">
+    <value>同じ色の連続マスを1回のドラッグで描画し、大幅に高速化。一部のタッチ方式では正常に動作しない可能性があります。問題が出たら無効化してください。</value>
+  </data>
+  <data name="Toolbox.PixelPaint.Tip" xml:space="preserve">
+    <value>ゲーム内の 24×24 ピクセル画編集ページに手動で入ってから開始してください。&#10;プレビューはドラッグ/ホイールで構図調整。デフォルトで白はスキップ。&#10;開始後はパラメータ固定。進捗はログ参照。</value>
+  </data>
   <data name="Toolbox.Recruit.AutoSelect3" xml:space="preserve">
     <value>3★ Tags を自動選択</value>
   </data>
@@ -4204,6 +4288,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="Toolbox.Tab.Peep" xml:space="preserve">
     <value>覗き見</value>
   </data>
+  <data name="Toolbox.Tab.PixelPaint" xml:space="preserve">
+    <value>ピクセル画</value>
+  </data>
   <data name="Toolbox.Tab.Recruit" xml:space="preserve">
     <value>公開求人認識</value>
   </data>
@@ -4239,6 +4326,9 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="Toolbox.ToolName.OperBox" xml:space="preserve">
     <value>オペレーター認識</value>
+  </data>
+  <data name="Toolbox.ToolName.PixelPaint" xml:space="preserve">
+    <value>ピクセル画</value>
   </data>
   <data name="Toolbox.ToolName.Recruit" xml:space="preserve">
     <value>公開求人認識</value>
