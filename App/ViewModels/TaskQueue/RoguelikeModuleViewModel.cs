@@ -1197,8 +1197,8 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
 
     private LocalizedObservableList<string> BuildThemeOptions()
     {
-        // WPF dev-v2 对 BlackFlow 主题按客户端追加 Common.NotAdapted；MAAUnified 尚未提供该主题，
-        // 现有主题均已适配，因此这里只保留链式能力（WithSecondaryKey）供后续主题接入。
+        // WPF dev-v2 be179f2364：BlackFlow（黑流树海）对官服/B 服以外的客户端追加
+        // Common.NotAdapted 后缀；条件在 RefreshGuiDependentOptions 触发 RefreshLocalization 时重新求值。
         return new LocalizedObservableList<string>(
             _optionLocalizer,
             Scope,
@@ -1206,7 +1206,9 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
             new LocalizedEntry<string>("Mizuki", "RoguelikeThemeMizuki", "水月"),
             new LocalizedEntry<string>("Sami", "RoguelikeThemeSami", "萨米"),
             new LocalizedEntry<string>("Sarkaz", "RoguelikeThemeSarkaz", "萨卡兹"),
-            new LocalizedEntry<string>("JieGarden", "RoguelikeThemeJieGarden", "界园"));
+            new LocalizedEntry<string>("JieGarden", "RoguelikeThemeJieGarden", "界园"),
+            new LocalizedEntry<string>("BlackFlow", "RoguelikeThemeBlackFlow", "黑流树海")
+                .WithSecondaryKey("Common.NotAdapted", IsBlackFlowNotAdaptedForCurrentClient));
     }
 
     private LocalizedObservableList<int> BuildModeOptions()
@@ -1468,6 +1470,13 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
         }
 
         return coreChar;
+    }
+
+    private bool IsBlackFlowNotAdaptedForCurrentClient()
+    {
+        var clientType = ResolveCurrentClientType();
+        return !string.Equals(clientType, "Official", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(clientType, "Bilibili", StringComparison.OrdinalIgnoreCase);
     }
 
     private string ResolveCurrentClientType()

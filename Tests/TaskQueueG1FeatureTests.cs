@@ -1650,6 +1650,27 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
+    public async Task RoguelikeModule_BlackFlowTheme_ShouldMarkNotAdaptedForNonOfficialClients()
+    {
+        await using var fixture = await TestFixture.CreateAsync(language: "zh-cn");
+        var profile = fixture.Config.CurrentConfig.Profiles[fixture.Config.CurrentConfig.CurrentProfile];
+        profile.Values["ClientType"] = JsonValue.Create("YoStarEN");
+        var module = new RoguelikeModuleViewModel(fixture.Runtime, new LocalizedTextMap { Language = "zh-cn" });
+
+        Assert.Contains(
+            "未适配",
+            module.ThemeOptions.Single(option => option.Value == "BlackFlow").Display,
+            StringComparison.Ordinal);
+
+        profile.Values["ClientType"] = JsonValue.Create("Official");
+        module.RefreshGuiDependentOptions();
+
+        Assert.Equal(
+            "黑流树海",
+            module.ThemeOptions.Single(option => option.Value == "BlackFlow").Display);
+    }
+
+    [Fact]
     public async Task TaskQueuePage_TaskEnabledToggle_ShouldPersistToService()
     {
         await using var fixture = await TestFixture.CreateAsync();

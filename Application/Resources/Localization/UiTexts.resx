@@ -12,6 +12,9 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="Achievement.NewBadgeText" xml:space="preserve">
+    <value>新</value>
+  </data>
   <data name="ActingCommandError" xml:space="preserve">
     <value>代理指挥失误</value>
   </data>
@@ -27,12 +30,12 @@
   <data name="AlgorithmFinish" xml:space="preserve">
     <value>演算结束</value>
   </data>
+  <data name="AllTaskCompleteContent" xml:space="preserve">
+    <value>MAA 已在 {DateTime} 完成了 {Preset} 配置下所有预设的任务。(用时 {TimeDiff})</value>
+  </data>
   <data name="AllTasksComplete" xml:space="preserve">
     <value>任务已全部完成！
 (用时 {0})</value>
-  </data>
-  <data name="AllTaskCompleteContent" xml:space="preserve">
-    <value>MAA 已在 {DateTime} 完成了 {Preset} 配置下所有预设的任务。(用时 {TimeDiff})</value>
   </data>
   <data name="AsYourHeartDesires" xml:space="preserve">
     <value>随心所欲（三张随机）</value>
@@ -125,20 +128,32 @@
   <data name="CombatOps" xml:space="preserve">
     <value>关卡: 普通作战</value>
   </data>
-  <data name="Common.ErrorPrefix" xml:space="preserve">
-    <value>错误</value>
-  </data>
-  <data name="Common.Edit.Cut" xml:space="preserve">
-    <value>剪切</value>
+  <data name="Common.Configuration" xml:space="preserve">
+    <value>配置</value>
   </data>
   <data name="Common.Edit.Copy" xml:space="preserve">
     <value>复制</value>
+  </data>
+  <data name="Common.Edit.Cut" xml:space="preserve">
+    <value>剪切</value>
   </data>
   <data name="Common.Edit.Paste" xml:space="preserve">
     <value>粘贴</value>
   </data>
   <data name="Common.Edit.SelectAll" xml:space="preserve">
     <value>全选</value>
+  </data>
+  <data name="Common.ErrorPrefix" xml:space="preserve">
+    <value>错误</value>
+  </data>
+  <data name="Common.List.FinalSeparator" xml:space="preserve">
+    <value>和</value>
+  </data>
+  <data name="Common.List.PairFormat" xml:space="preserve">
+    <value>{0}和{1}</value>
+  </data>
+  <data name="Common.List.Separator" xml:space="preserve">
+    <value>、</value>
   </data>
   <data name="Common.LoadingTaskHint" xml:space="preserve">
     <value>请先在左侧任务列表中选择对应任务。</value>
@@ -161,8 +176,89 @@
   <data name="ConnectingToEmulator" xml:space="preserve">
     <value>正在连接模拟器……</value>
   </data>
+  <data name="ConnectionFailure.AdbCommand.Message" xml:space="preserve">
+    <value>ADB 命令执行失败。</value>
+  </data>
+  <data name="ConnectionFailure.AdbCommand.Suggestion" xml:space="preserve">
+    <value>请点击“详细报错”查看 ADB 输出；确认 ADB 可执行，或尝试重启模拟器与 ADB。</value>
+  </data>
+  <data name="ConnectionFailure.AdbDevice.Message" xml:space="preserve">
+    <value>ADB 未连接到可用设备。</value>
+  </data>
+  <data name="ConnectionFailure.AdbDevice.Suggestion" xml:space="preserve">
+    <value>请在 adb devices 中确认设备为 device 状态；如果显示 unauthorized 请在模拟器内授权，如果显示 offline/no devices 请重启模拟器或 ADB 后重试。</value>
+  </data>
+  <data name="ConnectionFailure.AdbStart.Message" xml:space="preserve">
+    <value>ADB 启动失败。</value>
+  </data>
+  <data name="ConnectionFailure.AdbStart.Suggestion" xml:space="preserve">
+    <value>请检查连接设置中的 ADB 路径是否指向 adb 可执行文件，而不是 dmg、zip、目录或其他安装包。</value>
+  </data>
+  <data name="ConnectionFailure.AdbTarget.Message" xml:space="preserve">
+    <value>ADB 未连接到目标设备。</value>
+  </data>
+  <data name="ConnectionFailure.AdbTarget.Suggestion" xml:space="preserve">
+    <value>请检查连接地址和端口是否正确，常见 ADB 端口为 5555；确认模拟器已启动、ADB 已开启，并与电脑在同一网络内。</value>
+  </data>
+  <data name="ConnectionFailure.AddressPort.Message" xml:space="preserve">
+    <value>无法连接到这个地址或端口。</value>
+  </data>
+  <data name="ConnectionFailure.AddressPort.Suggestion" xml:space="preserve">
+    <value>请确认模拟器已启动，连接地址和端口正确；常见 ADB 端口为 5555，部分模拟器会使用 5554 等端口。</value>
+  </data>
+  <data name="ConnectionFailure.Callback.MessageFormat" xml:space="preserve">
+    <value>连接回调：{0}</value>
+  </data>
+  <data name="ConnectionFailure.ConnectionFailed.Message" xml:space="preserve">
+    <value>连接模拟器失败。</value>
+  </data>
+  <data name="ConnectionFailure.ConnectionFailed.Suggestion" xml:space="preserve">
+    <value>请点击“详细报错”查看核心返回的错误信息，并据此检查模拟器和 ADB 连接。</value>
+  </data>
+  <data name="ConnectionFailure.CoreFailure.MessageFormat" xml:space="preserve">
+    <value>连接核心返回失败：{0}</value>
+  </data>
+  <data name="ConnectionFailure.CoreFailure.Suggestion" xml:space="preserve">
+    <value>请检查模拟器、ADB 路径和连接配置；详情中保留了 core 回调信息。</value>
+  </data>
+  <data name="ConnectionFailure.CoreUnavailable.Message" xml:space="preserve">
+    <value>连接核心尚未就绪或已释放。</value>
+  </data>
+  <data name="ConnectionFailure.CoreUnavailable.Suggestion" xml:space="preserve">
+    <value>请稍等后重试；如果持续出现，请重启应用。</value>
+  </data>
+  <data name="ConnectionFailure.FixSettings.Suggestion" xml:space="preserve">
+    <value>请先修正连接设置后再重试。</value>
+  </data>
+  <data name="ConnectionFailure.Generic.Message" xml:space="preserve">
+    <value>连接失败。请“检查连接设置” -&gt; “尝试重启模拟器与 ADB” -&gt; “重启电脑”。</value>
+  </data>
+  <data name="ConnectionFailure.Generic.Suggestion" xml:space="preserve">
+    <value>请检查连接设置，尝试重启模拟器与 ADB；仍失败时重启电脑。</value>
+  </data>
+  <data name="ConnectionFailure.InvalidConfiguration.Message" xml:space="preserve">
+    <value>连接配置无效。</value>
+  </data>
+  <data name="ConnectionFailure.InvalidConfiguration.Suggestion" xml:space="preserve">
+    <value>请检查连接地址格式、端口、连接类型和 ADB 路径后重试。</value>
+  </data>
+  <data name="ConnectionFailure.Timeout.Message" xml:space="preserve">
+    <value>连接模拟器超时。</value>
+  </data>
+  <data name="ConnectionFailure.Timeout.Suggestion" xml:space="preserve">
+    <value>请确认模拟器已启动，连接地址和端口正确，ADB 服务可用。</value>
+  </data>
+  <data name="ConnectionFailure.TouchMode.Message" xml:space="preserve">
+    <value>当前触控模式不可用。</value>
+  </data>
+  <data name="ConnectionFailure.TouchMode.Suggestion" xml:space="preserve">
+    <value>请前往连接设置切换其他触控模式后重试。</value>
+  </data>
   <data name="ContinueRefresh" xml:space="preserve">
     <value>无招聘许可，继续尝试刷新 Tags</value>
+  </data>
+  <data name="Control" xml:space="preserve">
+    <value>控制中枢</value>
   </data>
   <data name="Copilot.Action.Start" xml:space="preserve">
     <value>开始</value>
@@ -208,36 +304,6 @@
   </data>
   <data name="Copilot.Button.PasteSet" xml:space="preserve">
     <value>作业集</value>
-  </data>
-  <data name="Copilot.List.InlineJsonHint" xml:space="preserve">
-    <value>内嵌 JSON</value>
-  </data>
-  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
-    <value>删除全部</value>
-  </data>
-  <data name="Copilot.List.Button.Disable" xml:space="preserve">
-    <value>禁用</value>
-  </data>
-  <data name="Copilot.List.Button.Enable" xml:space="preserve">
-    <value>启用</value>
-  </data>
-  <data name="Copilot.List.Button.LoadSingle" xml:space="preserve">
-    <value>载入单个</value>
-  </data>
-  <data name="Copilot.List.Button.ToggleRaid" xml:space="preserve">
-    <value>切换突袭</value>
-  </data>
-  <data name="Copilot.List.ClearAllConfirm.Confirm" xml:space="preserve">
-    <value>删除全部</value>
-  </data>
-  <data name="Copilot.List.ClearAllConfirm.Message" xml:space="preserve">
-    <value>将删除战斗列表中的全部作业，此操作不可撤销。</value>
-  </data>
-  <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
-    <value>删除战斗列表</value>
-  </data>
-  <data name="Copilot.List.RaidLabel" xml:space="preserve">
-    <value>突袭</value>
   </data>
   <data name="Copilot.Error.AddEmptyTaskPersistFail" xml:space="preserve">
     <value>新增作业失败：列表保存失败。</value>
@@ -317,11 +383,20 @@
   <data name="Copilot.Error.SelectTaskToUpdate" xml:space="preserve">
     <value>请选择要更新的作业。</value>
   </data>
+  <data name="Copilot.Error.SessionActivity.OtherActive" xml:space="preserve">
+    <value>另一项会话操作正在进行，Copilot 暂时无法启动；请先停止或等待该操作。</value>
+  </data>
+  <data name="Copilot.Error.SessionActivity.TimerActive" xml:space="preserve">
+    <value>定时任务正在进行，Copilot 暂时无法启动；请等待定时任务完成。</value>
+  </data>
   <data name="Copilot.Error.SessionStateNotAllowed" xml:space="preserve">
     <value>会话状态 `{0}` 不允许{1}。</value>
   </data>
   <data name="Copilot.Error.SortPersistFail" xml:space="preserve">
     <value>排序失败：列表保存失败。</value>
+  </data>
+  <data name="Copilot.Error.SortStateOutOfSync" xml:space="preserve">
+    <value>作业列表顺序已变化，请重试。</value>
   </data>
   <data name="Copilot.Error.StartInputFileNotFound" xml:space="preserve">
     <value>作业文件不存在：{0}</value>
@@ -338,23 +413,11 @@
   <data name="Copilot.Error.StopRunOwnerBlocked" xml:space="preserve">
     <value>Copilot 停止被拦截：当前运行所有者为 `{0}`。</value>
   </data>
+  <data name="Copilot.Error.TaskListPersistFail" xml:space="preserve">
+    <value>Copilot 列表持久化失败。</value>
+  </data>
   <data name="Copilot.Error.UpdateListItemPersistFail" xml:space="preserve">
     <value>更新作业列表失败：列表保存失败。</value>
-  </data>
-  <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
-    <value>确认</value>
-  </data>
-  <data name="Copilot.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
-    <value>详细报错</value>
-  </data>
-  <data name="Copilot.RunOwnerBlockedDialog.Message" xml:space="preserve">
-    <value>{0} 正在运行。请先停止当前任务，再启动 Copilot。</value>
-  </data>
-  <data name="Copilot.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
-    <value>停止任务</value>
-  </data>
-  <data name="Copilot.RunOwnerBlockedDialog.Title" xml:space="preserve">
-    <value>Copilot 启动被拦截</value>
   </data>
   <data name="Copilot.Error.ValidateTabMismatch" xml:space="preserve">
     <value>当前选择的作业与页签不匹配</value>
@@ -408,6 +471,36 @@
   </data>
   <data name="Copilot.Input.StageNameWatermark" xml:space="preserve">
     <value>关卡名</value>
+  </data>
+  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
+    <value>删除全部</value>
+  </data>
+  <data name="Copilot.List.Button.Disable" xml:space="preserve">
+    <value>禁用</value>
+  </data>
+  <data name="Copilot.List.Button.Enable" xml:space="preserve">
+    <value>启用</value>
+  </data>
+  <data name="Copilot.List.Button.LoadSingle" xml:space="preserve">
+    <value>载入单个</value>
+  </data>
+  <data name="Copilot.List.Button.ToggleRaid" xml:space="preserve">
+    <value>切换突袭</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Confirm" xml:space="preserve">
+    <value>删除全部</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Message" xml:space="preserve">
+    <value>将删除战斗列表中的全部作业，此操作不可撤销。</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
+    <value>删除战斗列表</value>
+  </data>
+  <data name="Copilot.List.InlineJsonHint" xml:space="preserve">
+    <value>内嵌 JSON</value>
+  </data>
+  <data name="Copilot.List.RaidLabel" xml:space="preserve">
+    <value>突袭</value>
   </data>
   <data name="Copilot.Option.AddTrust" xml:space="preserve">
     <value>补充低信赖干员</value>
@@ -466,6 +559,21 @@
   <data name="Copilot.Rating.Prompt" xml:space="preserve">
     <value>作业怎么样？评价下吧！</value>
   </data>
+  <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
+    <value>确认</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
+    <value>详细报错</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Message" xml:space="preserve">
+    <value>{0} 正在运行。请先停止当前任务，再启动 Copilot。</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
+    <value>停止任务</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Title" xml:space="preserve">
+    <value>Copilot 启动被拦截</value>
+  </data>
   <data name="Copilot.Status.AddCurrentFailed" xml:space="preserve">
     <value>添加作业失败。</value>
   </data>
@@ -496,11 +604,11 @@
   <data name="Copilot.Status.CleanInactiveNone" xml:space="preserve">
     <value>没有未激活作业需要清理。</value>
   </data>
-  <data name="Copilot.Status.ClearSuccess" xml:space="preserve">
-    <value>已删除全部作业。</value>
-  </data>
   <data name="Copilot.Status.ClearCancelled" xml:space="preserve">
     <value>已取消删除全部作业。</value>
+  </data>
+  <data name="Copilot.Status.ClearSuccess" xml:space="preserve">
+    <value>已删除全部作业。</value>
   </data>
   <data name="Copilot.Status.CorruptedListIgnored" xml:space="preserve">
     <value>已忽略损坏的 Copilot 列表配置。</value>
@@ -532,6 +640,18 @@
   <data name="Copilot.Status.InputUpdated" xml:space="preserve">
     <value>已更新作业输入。</value>
   </data>
+  <data name="Copilot.Status.ListItemDisabled" xml:space="preserve">
+    <value>已禁用作业。</value>
+  </data>
+  <data name="Copilot.Status.ListItemEnabled" xml:space="preserve">
+    <value>已启用作业。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidDisabled" xml:space="preserve">
+    <value>已切换为普通作业。</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidEnabled" xml:space="preserve">
+    <value>已切换为突袭作业。</value>
+  </data>
   <data name="Copilot.Status.LoadClipboardFailed" xml:space="preserve">
     <value>读取剪贴板作业失败。</value>
   </data>
@@ -544,23 +664,14 @@
   <data name="Copilot.Status.LoadSetFailed" xml:space="preserve">
     <value>读取作业集失败。</value>
   </data>
+  <data name="Copilot.Status.LoadSetPartialFailed" xml:space="preserve">
+    <value>以下作业加载失败：{0}</value>
+  </data>
   <data name="Copilot.Status.LoadedFeedbackDislikeSuccess" xml:space="preserve">
     <value>已提交点踩。</value>
   </data>
   <data name="Copilot.Status.LoadedFeedbackLikeSuccess" xml:space="preserve">
     <value>已提交点赞。</value>
-  </data>
-  <data name="Copilot.Status.ListItemDisabled" xml:space="preserve">
-    <value>已禁用作业。</value>
-  </data>
-  <data name="Copilot.Status.ListItemEnabled" xml:space="preserve">
-    <value>已启用作业。</value>
-  </data>
-  <data name="Copilot.Status.ListItemRaidDisabled" xml:space="preserve">
-    <value>已切换为普通作业。</value>
-  </data>
-  <data name="Copilot.Status.ListItemRaidEnabled" xml:space="preserve">
-    <value>已切换为突袭作业。</value>
   </data>
   <data name="Copilot.Status.MoveDownSuccess" xml:space="preserve">
     <value>已将选中作业下移。</value>
@@ -577,6 +688,9 @@
   <data name="Copilot.Status.RemoveSuccess" xml:space="preserve">
     <value>已删除选中作业。</value>
   </data>
+  <data name="Copilot.Status.ReorderSuccess" xml:space="preserve">
+    <value>已更新作业顺序。</value>
+  </data>
   <data name="Copilot.Status.SelectedItem" xml:space="preserve">
     <value>已选中作业：{0}</value>
   </data>
@@ -585,6 +699,9 @@
   </data>
   <data name="Copilot.Status.StartFailed" xml:space="preserve">
     <value>启动失败。</value>
+  </data>
+  <data name="Copilot.Status.Starting" xml:space="preserve">
+    <value>启动中...</value>
   </data>
   <data name="Copilot.Status.StopFailed" xml:space="preserve">
     <value>停止失败。</value>
@@ -597,6 +714,9 @@
   </data>
   <data name="Copilot.Status.UpdateListItemNameSuccess" xml:space="preserve">
     <value>已更新作业名称：{0}</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemSuccess" xml:space="preserve">
+    <value>已更新作业。</value>
   </data>
   <data name="Copilot.Tab.Display.Main" xml:space="preserve">
     <value>主线/故事集/SideStory</value>
@@ -670,11 +790,17 @@
   <data name="Copilot.Tip.UserAdditionalFormat" xml:space="preserve">
     <value>以英文 「;」 为分隔符，英文 「,」 分隔干员名与技能，例: 史尔特尔,3;艾雅法拉,1</value>
   </data>
+  <data name="Copilot.Title" xml:space="preserve">
+    <value>自动战斗</value>
+  </data>
   <data name="Copilot.Warn.ListSingleItem" xml:space="preserve">
     <value>正在使用「战斗列表」执行单个作业, 不推荐此行为。 单个作业请直接运行</value>
   </data>
   <data name="CopilotUserAdditionalNameInvalid" xml:space="preserve">
     <value>追加自定{key=Operator}名称无效: {0}，请检查拼写</value>
+  </data>
+  <data name="CoreLoadingTip" xml:space="preserve">
+    <value>MAA 内核尚未加载完成，请稍后再试。</value>
   </data>
   <data name="CreditFight" xml:space="preserve">
     <value>借助战打 OF-1 赚信用</value>
@@ -805,11 +931,11 @@
   <data name="Dialog.Error.CloseButton" xml:space="preserve">
     <value>关闭</value>
   </data>
-  <data name="Dialog.Error.ConnectFailedTitle" xml:space="preserve">
-    <value>连接模拟器失败</value>
-  </data>
   <data name="Dialog.Error.CodeLabel" xml:space="preserve">
     <value>错误码</value>
+  </data>
+  <data name="Dialog.Error.ConnectFailedTitle" xml:space="preserve">
+    <value>连接模拟器失败</value>
   </data>
   <data name="Dialog.Error.ContextLabel" xml:space="preserve">
     <value>上下文</value>
@@ -823,20 +949,20 @@
   <data name="Dialog.Error.DetailsLabel" xml:space="preserve">
     <value>详情</value>
   </data>
+  <data name="Dialog.Error.HelpButton" xml:space="preserve">
+    <value>常见问题</value>
+  </data>
   <data name="Dialog.Error.IgnoreButton" xml:space="preserve">
     <value>忽略</value>
   </data>
   <data name="Dialog.Error.IssueReportButton" xml:space="preserve">
     <value>问题反馈</value>
   </data>
-  <data name="Dialog.Error.HelpButton" xml:space="preserve">
-    <value>常见问题</value>
+  <data name="Dialog.Error.MessageLabel" xml:space="preserve">
+    <value>消息</value>
   </data>
   <data name="Dialog.Error.QqGroupButton" xml:space="preserve">
     <value>加入 QQ 群</value>
-  </data>
-  <data name="Dialog.Error.MessageLabel" xml:space="preserve">
-    <value>消息</value>
   </data>
   <data name="Dialog.Error.SectionTitle" xml:space="preserve">
     <value>错误详情</value>
@@ -868,6 +994,9 @@
   <data name="Dialog.Warning.Title" xml:space="preserve">
     <value>警告</value>
   </data>
+  <data name="Dorm" xml:space="preserve">
+    <value>宿舍</value>
+  </data>
   <data name="DreadfulFoe" xml:space="preserve">
     <value>关卡: 险路恶敌</value>
   </data>
@@ -895,6 +1024,9 @@
   <data name="FailedToOpenClient" xml:space="preserve">
     <value>打开客户端失败，请检查配置文件</value>
   </data>
+  <data name="Fight.AddStage" xml:space="preserve">
+    <value>添加备选关卡</value>
+  </data>
   <data name="Fight.AllowUseStoneSave" xml:space="preserve">
     <value>允许使用源石保存状态</value>
   </data>
@@ -919,6 +1051,12 @@
   <data name="Fight.AssignedMaterial" xml:space="preserve">
     <value>指定材料</value>
   </data>
+  <data name="Fight.CustomStageCode" xml:space="preserve">
+    <value>手动输入关卡名</value>
+  </data>
+  <data name="Fight.CustomStageCodeTip" xml:space="preserve">
+    <value>支持大多数主线关卡简称和原始关卡列表中的关卡名。</value>
+  </data>
   <data name="Fight.DefaultStage" xml:space="preserve">
     <value>当前/上次</value>
   </data>
@@ -934,14 +1072,14 @@
   <data name="Fight.DropCount" xml:space="preserve">
     <value>目标数量</value>
   </data>
+  <data name="Fight.DropId" xml:space="preserve">
+    <value>掉落物 ID</value>
+  </data>
   <data name="Fight.DropQuantityMode" xml:space="preserve">
     <value>数量</value>
   </data>
   <data name="Fight.DropTargetMode" xml:space="preserve">
     <value>目标模式</value>
-  </data>
-  <data name="Fight.DropId" xml:space="preserve">
-    <value>掉落物 ID</value>
   </data>
   <data name="Fight.EnableTargetDrop" xml:space="preserve">
     <value>指定掉落</value>
@@ -1006,6 +1144,9 @@
   <data name="Fight.Stone" xml:space="preserve">
     <value>源石数量</value>
   </data>
+  <data name="Fight.TargetInventory" xml:space="preserve">
+    <value>目标库存</value>
+  </data>
   <data name="Fight.Times" xml:space="preserve">
     <value>次数</value>
   </data>
@@ -1018,14 +1159,11 @@
   <data name="Fight.UseCustomAnnihilation" xml:space="preserve">
     <value>自定义剿灭</value>
   </data>
-  <data name="Fight.UseExpiringMedicine" xml:space="preserve">
-    <value>无限吃 48 小时内过期的理智药</value>
-  </data>
-  <data name="Fight.TargetInventory" xml:space="preserve">
-    <value>目标库存</value>
-  </data>
   <data name="Fight.UseExpireMedicineForActivity" xml:space="preserve">
     <value>活动结束前 48H 吃当周过期理智药</value>
+  </data>
+  <data name="Fight.UseExpiringMedicine" xml:space="preserve">
+    <value>无限吃 48 小时内过期的理智药</value>
   </data>
   <data name="Fight.UseMedicine" xml:space="preserve">
     <value>使用药剂</value>
@@ -1039,38 +1177,29 @@
   <data name="Fight.UseWeeklySchedule" xml:space="preserve">
     <value>启用每周计划</value>
   </data>
-  <data name="Fight.AddStage" xml:space="preserve">
-    <value>添加备选关卡</value>
-  </data>
-  <data name="Fight.CustomStageCode" xml:space="preserve">
-    <value>手动输入关卡名</value>
-  </data>
-  <data name="Fight.CustomStageCodeTip" xml:space="preserve">
-    <value>支持大多数主线关卡简称和原始关卡列表中的关卡名。</value>
-  </data>
   <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
     <value>这里按游戏内刷新时间计算星期，而不是本地自然日。</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Friday" xml:space="preserve">
+    <value>周五</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Monday" xml:space="preserve">
+    <value>周一</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>周六</value>
   </data>
   <data name="Fight.WeeklySchedule.Sunday" xml:space="preserve">
     <value>周日</value>
   </data>
-  <data name="Fight.WeeklySchedule.Monday" xml:space="preserve">
-    <value>周一</value>
+  <data name="Fight.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>周四</value>
   </data>
   <data name="Fight.WeeklySchedule.Tuesday" xml:space="preserve">
     <value>周二</value>
   </data>
   <data name="Fight.WeeklySchedule.Wednesday" xml:space="preserve">
     <value>周三</value>
-  </data>
-  <data name="Fight.WeeklySchedule.Thursday" xml:space="preserve">
-    <value>周四</value>
-  </data>
-  <data name="Fight.WeeklySchedule.Friday" xml:space="preserve">
-    <value>周五</value>
-  </data>
-  <data name="Fight.WeeklySchedule.Saturday" xml:space="preserve">
-    <value>周六</value>
   </data>
   <data name="FightCompleted" xml:space="preserve">
     <value>战斗完成</value>
@@ -1131,6 +1260,9 @@
   </data>
   <data name="GiveUpUploadingPenguins" xml:space="preserve">
     <value>放弃上传企鹅物流</value>
+  </data>
+  <data name="GpuDeviceRemovedRestartRequired" xml:space="preserve">
+    <value>{0}任务因 GPU 推理设备失效而停止，可能是显卡驱动更新或 GPU 重置所致。{key=RestartRecommendation}</value>
   </data>
   <data name="HasReturned" xml:space="preserve">
     <value>已返回</value>
@@ -1273,11 +1405,17 @@
   <data name="Infrast.Drones" xml:space="preserve">
     <value>无人机策略</value>
   </data>
-  <data name="Control" xml:space="preserve">
-    <value>控制中枢</value>
+  <data name="Infrast.Error.CustomFileNotFound" xml:space="preserve">
+    <value>自定义文件不存在：{0}</value>
   </data>
-  <data name="Dorm" xml:space="preserve">
-    <value>宿舍</value>
+  <data name="Infrast.Error.ParseFailed" xml:space="preserve">
+    <value>解析自定义基建文件失败。</value>
+  </data>
+  <data name="Infrast.Error.PlanOutOfRange" xml:space="preserve">
+    <value>计划索引 {0} 超出 `{1}` 范围。</value>
+  </data>
+  <data name="Infrast.Facility" xml:space="preserve">
+    <value>房间顺序</value>
   </data>
   <data name="Infrast.Fiammetta.Recovery" xml:space="preserve">
     <value>启用菲亚梅塔心情恢复</value>
@@ -1293,171 +1431,6 @@
   </data>
   <data name="Infrast.Fiammetta.Targets.Tip" xml:space="preserve">
     <value>理论上恢复巫恋和龙舌兰可以实现 007，但自动换班下难以做到，因此不推荐选择。</value>
-  </data>
-  <data name="Infrast.UseAbyssalHunter" xml:space="preserve">
-    <value>使用深海猎人跨设施组合</value>
-  </data>
-  <data name="Infrast.UseAbyssalHunter.Tip" xml:space="preserve">
-    <value>必要干员：歌蕾蒂娅（精二）、乌尔比安、斯卡蒂、幽灵鲨、安哲拉。因算法原因，与红松骑士团同时勾选时不会同时参与排班。</value>
-  </data>
-  <data name="Infrast.UsePerceptionInformation" xml:space="preserve">
-    <value>使用感知信息跨设施组合</value>
-  </data>
-  <data name="Infrast.UsePerceptionInformation.Tip" xml:space="preserve">
-    <value>必要干员：絮雨（精二）、迷迭香（精二）、黑键（精二）。参与计算干员：夕、塑心、爱丽丝、车尔尼。优先度高于人间烟火。</value>
-  </data>
-  <data name="Infrast.UsePinusSylvestris" xml:space="preserve">
-    <value>使用红松骑士团跨设施组合</value>
-  </data>
-  <data name="Infrast.UsePinusSylvestris.Tip" xml:space="preserve">
-    <value>必要干员：焰尾（精二）、薇薇安娜（精二），以及野鬃（精二）、灰毫（精二）、远牙（精二）至少一个。参与计算干员：砾。</value>
-  </data>
-  <data name="Infrast.UseWeeklySchedule" xml:space="preserve">
-    <value>启用周计划</value>
-  </data>
-  <data name="Infrast.UseWeeklySchedule.Tip" xml:space="preserve">
-    <value>此处星期按游戏时间计算，并非现实时间。例如游戏在 4:00 刷新，则 3:59 仍算作前一天。</value>
-  </data>
-  <data name="Infrast.UseWorldlyPlight" xml:space="preserve">
-    <value>使用人间烟火跨设施组合</value>
-  </data>
-  <data name="Infrast.UseWorldlyPlight.Tip" xml:space="preserve">
-    <value>必要干员：桑葚（精二）、乌有（精二）。参与计算干员：重岳、令、夕。</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Friday" xml:space="preserve">
-    <value>周五</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Monday" xml:space="preserve">
-    <value>周一</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Saturday" xml:space="preserve">
-    <value>周六</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Sunday" xml:space="preserve">
-    <value>周日</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Thursday" xml:space="preserve">
-    <value>周四</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Tuesday" xml:space="preserve">
-    <value>周二</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Wednesday" xml:space="preserve">
-    <value>周三</value>
-  </data>
-  <data name="Mfg" xml:space="preserve">
-    <value>制造站</value>
-  </data>
-  <data name="Office" xml:space="preserve">
-    <value>办公室</value>
-  </data>
-  <data name="OperProgress.AddPlan" xml:space="preserve">
-    <value>添加干员</value>
-  </data>
-  <data name="OperProgress.EmptyHint" xml:space="preserve">
-    <value>尚未添加培养计划，运行时将跳过该任务。</value>
-  </data>
-  <data name="OperProgress.Mastery1" xml:space="preserve">
-    <value>专精 1</value>
-  </data>
-  <data name="OperProgress.Mastery2" xml:space="preserve">
-    <value>专精 2</value>
-  </data>
-  <data name="OperProgress.Mastery3" xml:space="preserve">
-    <value>专精 3</value>
-  </data>
-  <data name="OperProgress.MoveDown" xml:space="preserve">
-    <value>下移</value>
-  </data>
-  <data name="OperProgress.MoveUp" xml:space="preserve">
-    <value>上移</value>
-  </data>
-  <data name="OperProgress.NameRequired" xml:space="preserve">
-    <value>请先填写干员名。</value>
-  </data>
-  <data name="OperProgress.NotSet" xml:space="preserve">
-    <value>---</value>
-  </data>
-  <data name="OperProgress.OperatorName" xml:space="preserve">
-    <value>干员</value>
-  </data>
-  <data name="OperProgress.OperatorNameTip" xml:space="preserve">
-    <value>支持任意语言的写法，保存时会归一为 Core 可识别的干员名。</value>
-  </data>
-  <data name="OperProgress.OperatorNameWatermark" xml:space="preserve">
-    <value>干员名</value>
-  </data>
-  <data name="OperProgress.Plans" xml:space="preserve">
-    <value>培养计划</value>
-  </data>
-  <data name="OperProgress.Remove" xml:space="preserve">
-    <value>移除</value>
-  </data>
-  <data name="OperProgress.Title" xml:space="preserve">
-    <value>干员培养</value>
-  </data>
-  <data name="OperProgress.UnknownOperator" xml:space="preserve">
-    <value>未识别的干员名，MaaCore 将拒绝该条计划。</value>
-  </data>
-  <data name="Power" xml:space="preserve">
-    <value>发电站</value>
-  </data>
-  <data name="Processing" xml:space="preserve">
-    <value>加工站</value>
-  </data>
-  <data name="Reception" xml:space="preserve">
-    <value>会客室</value>
-  </data>
-  <data name="RecruitingTips" xml:space="preserve">
-    <value>公招提示</value>
-  </data>
-  <data name="RecruitmentOfStar" xml:space="preserve">
-    <value>公招出 {0} 星了哦！</value>
-  </data>
-  <data name="SwitchTheme.EmptyHint" xml:space="preserve">
-    <value>未填写主题名称，运行时将跳过该任务。</value>
-  </data>
-  <data name="SwitchTheme.Placeholder" xml:space="preserve">
-    <value>主题名称</value>
-  </data>
-  <data name="SwitchTheme.Themes" xml:space="preserve">
-    <value>候选主题</value>
-  </data>
-  <data name="SwitchTheme.ThemesTip" xml:space="preserve">
-    <value>填写游戏内主题列表中显示的名称；多个时每次运行随机选择一个，仅填一个时固定切换。</value>
-  </data>
-  <data name="SwitchTheme.Title" xml:space="preserve">
-    <value>更换主题</value>
-  </data>
-  <data name="TaskQueue.Module.DepotMaintain" xml:space="preserve">
-    <value>库存保持</value>
-  </data>
-  <data name="TaskQueue.Module.OperProgress" xml:space="preserve">
-    <value>干员培养</value>
-  </data>
-  <data name="TaskQueue.Module.SwitchTheme" xml:space="preserve">
-    <value>更换主题</value>
-  </data>
-  <data name="TaskStallWarning" xml:space="preserve">
-    <value>任务日志已超过 {0} 分钟没有更新（当前已停滞 {1} 分钟），请检查任务是否仍在正常运行。</value>
-  </data>
-  <data name="Trade" xml:space="preserve">
-    <value>贸易站</value>
-  </data>
-  <data name="Training" xml:space="preserve">
-    <value>训练室</value>
-  </data>
-  <data name="Infrast.Error.CustomFileNotFound" xml:space="preserve">
-    <value>自定义文件不存在：{0}</value>
-  </data>
-  <data name="Infrast.Error.ParseFailed" xml:space="preserve">
-    <value>解析自定义基建文件失败。</value>
-  </data>
-  <data name="Infrast.Error.PlanOutOfRange" xml:space="preserve">
-    <value>计划索引 {0} 超出 `{1}` 范围。</value>
-  </data>
-  <data name="Infrast.Facility" xml:space="preserve">
-    <value>房间顺序</value>
   </data>
   <data name="Infrast.File" xml:space="preserve">
     <value>自定义基建文件</value>
@@ -1536,6 +1509,57 @@
   </data>
   <data name="Infrast.Trust" xml:space="preserve">
     <value>宿舍信赖收取</value>
+  </data>
+  <data name="Infrast.UseAbyssalHunter" xml:space="preserve">
+    <value>使用深海猎人跨设施组合</value>
+  </data>
+  <data name="Infrast.UseAbyssalHunter.Tip" xml:space="preserve">
+    <value>必要干员：歌蕾蒂娅（精二）、乌尔比安、斯卡蒂、幽灵鲨、安哲拉。因算法原因，与红松骑士团同时勾选时不会同时参与排班。</value>
+  </data>
+  <data name="Infrast.UsePerceptionInformation" xml:space="preserve">
+    <value>使用感知信息跨设施组合</value>
+  </data>
+  <data name="Infrast.UsePerceptionInformation.Tip" xml:space="preserve">
+    <value>必要干员：絮雨（精二）、迷迭香（精二）、黑键（精二）。参与计算干员：夕、塑心、爱丽丝、车尔尼。优先度高于人间烟火。</value>
+  </data>
+  <data name="Infrast.UsePinusSylvestris" xml:space="preserve">
+    <value>使用红松骑士团跨设施组合</value>
+  </data>
+  <data name="Infrast.UsePinusSylvestris.Tip" xml:space="preserve">
+    <value>必要干员：焰尾（精二）、薇薇安娜（精二），以及野鬃（精二）、灰毫（精二）、远牙（精二）至少一个。参与计算干员：砾。</value>
+  </data>
+  <data name="Infrast.UseWeeklySchedule" xml:space="preserve">
+    <value>启用周计划</value>
+  </data>
+  <data name="Infrast.UseWeeklySchedule.Tip" xml:space="preserve">
+    <value>此处星期按游戏时间计算，并非现实时间。例如游戏在 4:00 刷新，则 3:59 仍算作前一天。</value>
+  </data>
+  <data name="Infrast.UseWorldlyPlight" xml:space="preserve">
+    <value>使用人间烟火跨设施组合</value>
+  </data>
+  <data name="Infrast.UseWorldlyPlight.Tip" xml:space="preserve">
+    <value>必要干员：桑葚（精二）、乌有（精二）。参与计算干员：重岳、令、夕。</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Friday" xml:space="preserve">
+    <value>周五</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Monday" xml:space="preserve">
+    <value>周一</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>周六</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Sunday" xml:space="preserve">
+    <value>周日</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>周四</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Tuesday" xml:space="preserve">
+    <value>周二</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Wednesday" xml:space="preserve">
+    <value>周三</value>
   </data>
   <data name="InfrastDormDoubleConfirmed" xml:space="preserve">
     <value>{key=Operator}冲突</value>
@@ -1651,22 +1675,26 @@
   <data name="LeaderSquad" xml:space="preserve">
     <value>指挥分队</value>
   </data>
+  <data name="MacRawByNcRisk.Dialog.ApplyRecommended" xml:space="preserve">
+    <value>一键修改</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
+    <value>默认触控方式</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.ForceRun" xml:space="preserve">
+    <value>强行运行</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Message" xml:space="preserve">
+    <value>{0} + adbLite={1} 组合存在 macOS RawByNc/POSIX 连接问题，可能导致连接失败或卡住。建议将 adbLite 修改为 {2}。</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Title" xml:space="preserve">
+    <value>连接配置存在风险</value>
+  </data>
   <data name="Main.Blocking.Title" xml:space="preserve">
     <value>配置校验阻断中（{0}）: Start/LinkStart 已禁用</value>
   </data>
-  <data name="Main.ConfigRepair.Dialog.Cancel" xml:space="preserve">
-    <value>关闭</value>
-  </data>
-  <data name="Main.ConfigRepair.Dialog.Confirm" xml:space="preserve">
-    <value>我知道了</value>
-  </data>
-  <data name="Main.ConfigRepair.Dialog.Prompt" xml:space="preserve">
-    <value>读取配置时发现问题，已自动执行恢复。
-{0}
-建议: {1}</value>
-  </data>
-  <data name="Main.ConfigRepair.Dialog.Title" xml:space="preserve">
-    <value>配置恢复提示</value>
+  <data name="Main.Close.SaveFailed" xml:space="preserve">
+    <value>{0}保存失败</value>
   </data>
   <data name="Main.CloseConfirm.Cancel" xml:space="preserve">
     <value>取消</value>
@@ -1686,6 +1714,20 @@
   </data>
   <data name="Main.CloseConfirm.Update.Title" xml:space="preserve">
     <value>MAA 正在更新</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Cancel" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Confirm" xml:space="preserve">
+    <value>我知道了</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Prompt" xml:space="preserve">
+    <value>读取配置时发现问题，已自动执行恢复。
+{0}
+建议: {1}</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Title" xml:space="preserve">
+    <value>配置恢复提示</value>
   </data>
   <data name="Main.Connection.Button" xml:space="preserve">
     <value>连接</value>
@@ -1825,6 +1867,24 @@
   <data name="Main.RootPage.Pending.Toolbox.Message" xml:space="preserve">
     <value>Toolbox 页面将在首屏完成后继续加载。</value>
   </data>
+  <data name="Main.SchemaMigration.Dialog.Cancel" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Main.SchemaMigration.Dialog.Confirm" xml:space="preserve">
+    <value>我知道了</value>
+  </data>
+  <data name="Main.SchemaMigration.Dialog.Prompt" xml:space="preserve">
+    <value>检测到配置版本落后于最新 schema。
+当前版本: v{0}
+最新版本: v{1}
+
+{2}
+建议动作: {3}
+保存后会先备份为 avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; 再写入最新 schema。</value>
+  </data>
+  <data name="Main.SchemaMigration.Dialog.Title" xml:space="preserve">
+    <value>配置版本迁移提示</value>
+  </data>
   <data name="Main.Sidebar.GrowlAndCapability" xml:space="preserve">
     <value>消息与能力状态</value>
   </data>
@@ -1941,6 +2001,9 @@
   <data name="MedicineUsedTimesWithExpiring" xml:space="preserve">
     <value>药: {0},{1}(临期)  </value>
   </data>
+  <data name="Mfg" xml:space="preserve">
+    <value>制造站</value>
+  </data>
   <data name="MissingOperators" xml:space="preserve">
     <value>缺少以下{key=Operator}组中的{key=Operator}：</value>
   </data>
@@ -1949,6 +2012,10 @@
   </data>
   <data name="MissionStart.FightTask" xml:space="preserve">
     <value>开始行动 {0} 次, -{1}理智</value>
+  </data>
+  <data name="MultiInstanceUnderSamePath" xml:space="preserve">
+    <value>同一路径下只能启动一个实例！
+如需多开 MAA，请复制一份新的 MAA 到其他文件夹下，并设置使用不同的 MAA，相同的 adb 和不同的模拟器地址进行多开操作。</value>
   </data>
   <data name="NoDrop" xml:space="preserve">
     <value>无</value>
@@ -1962,8 +2029,62 @@
   <data name="NotSwitch" xml:space="preserve">
     <value>不切换</value>
   </data>
+  <data name="Office" xml:space="preserve">
+    <value>办公室</value>
+  </data>
+  <data name="OperProgress.AddPlan" xml:space="preserve">
+    <value>添加干员</value>
+  </data>
+  <data name="OperProgress.EmptyHint" xml:space="preserve">
+    <value>尚未添加培养计划，运行时将跳过该任务。</value>
+  </data>
+  <data name="OperProgress.Mastery1" xml:space="preserve">
+    <value>专精 1</value>
+  </data>
+  <data name="OperProgress.Mastery2" xml:space="preserve">
+    <value>专精 2</value>
+  </data>
+  <data name="OperProgress.Mastery3" xml:space="preserve">
+    <value>专精 3</value>
+  </data>
+  <data name="OperProgress.MoveDown" xml:space="preserve">
+    <value>下移</value>
+  </data>
+  <data name="OperProgress.MoveUp" xml:space="preserve">
+    <value>上移</value>
+  </data>
+  <data name="OperProgress.NameRequired" xml:space="preserve">
+    <value>请先填写干员名。</value>
+  </data>
+  <data name="OperProgress.NotSet" xml:space="preserve">
+    <value>---</value>
+  </data>
+  <data name="OperProgress.OperatorName" xml:space="preserve">
+    <value>干员</value>
+  </data>
+  <data name="OperProgress.OperatorNameTip" xml:space="preserve">
+    <value>支持任意语言的写法，保存时会归一为 Core 可识别的干员名。</value>
+  </data>
+  <data name="OperProgress.OperatorNameWatermark" xml:space="preserve">
+    <value>干员名</value>
+  </data>
+  <data name="OperProgress.Plans" xml:space="preserve">
+    <value>培养计划</value>
+  </data>
+  <data name="OperProgress.Remove" xml:space="preserve">
+    <value>移除</value>
+  </data>
+  <data name="OperProgress.Title" xml:space="preserve">
+    <value>干员培养</value>
+  </data>
+  <data name="OperProgress.UnknownOperator" xml:space="preserve">
+    <value>未识别的干员名，MaaCore 将拒绝该条计划。</value>
+  </data>
   <data name="Operator" xml:space="preserve">
     <value>干员</value>
+  </data>
+  <data name="OutOfMemoryError" xml:space="preserve">
+    <value>{0}任务因内存不足停止，请关闭部分程序或重启 MAA 后重试</value>
   </data>
   <data name="OvercomingYourWeaknesses" xml:space="preserve">
     <value>取长补短（近卫、辅助、医疗）</value>
@@ -2023,21 +2144,6 @@
   <data name="PlatformCapability.Error.NotificationUnsupported" xml:space="preserve">
     <value>当前环境不支持通知</value>
   </data>
-  <data name="PlatformCapability.Notification.Unavailable" xml:space="preserve">
-    <value>Toast 通知不可用：{0}</value>
-  </data>
-  <data name="PlatformCapability.Notification.Unavailable.DisabledForApplication" xml:space="preserve">
-    <value>用户在 Windows 设置中关闭了该应用的通知</value>
-  </data>
-  <data name="PlatformCapability.Notification.Unavailable.DisabledForUser" xml:space="preserve">
-    <value>用户在 Windows 设置中关闭了所有应用通知</value>
-  </data>
-  <data name="PlatformCapability.Notification.Unavailable.DisabledByGroupPolicy" xml:space="preserve">
-    <value>被 Windows 组策略禁用</value>
-  </data>
-  <data name="PlatformCapability.Notification.Unavailable.DisabledByManifest" xml:space="preserve">
-    <value>被应用清单 (Package.appxmanifest) 禁用</value>
-  </data>
   <data name="PlatformCapability.Error.OverlayStartFailed" xml:space="preserve">
     <value>Overlay 启动失败</value>
   </data>
@@ -2058,6 +2164,21 @@
   </data>
   <data name="PlatformCapability.Error.TrayUnsupported" xml:space="preserve">
     <value>当前环境不支持托盘</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable" xml:space="preserve">
+    <value>Toast 通知不可用：{0}</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByGroupPolicy" xml:space="preserve">
+    <value>被 Windows 组策略禁用</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByManifest" xml:space="preserve">
+    <value>被应用清单 (Package.appxmanifest) 禁用</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForApplication" xml:space="preserve">
+    <value>用户在 Windows 设置中关闭了该应用的通知</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForUser" xml:space="preserve">
+    <value>用户在 Windows 设置中关闭了所有应用通知</value>
   </data>
   <data name="PlatformCapability.Snapshot.Unavailable" xml:space="preserve">
     <value>能力快照不可用: {0}</value>
@@ -2122,6 +2243,33 @@
   <data name="PostAction.Cmd.Watermark" xml:space="preserve">
     <value>留空则仅记录降级日志</value>
   </data>
+  <data name="PostAction.Dialog.ConfirmNow" xml:space="preserve">
+    <value>立即执行</value>
+  </data>
+  <data name="PostAction.Dialog.Message.Hibernate" xml:space="preserve">
+    <value>任务完成后将在 {0} 秒后执行休眠，期间可以取消。</value>
+  </data>
+  <data name="PostAction.Dialog.Message.LockScreen" xml:space="preserve">
+    <value>任务完成后将在 {0} 秒后执行锁屏，期间可以取消。</value>
+  </data>
+  <data name="PostAction.Dialog.Message.Shutdown" xml:space="preserve">
+    <value>任务完成后将在 {0} 秒后执行关机，期间可以取消。</value>
+  </data>
+  <data name="PostAction.Dialog.Message.Sleep" xml:space="preserve">
+    <value>任务完成后将在 {0} 秒后执行睡眠，期间可以取消。</value>
+  </data>
+  <data name="PostAction.Dialog.Title.Hibernate" xml:space="preserve">
+    <value>确认休眠</value>
+  </data>
+  <data name="PostAction.Dialog.Title.LockScreen" xml:space="preserve">
+    <value>确认锁屏</value>
+  </data>
+  <data name="PostAction.Dialog.Title.Shutdown" xml:space="preserve">
+    <value>确认关机</value>
+  </data>
+  <data name="PostAction.Dialog.Title.Sleep" xml:space="preserve">
+    <value>确认睡眠</value>
+  </data>
   <data name="PostAction.ExitArknights" xml:space="preserve">
     <value>退出游戏</value>
   </data>
@@ -2157,12 +2305,6 @@
   <data name="PostAction.Shutdown" xml:space="preserve">
     <value>关机</value>
   </data>
-  <data name="PostAction.Sleep" xml:space="preserve">
-    <value>睡眠</value>
-  </data>
-  <data name="PostAction.Title" xml:space="preserve">
-    <value>后置动作</value>
-  </data>
   <data name="PostAction.SkipOnError" xml:space="preserve">
     <value>任务出错时跳过</value>
   </data>
@@ -2173,6 +2315,12 @@
   <data name="PostAction.SkippedDueToError" xml:space="preserve">
     <value>以下任务出错：{0}，已跳过完成后动作</value>
   </data>
+  <data name="PostAction.Sleep" xml:space="preserve">
+    <value>睡眠</value>
+  </data>
+  <data name="PostAction.Title" xml:space="preserve">
+    <value>后置动作</value>
+  </data>
   <data name="PostAction.Unsupported" xml:space="preserve">
     <value>该动作当前平台不支持，将降级为日志记录。</value>
   </data>
@@ -2182,6 +2330,12 @@
   <data name="PostAction.Warn.UnsupportedDowngrade" xml:space="preserve">
     <value>当前选择包含不可执行动作，将降级为日志记录。</value>
   </data>
+  <data name="Power" xml:space="preserve">
+    <value>发电站</value>
+  </data>
+  <data name="Processing" xml:space="preserve">
+    <value>加工站</value>
+  </data>
   <data name="ProductChanged" xml:space="preserve">
     <value>产物已切换</value>
   </data>
@@ -2190,6 +2344,9 @@
   </data>
   <data name="ProductUnknown" xml:space="preserve">
     <value>无法识别的产物</value>
+  </data>
+  <data name="Reception" xml:space="preserve">
+    <value>会客室</value>
   </data>
   <data name="Reclamation.ClearStore" xml:space="preserve">
     <value>任务完成后购买商店</value>
@@ -2233,11 +2390,11 @@
   <data name="Reclamation.Option.Mode.RA1" xml:space="preserve">
     <value>RA-1</value>
   </data>
-  <data name="Reclamation.Option.Mode.RA4" xml:space="preserve">
-    <value>RA-4</value>
-  </data>
   <data name="Reclamation.Option.Mode.RA15" xml:space="preserve">
     <value>RA-15</value>
+  </data>
+  <data name="Reclamation.Option.Mode.RA4" xml:space="preserve">
+    <value>RA-4</value>
   </data>
   <data name="Reclamation.Option.Theme.FireClosed" xml:space="preserve">
     <value>沙中之火 (活动未开放)</value>
@@ -2362,6 +2519,12 @@
   <data name="RecruitingTips" xml:space="preserve">
     <value>公招提示</value>
   </data>
+  <data name="RecruitingTips" xml:space="preserve">
+    <value>公招提示</value>
+  </data>
+  <data name="RecruitmentOfStar" xml:space="preserve">
+    <value>公招出 {0} 星了哦！</value>
+  </data>
   <data name="RecruitmentOfStar" xml:space="preserve">
     <value>公招出 {0} 星了哦！</value>
   </data>
@@ -2370,6 +2533,21 @@
   </data>
   <data name="ResearchSquad" xml:space="preserve">
     <value>研究分队</value>
+  </data>
+  <data name="ResolutionChanged" xml:space="preserve">
+    <value>模拟器分辨率已变更，连接已断开。请重新开始任务以应用新分辨率</value>
+  </data>
+  <data name="ResolutionNotSupportedCurrentResolution" xml:space="preserve">
+    <value>当前分辨率：{0}x{1}</value>
+  </data>
+  <data name="ResourceBrokenRepairGuidance" xml:space="preserve">
+    <value>请前往 设置 > 版本更新 检查资源更新（或重新下载完整安装包）后重启 MAA；重新加载资源成功后会自动解除限制。</value>
+  </data>
+  <data name="ResourceBrokenTaskBlocked" xml:space="preserve">
+    <value>资源已损坏，任务无法启动。{key=ResourceBrokenRepairGuidance}</value>
+  </data>
+  <data name="RestartRecommendation" xml:space="preserve">
+    <value>建议重启 MAA 以恢复正常状态</value>
   </data>
   <data name="Retreat" xml:space="preserve">
     <value>撤退</value>
@@ -2555,6 +2733,9 @@
   <data name="RoguelikeStrategyMonthlySquad" xml:space="preserve">
     <value>刷月度小队，尽可能稳定地打更多层数</value>
   </data>
+  <data name="RoguelikeThemeBlackFlow" xml:space="preserve">
+    <value>黑流树海</value>
+  </data>
   <data name="RoguelikeThemeJieGarden" xml:space="preserve">
     <value>界园</value>
   </data>
@@ -2603,17 +2784,20 @@
   <data name="Settings.About.Announcement.Save" xml:space="preserve">
     <value>保存公告</value>
   </data>
+  <data name="Settings.About.Bilibili" xml:space="preserve">
+    <value>bilibili</value>
+  </data>
   <data name="Settings.About.CheckAnnouncement" xml:space="preserve">
     <value>查看公告</value>
+  </data>
+  <data name="Settings.About.Dialog.BottomHint" xml:space="preserve">
+    <value>未读完公告前，暂时无法直接关闭。</value>
   </data>
   <data name="Settings.About.Dialog.Cancel" xml:space="preserve">
     <value>取消</value>
   </data>
   <data name="Settings.About.Dialog.Confirm" xml:space="preserve">
     <value>确认</value>
-  </data>
-  <data name="Settings.About.Dialog.ConfirmLocked" xml:space="preserve">
-    <value>请先阅读公告</value>
   </data>
   <data name="Settings.About.Dialog.ConfirmBlocked1" xml:space="preserve">
     <value>没看完点什么确认</value>
@@ -2624,20 +2808,32 @@
   <data name="Settings.About.Dialog.ConfirmBlocked3" xml:space="preserve">
     <value>还点</value>
   </data>
+  <data name="Settings.About.Dialog.ConfirmLocked" xml:space="preserve">
+    <value>请先阅读公告</value>
+  </data>
   <data name="Settings.About.Dialog.DoNotRemindThisAnnouncementAgain" xml:space="preserve">
     <value>下次公告更新前不再显示</value>
   </data>
   <data name="Settings.About.Dialog.DoNotShowAnnouncement" xml:space="preserve">
     <value>不显示公告</value>
   </data>
-  <data name="Settings.About.Dialog.Title" xml:space="preserve">
-    <value>公告</value>
+  <data name="Settings.About.Dialog.Lead" xml:space="preserve">
+    <value>请仔细阅读最新公告后再关闭此窗口。</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaCurrentSection" xml:space="preserve">
+    <value>当前查看</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaSectionFormat" xml:space="preserve">
+    <value>第 {0} / {1} 节</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadFinishedHint" xml:space="preserve">
+    <value>已完整阅读公告，现在可以关闭此窗口。</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadHint" xml:space="preserve">
+    <value>滚动到底部后，才可以关闭此公告，或选择在下次更新前不再显示。</value>
   </data>
   <data name="Settings.About.Dialog.ReadProgress.PendingBadge" xml:space="preserve">
     <value>阅读门禁</value>
-  </data>
-  <data name="Settings.About.Dialog.ReadProgress.PendingTitle" xml:space="preserve">
-    <value>滚动到底部以解锁确认</value>
   </data>
   <data name="Settings.About.Dialog.ReadProgress.PendingCaption" xml:space="preserve">
     <value>继续向下浏览所有章节。确认按钮和“下次公告更新前不再显示”会在阅读完成后一起解锁。</value>
@@ -2645,11 +2841,11 @@
   <data name="Settings.About.Dialog.ReadProgress.PendingFooterHint" xml:space="preserve">
     <value>这个选项会在你阅读完成后解锁，所以底部操作会始终集中在同一区域。</value>
   </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingTitle" xml:space="preserve">
+    <value>滚动到底部以解锁确认</value>
+  </data>
   <data name="Settings.About.Dialog.ReadProgress.ReadyBadge" xml:space="preserve">
     <value>已解锁</value>
-  </data>
-  <data name="Settings.About.Dialog.ReadProgress.ReadyTitle" xml:space="preserve">
-    <value>现在可以确认</value>
   </data>
   <data name="Settings.About.Dialog.ReadProgress.ReadyCaption" xml:space="preserve">
     <value>现在可以确认，也可以选择在下次公告内容更新前不再显示。</value>
@@ -2657,29 +2853,23 @@
   <data name="Settings.About.Dialog.ReadProgress.ReadyFooterHint" xml:space="preserve">
     <value>如果你不想在这次公告内容变更前再次看到它，可以先勾选左侧选项，再从右侧确认。</value>
   </data>
-  <data name="Settings.About.Dialog.SectionsTitle" xml:space="preserve">
-    <value>公告分栏</value>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyTitle" xml:space="preserve">
+    <value>现在可以确认</value>
   </data>
   <data name="Settings.About.Dialog.SectionsCaption" xml:space="preserve">
     <value>选择左侧分栏以查看完整公告内容。</value>
   </data>
-  <data name="Settings.About.Dialog.Lead" xml:space="preserve">
-    <value>请仔细阅读最新公告后再关闭此窗口。</value>
+  <data name="Settings.About.Dialog.SectionsTitle" xml:space="preserve">
+    <value>公告分栏</value>
   </data>
-  <data name="Settings.About.Dialog.BottomHint" xml:space="preserve">
-    <value>未读完公告前，暂时无法直接关闭。</value>
+  <data name="Settings.About.Dialog.Title" xml:space="preserve">
+    <value>公告</value>
   </data>
-  <data name="Settings.About.Dialog.ReadHint" xml:space="preserve">
-    <value>滚动到底部后，才可以关闭此公告，或选择在下次更新前不再显示。</value>
+  <data name="Settings.About.Discord" xml:space="preserve">
+    <value>Discord</value>
   </data>
-  <data name="Settings.About.Dialog.ReadFinishedHint" xml:space="preserve">
-    <value>已完整阅读公告，现在可以关闭此窗口。</value>
-  </data>
-  <data name="Settings.About.Dialog.MetaCurrentSection" xml:space="preserve">
-    <value>当前查看</value>
-  </data>
-  <data name="Settings.About.Dialog.MetaSectionFormat" xml:space="preserve">
-    <value>第 {0} / {1} 节</value>
+  <data name="Settings.About.Github" xml:space="preserve">
+    <value>源码: GitHub</value>
   </data>
   <data name="Settings.About.OpenCommunity" xml:space="preserve">
     <value>打开社区入口</value>
@@ -2690,23 +2880,11 @@
   <data name="Settings.About.OpenOfficialWebsite" xml:space="preserve">
     <value>打开官网</value>
   </data>
-  <data name="Settings.About.Bilibili" xml:space="preserve">
-    <value>bilibili</value>
-  </data>
-  <data name="Settings.About.Github" xml:space="preserve">
-    <value>源码: GitHub</value>
-  </data>
-  <data name="Settings.About.QqGroup" xml:space="preserve">
-    <value>QQ 群</value>
-  </data>
   <data name="Settings.About.QqChannel" xml:space="preserve">
     <value>QQ 频道</value>
   </data>
-  <data name="Settings.About.Telegram" xml:space="preserve">
-    <value>Telegram</value>
-  </data>
-  <data name="Settings.About.Discord" xml:space="preserve">
-    <value>Discord</value>
+  <data name="Settings.About.QqGroup" xml:space="preserve">
+    <value>QQ 群</value>
   </data>
   <data name="Settings.About.Status.AnnouncementDialogCancelled" xml:space="preserve">
     <value>公告弹窗已取消。</value>
@@ -2744,20 +2922,26 @@
   <data name="Settings.About.Status.OpenOfficialWebsiteSucceeded" xml:space="preserve">
     <value>已打开官网。</value>
   </data>
+  <data name="Settings.About.Telegram" xml:space="preserve">
+    <value>Telegram</value>
+  </data>
   <data name="Settings.Achievement.Backup" xml:space="preserve">
     <value>备份成就</value>
   </data>
   <data name="Settings.Achievement.Dialog" xml:space="preserve">
     <value>成就对话框</value>
   </data>
-  <data name="Settings.Achievement.Dialog.FilterWatermark" xml:space="preserve">
-    <value>搜索成就</value>
+  <data name="Settings.Achievement.Dialog.ClearFilters" xml:space="preserve">
+    <value>清除筛选</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyDescription" xml:space="preserve">
+    <value>试试更换关键词或筛选条件。</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyTitle" xml:space="preserve">
+    <value>没有找到匹配的成就</value>
   </data>
   <data name="Settings.Achievement.Dialog.FilterAll" xml:space="preserve">
     <value>全部</value>
-  </data>
-  <data name="Settings.Achievement.Dialog.FilterUnlocked" xml:space="preserve">
-    <value>已解锁</value>
   </data>
   <data name="Settings.Achievement.Dialog.FilterInProgress" xml:space="preserve">
     <value>进行中</value>
@@ -2765,23 +2949,20 @@
   <data name="Settings.Achievement.Dialog.FilterNew" xml:space="preserve">
     <value>新解锁</value>
   </data>
+  <data name="Settings.Achievement.Dialog.FilterUnlocked" xml:space="preserve">
+    <value>已解锁</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterWatermark" xml:space="preserve">
+    <value>搜索成就</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.OverviewFormat" xml:space="preserve">
+    <value>已解锁 {0} / {1} · 完成率 {2}%</value>
+  </data>
   <data name="Settings.Achievement.Dialog.ProgressFormat" xml:space="preserve">
     <value>进度：{0}</value>
   </data>
   <data name="Settings.Achievement.Dialog.ResultsFormat" xml:space="preserve">
     <value>显示 {0} 项</value>
-  </data>
-  <data name="Settings.Achievement.Dialog.ClearFilters" xml:space="preserve">
-    <value>清除筛选</value>
-  </data>
-  <data name="Settings.Achievement.Dialog.EmptyTitle" xml:space="preserve">
-    <value>没有找到匹配的成就</value>
-  </data>
-  <data name="Settings.Achievement.Dialog.EmptyDescription" xml:space="preserve">
-    <value>试试更换关键词或筛选条件。</value>
-  </data>
-  <data name="Settings.Achievement.Dialog.OverviewFormat" xml:space="preserve">
-    <value>已解锁 {0} / {1} · 完成率 {2}%</value>
   </data>
   <data name="Settings.Achievement.Dialog.Snapshot" xml:space="preserve">
     <value>成就对话快照</value>
@@ -2903,11 +3084,11 @@
   <data name="Settings.Action.Close" xml:space="preserve">
     <value>关闭</value>
   </data>
-  <data name="Settings.Action.GotIt" xml:space="preserve">
-    <value>知道了</value>
-  </data>
   <data name="Settings.Action.Delete" xml:space="preserve">
     <value>删除</value>
+  </data>
+  <data name="Settings.Action.GotIt" xml:space="preserve">
+    <value>知道了</value>
   </data>
   <data name="Settings.Action.ImportAnyway" xml:space="preserve">
     <value>强行导入</value>
@@ -3065,11 +3246,11 @@
   <data name="Settings.ConfigurationManager.Dialog.ExportCurrentTitle" xml:space="preserve">
     <value>导出当前配置</value>
   </data>
+  <data name="Settings.ConfigurationManager.Dialog.GlobalConfiguration" xml:space="preserve">
+    <value>全局</value>
+  </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportConfigTitle" xml:space="preserve">
     <value>导入配置</value>
-  </data>
-  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValuesTitle" xml:space="preserve">
-    <value>部分配置导入失败</value>
   </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportLegacyTitle" xml:space="preserve">
     <value>导入旧配置</value>
@@ -3082,6 +3263,12 @@
   </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportUnifiedFolderTitle" xml:space="preserve">
     <value>选择 Unified 文件夹</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine" xml:space="preserve">
+    <value>{0} 配置的 {1} 导入失败，无法读取 {1} 配置。请手动修改。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValuesTitle" xml:space="preserve">
+    <value>部分配置导入失败</value>
   </data>
   <data name="Settings.ConfigurationManager.Error.ExportPathEmpty" xml:space="preserve">
     <value>导出路径为空。</value>
@@ -3122,9 +3309,6 @@
   <data name="Settings.ConfigurationManager.Import.DirectoryInvalid" xml:space="preserve">
     <value>未选择有效文件夹。</value>
   </data>
-  <data name="Settings.ConfigurationManager.Import.LegacyFilenameInvalid" xml:space="preserve">
-    <value>旧配置文件名不正确，请选择 gui.json 或 gui.new.json。</value>
-  </data>
   <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingBoth" xml:space="preserve">
     <value>所选文件夹中未能找到 gui.new.json 和 gui.json。</value>
   </data>
@@ -3133,6 +3317,9 @@
   </data>
   <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingGuiNew" xml:space="preserve">
     <value>所选文件夹中未能找到 gui.new.json。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyFilenameInvalid" xml:space="preserve">
+    <value>旧配置文件名不正确，请选择 gui.json 或 gui.new.json。</value>
   </data>
   <data name="Settings.ConfigurationManager.Import.LegacyInvalidFilesOnly" xml:space="preserve">
     <value>选择中存在文件名不正确的旧配置文件。</value>
@@ -3149,14 +3336,23 @@
   <data name="Settings.ConfigurationManager.Import.TooManyFiles" xml:space="preserve">
     <value>旧配置导入最多选择两个文件；统一配置 json 只支持单文件导入。</value>
   </data>
-  <data name="Settings.ConfigurationManager.Import.UnifiedSingleFileOnly" xml:space="preserve">
-    <value>统一配置 json 只支持单文件导入。</value>
-  </data>
   <data name="Settings.ConfigurationManager.Import.UnifiedDirectoryMissing" xml:space="preserve">
     <value>所选文件夹中未找到 config/avalonia.json 或 avalonia.json。</value>
   </data>
+  <data name="Settings.ConfigurationManager.Import.UnifiedSingleFileOnly" xml:space="preserve">
+    <value>统一配置 json 只支持单文件导入。</value>
+  </data>
   <data name="Settings.ConfigurationManager.Import.UnrecognizedFiles" xml:space="preserve">
     <value>无法识别导入文件，请选择导出的配置 json，或 gui.json / gui.new.json。</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportLegacy" xml:space="preserve">
+    <value>导入旧配置</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportLegacy.ContextRefresh" xml:space="preserve">
+    <value>旧配置导入后刷新列表</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportLegacy.PendingConfirmation" xml:space="preserve">
+    <value>旧配置导入待确认</value>
   </data>
   <data name="Settings.ConfigurationManager.ImportMode.LegacyWindows" xml:space="preserve">
     <value>旧版 MAA</value>
@@ -3179,14 +3375,8 @@
   <data name="Settings.ConfigurationManager.ImportMode.UnifiedDescription" xml:space="preserve">
     <value>选择 MAAUnified 的文件夹。</value>
   </data>
-  <data name="Settings.ConfigurationManager.ImportLegacy" xml:space="preserve">
-    <value>导入旧配置</value>
-  </data>
-  <data name="Settings.ConfigurationManager.ImportLegacy.ContextRefresh" xml:space="preserve">
-    <value>旧配置导入后刷新列表</value>
-  </data>
-  <data name="Settings.ConfigurationManager.ImportLegacy.PendingConfirmation" xml:space="preserve">
-    <value>旧配置导入待确认</value>
+  <data name="Settings.ConfigurationManager.ImportSucceededInline" xml:space="preserve">
+    <value>导入成功</value>
   </data>
   <data name="Settings.ConfigurationManager.Load" xml:space="preserve">
     <value>加载配置</value>
@@ -3212,15 +3402,6 @@
   <data name="Settings.ConfigurationManager.SaveAsNew" xml:space="preserve">
     <value>另存为新配置</value>
   </data>
-  <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
-    <value>保存成功</value>
-  </data>
-  <data name="Settings.ConfigurationManager.SwitchSucceededInline" xml:space="preserve">
-    <value>已切换到{0}</value>
-  </data>
-  <data name="Settings.ConfigurationManager.ImportSucceededInline" xml:space="preserve">
-    <value>导入成功</value>
-  </data>
   <data name="Settings.ConfigurationManager.SaveAsNewFailedInline" xml:space="preserve">
     <value>保存失败：{0}</value>
   </data>
@@ -3239,8 +3420,8 @@
   <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.SourceProfileMissing" xml:space="preserve">
     <value>当前配置不存在，请刷新后重试。</value>
   </data>
-  <data name="Settings.ConfigurationManager.Title" xml:space="preserve">
-    <value>配置管理</value>
+  <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
+    <value>保存成功</value>
   </data>
   <data name="Settings.ConfigurationManager.SaveCurrent" xml:space="preserve">
     <value>保存当前配置</value>
@@ -3308,6 +3489,9 @@
   <data name="Settings.ConfigurationManager.Status.SaveCurrentSucceeded" xml:space="preserve">
     <value>当前配置已保存。</value>
   </data>
+  <data name="Settings.ConfigurationManager.Status.SwitchBlockedWhileRunning" xml:space="preserve">
+    <value>任务运行或停止期间不能切换配置，请等待任务结束后再试。</value>
+  </data>
   <data name="Settings.ConfigurationManager.Status.SwitchFailed" xml:space="preserve">
     <value>配置切换失败。</value>
   </data>
@@ -3316,6 +3500,12 @@
   </data>
   <data name="Settings.ConfigurationManager.Switch" xml:space="preserve">
     <value>切换配置</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SwitchSucceededInline" xml:space="preserve">
+    <value>已切换到{0}</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Title" xml:space="preserve">
+    <value>配置管理</value>
   </data>
   <data name="Settings.Connect.AdbLiteEnabled" xml:space="preserve">
     <value>启用 AdbLite</value>
@@ -3398,6 +3588,21 @@
   <data name="Settings.Connect.Hint.ConnectionAddressEmpty" xml:space="preserve">
     <value>连接地址为空，请填写“IP:端口”后再连接。</value>
   </data>
+  <data name="Settings.Connect.Hint.LdPlayerOpenGlMissing" xml:space="preserve">
+    <value>LDPlayer 模拟器路径缺少 ldopengl64.dll：{0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.LdPlayerPathNotFound" xml:space="preserve">
+    <value>LDPlayer 模拟器路径不存在：{0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.MacBundledAdbNotFound" xml:space="preserve">
+    <value>内置 ADB 不存在：{0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.MuMuExternalRendererMissing" xml:space="preserve">
+    <value>MuMu 模拟器路径缺少 external_renderer_ipc.dll：{0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.MuMuPathNotFound" xml:space="preserve">
+    <value>MuMu 模拟器路径不存在：{0}</value>
+  </data>
   <data name="Settings.Connect.InstanceId" xml:space="preserve">
     <value>实例序号</value>
   </data>
@@ -3443,6 +3648,12 @@
   <data name="Settings.Connect.Status.DownloadingAdb" xml:space="preserve">
     <value>正在下载 ADB...</value>
   </data>
+  <data name="Settings.Connect.Status.LdPlayerPathAutoDetected" xml:space="preserve">
+    <value>已自动检测到 LDPlayer 模拟器路径：{0}</value>
+  </data>
+  <data name="Settings.Connect.Status.MuMuPathAutoDetected" xml:space="preserve">
+    <value>已自动检测到 MuMu 模拟器路径：{0}</value>
+  </data>
   <data name="Settings.Connect.Status.ReplacedAdb" xml:space="preserve">
     <value>已替换 ADB：{0}</value>
   </data>
@@ -3452,6 +3663,9 @@
   <data name="Settings.Connect.TouchMode" xml:space="preserve">
     <value>触控模式</value>
   </data>
+  <data name="Settings.ExternalNotification.Blacklist" xml:space="preserve">
+    <value>内容黑名单（每行一个正则）</value>
+  </data>
   <data name="Settings.ExternalNotification.DefaultMessage" xml:space="preserve">
     <value>这是 MAA 外部通知测试信息。如果你看到了这段内容，就说明通知发送成功了！</value>
   </data>
@@ -3460,33 +3674,6 @@
   </data>
   <data name="Settings.ExternalNotification.EnableDetails" xml:space="preserve">
     <value>启用详细内容</value>
-  </data>
-  <data name="Settings.ExternalNotification.IncludePreviousLogs" xml:space="preserve">
-    <value>随附历史日志</value>
-  </data>
-  <data name="Settings.ExternalNotification.MaxEntries" xml:space="preserve">
-    <value>历史日志条数</value>
-  </data>
-  <data name="Settings.ExternalNotification.TimeMinutes" xml:space="preserve">
-    <value>历史日志时间窗（分钟，0 关闭）</value>
-  </data>
-  <data name="Settings.ExternalNotification.FilterPreviousLogs" xml:space="preserve">
-    <value>按黑名单过滤历史日志</value>
-  </data>
-  <data name="Settings.ExternalNotification.SendAfterLogCount" xml:space="preserve">
-    <value>新增日志达到阈值时通知</value>
-  </data>
-  <data name="Settings.ExternalNotification.NewLogCount" xml:space="preserve">
-    <value>新增日志条数阈值</value>
-  </data>
-  <data name="Settings.ExternalNotification.SendWhenContentMatches" xml:space="preserve">
-    <value>日志内容匹配白名单时通知</value>
-  </data>
-  <data name="Settings.ExternalNotification.Whitelist" xml:space="preserve">
-    <value>内容白名单（每行一个正则）</value>
-  </data>
-  <data name="Settings.ExternalNotification.Blacklist" xml:space="preserve">
-    <value>内容黑名单（每行一个正则）</value>
   </data>
   <data name="Settings.ExternalNotification.Enabled" xml:space="preserve">
     <value>启用外部通知</value>
@@ -3512,6 +3699,18 @@
   <data name="Settings.ExternalNotification.Error.Unsupported" xml:space="preserve">
     <value>当前环境不支持该外部通知能力：{0} ({1})</value>
   </data>
+  <data name="Settings.ExternalNotification.FilterPreviousLogs" xml:space="preserve">
+    <value>按黑名单过滤历史日志</value>
+  </data>
+  <data name="Settings.ExternalNotification.IncludePreviousLogs" xml:space="preserve">
+    <value>随附历史日志</value>
+  </data>
+  <data name="Settings.ExternalNotification.MaxEntries" xml:space="preserve">
+    <value>历史日志条数</value>
+  </data>
+  <data name="Settings.ExternalNotification.NewLogCount" xml:space="preserve">
+    <value>新增日志条数阈值</value>
+  </data>
   <data name="Settings.ExternalNotification.OnlyCompleteNote" xml:space="preserve">
     <value>默认仅在任务完成时发送摘要通知，可按需开启错误和超时通知。</value>
   </data>
@@ -3521,23 +3720,29 @@
   <data name="Settings.ExternalNotification.ProviderParametersNote" xml:space="preserve">
     <value>请按通知服务文档填写 JSON 参数。</value>
   </data>
-  <data name="Settings.ExternalNotification.SendWhenComplete" xml:space="preserve">
-    <value>完成时通知</value>
-  </data>
-  <data name="Settings.ExternalNotification.SendWhenError" xml:space="preserve">
-    <value>错误时通知</value>
-  </data>
-  <data name="Settings.ExternalNotification.SendWhenTimeout" xml:space="preserve">
-    <value>超时时通知</value>
-  </data>
-  <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
-    <value>任务日志输出停滞时发送通知</value>
+  <data name="Settings.ExternalNotification.SendAfterLogCount" xml:space="preserve">
+    <value>新增日志达到阈值时通知</value>
   </data>
   <data name="Settings.ExternalNotification.SendBeforeScheduledStart" xml:space="preserve">
     <value>定时执行前</value>
   </data>
   <data name="Settings.ExternalNotification.SendBeforeScheduledStartTip" xml:space="preserve">
     <value>在定时任务开始前发送外部通知。&#10;提前时间使用定时设置中的提前时间。</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenComplete" xml:space="preserve">
+    <value>完成时通知</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenContentMatches" xml:space="preserve">
+    <value>日志内容匹配白名单时通知</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenError" xml:space="preserve">
+    <value>错误时通知</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
+    <value>任务日志输出停滞时发送通知</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenTimeout" xml:space="preserve">
+    <value>超时时通知</value>
   </data>
   <data name="Settings.ExternalNotification.Status.OperationFailed" xml:space="preserve">
     <value>外部通知操作失败。</value>
@@ -3566,6 +3771,15 @@
   <data name="Settings.ExternalNotification.TestTitle" xml:space="preserve">
     <value>测试通知标题</value>
   </data>
+  <data name="Settings.ExternalNotification.TimeMinutes" xml:space="preserve">
+    <value>历史日志时间窗（分钟，0 关闭）</value>
+  </data>
+  <data name="Settings.ExternalNotification.Whitelist" xml:space="preserve">
+    <value>内容白名单（每行一个正则）</value>
+  </data>
+  <data name="Settings.GUI.HideCloseButton" xml:space="preserve">
+    <value>隐藏关闭按钮</value>
+  </data>
   <data name="Settings.GUI.InverseClearMode" xml:space="preserve">
     <value>主界面按钮功能</value>
   </data>
@@ -3578,6 +3792,15 @@
   <data name="Settings.GUI.LogItemDateFormat.PreviewCaption" xml:space="preserve">
     <value>预览</value>
   </data>
+  <data name="Settings.GUI.MainTasksInvertNullFunction" xml:space="preserve">
+    <value>反转主任务右键单击效果</value>
+  </data>
+  <data name="Settings.GUI.MainTasksInvertNullFunctionTip" xml:space="preserve">
+    <value>默认仅一次生效，勾选后仅一次跳过</value>
+  </data>
+  <data name="Settings.GUI.MaxNumberOfLogThumbnails" xml:space="preserve">
+    <value>日志缩略图最大数量</value>
+  </data>
   <data name="Settings.GUI.MinimizeToTray" xml:space="preserve">
     <value>最小化时隐藏至托盘</value>
   </data>
@@ -3586,6 +3809,9 @@
   </data>
   <data name="Settings.GUI.OperNameLanguage" xml:space="preserve">
     <value>干员名称显示语言</value>
+  </data>
+  <data name="Settings.GUI.PallasHangoverMessage" xml:space="preserve">
+    <value>下次不能喝、喝这么多了……</value>
   </data>
   <data name="Settings.GUI.SoftwareRendering.RestartDialog.Cancel" xml:space="preserve">
     <value>稍后再说</value>
@@ -3617,53 +3843,35 @@
   <data name="Settings.GUI.UiScalePercentTip" xml:space="preserve">
     <value>允许范围：70% 到 140%。</value>
   </data>
+  <data name="Settings.GUI.UseCardLog" xml:space="preserve">
+    <value>使用卡片样式日志</value>
+  </data>
+  <data name="Settings.GUI.UseNotify" xml:space="preserve">
+    <value>显示系统通知</value>
+  </data>
   <data name="Settings.GUI.UseSoftwareRendering" xml:space="preserve">
     <value>使用软件渲染</value>
   </data>
   <data name="Settings.GUI.UseTray" xml:space="preserve">
     <value>显示托盘图标</value>
   </data>
-  <data name="Settings.GUI.UseNotify" xml:space="preserve">
-    <value>显示系统通知</value>
-  </data>
-  <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
-    <value>窗口标题滚动</value>
-  </data>
-  <data name="Settings.GUI.HideCloseButton" xml:space="preserve">
-    <value>隐藏关闭按钮</value>
-  </data>
-  <data name="Settings.GUI.UseCardLog" xml:space="preserve">
-    <value>使用卡片样式日志</value>
-  </data>
-  <data name="Settings.GUI.MaxNumberOfLogThumbnails" xml:space="preserve">
-    <value>日志缩略图最大数量</value>
-  </data>
-  <data name="Settings.GUI.MainTasksInvertNullFunction" xml:space="preserve">
-    <value>反转主任务右键单击效果</value>
-  </data>
-  <data name="Settings.GUI.MainTasksInvertNullFunctionTip" xml:space="preserve">
-    <value>默认仅一次生效，勾选后仅一次跳过</value>
-  </data>
-  <data name="Settings.GUI.WindowTitleSelectShowList" xml:space="preserve">
-    <value>标题栏显示内容</value>
+  <data name="Settings.GUI.WindowTitleField.ClientType" xml:space="preserve">
+    <value>客户端类型</value>
   </data>
   <data name="Settings.GUI.WindowTitleField.ConfigurationName" xml:space="preserve">
     <value>配置名称</value>
   </data>
-  <data name="Settings.GUI.WindowTitleField.ConnectionPreset" xml:space="preserve">
-    <value>连接配置</value>
-  </data>
   <data name="Settings.GUI.WindowTitleField.ConnectionAddress" xml:space="preserve">
     <value>连接地址</value>
   </data>
-  <data name="Settings.GUI.WindowTitleField.ClientType" xml:space="preserve">
-    <value>客户端类型</value>
+  <data name="Settings.GUI.WindowTitleField.ConnectionPreset" xml:space="preserve">
+    <value>连接配置</value>
   </data>
-  <data name="Settings.GUI.PallasHangoverMessage" xml:space="preserve">
-    <value>下次不能喝、喝这么多了……</value>
+  <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
+    <value>窗口标题滚动</value>
   </data>
-  <data name="Settings.Option.OperNameLanguage.Force" xml:space="preserve">
-    <value>强制使用指定语言</value>
+  <data name="Settings.GUI.WindowTitleSelectShowList" xml:space="preserve">
+    <value>标题栏显示内容</value>
   </data>
   <data name="Settings.Game.BlockSleep" xml:space="preserve">
     <value>阻止系统休眠</value>
@@ -3680,6 +3888,15 @@
   <data name="Settings.Game.EnablePenguin" xml:space="preserve">
     <value>启用企鹅物流上传</value>
   </data>
+  <data name="Settings.Game.EnableRunDurationLimit" xml:space="preserve">
+    <value>限制单次运行时长</value>
+  </data>
+  <data name="Settings.Game.EnableRunDurationLimit.Tip" xml:space="preserve">
+    <value>勾选＝每轮生效，半选＝仅本次；到点停止当前运行。</value>
+  </data>
+  <data name="Settings.Game.EnableStallTimeout" xml:space="preserve">
+    <value>启用日志更新停滞检测</value>
+  </data>
   <data name="Settings.Game.EnableYituliu" xml:space="preserve">
     <value>启用一图流上传</value>
   </data>
@@ -3689,11 +3906,26 @@
   <data name="Settings.Game.EndsWithScriptTip" xml:space="preserve">
     <value>任务结束后执行</value>
   </data>
+  <data name="Settings.Game.OverseasAdaptationGuide.Open" xml:space="preserve">
+    <value>打开海外客户端适配指南</value>
+  </data>
+  <data name="Settings.Game.OverseasClientHint" xml:space="preserve">
+    <value>使用海外客户端？请查看适配帮助。</value>
+  </data>
   <data name="Settings.Game.PenguinId" xml:space="preserve">
     <value>企鹅物流用户 ID</value>
   </data>
   <data name="Settings.Game.ReminderIntervalMinutes" xml:space="preserve">
     <value>提醒间隔（分钟）</value>
+  </data>
+  <data name="Settings.Game.RunDurationLimitExecutePostActions" xml:space="preserve">
+    <value>停止后执行完成后动作</value>
+  </data>
+  <data name="Settings.Game.RunDurationLimitMinutes" xml:space="preserve">
+    <value>运行时长上限（分钟）</value>
+  </data>
+  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
+    <value>日志输出停滞超时时间（分钟）</value>
   </data>
   <data name="Settings.Game.StartsWithScript" xml:space="preserve">
     <value>开始前脚本</value>
@@ -3709,6 +3941,12 @@
   </data>
   <data name="Settings.Game.UseScriptOnManualStop" xml:space="preserve">
     <value>手动停止时执行脚本</value>
+  </data>
+  <data name="Settings.Game.YoStarResolutionGuide.Available" xml:space="preserve">
+    <value>YoStar EN 分辨率指南已可用。</value>
+  </data>
+  <data name="Settings.Game.YoStarResolutionGuide.Open" xml:space="preserve">
+    <value>打开 YoStar EN 分辨率指南</value>
   </data>
   <data name="Settings.Gui.Language.Change" xml:space="preserve">
     <value>更改界面语言</value>
@@ -3806,11 +4044,23 @@
   <data name="Settings.IssueReport.Build" xml:space="preserve">
     <value>生成问题报告</value>
   </data>
+  <data name="Settings.IssueReport.CheckHelpBeforeReportingIssue" xml:space="preserve">
+    <value>请在确认您的问题不属于 ｢{key=Help}｣ 后，再进行 ｢{key=Issue}｣</value>
+  </data>
+  <data name="Settings.IssueReport.CheckUpdateBeforeReportingIssue" xml:space="preserve">
+    <value>请先升级并测试新版是否仍有此问题，确认非 ｢{key=Help}｣ 后再进行 ｢{key=Issue}｣</value>
+  </data>
   <data name="Settings.IssueReport.ClearImageCache" xml:space="preserve">
     <value>清除图片缓存</value>
   </data>
   <data name="Settings.IssueReport.ClearImageCacheConfirm" xml:space="preserve">
     <value>正常情况下无需手动清理。&#10;DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图片。&#10;手动清理会删除所有图片，可能导致问题排查时缺少截图依据。&#10;缓存文件（如地图、干员头像等）清理后需要重新生成，可能影响使用体验。</value>
+  </data>
+  <data name="Settings.IssueReport.ClearImageCacheTip" xml:space="preserve">
+    <value>正常情况下无需手动清理。
+DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图片。
+手动清理会删除所有图片，可能导致问题排查时缺少截图依据。
+缓存文件（如地图、干员头像等）清理后需要重新生成，可能影响使用体验。</value>
   </data>
   <data name="Settings.IssueReport.DeveloperMode" xml:space="preserve">
     <value>开发者模式</value>
@@ -3836,12 +4086,6 @@
   <data name="Settings.IssueReport.OpenRuntimeLogWindow" xml:space="preserve">
     <value>打开运行日志窗口</value>
   </data>
-  <data name="Settings.IssueReport.CheckUpdateBeforeReportingIssue" xml:space="preserve">
-    <value>请先升级并测试新版是否仍有此问题，确认非 ｢{key=Help}｣ 后再进行 ｢{key=Issue}｣</value>
-  </data>
-  <data name="Settings.IssueReport.CheckHelpBeforeReportingIssue" xml:space="preserve">
-    <value>请在确认您的问题不属于 ｢{key=Help}｣ 后，再进行 ｢{key=Issue}｣</value>
-  </data>
   <data name="Settings.IssueReport.PreflightNote" xml:space="preserve">
     <value>提交反馈前请先阅读 FAQ，附上日志压缩包可更快定位问题。</value>
   </data>
@@ -3856,12 +4100,6 @@
   </data>
   <data name="Settings.IssueReport.Status.ImageCacheClearFailed" xml:space="preserve">
     <value>清理图像缓存失败。</value>
-  </data>
-  <data name="Settings.IssueReport.ClearImageCacheTip" xml:space="preserve">
-    <value>正常情况下无需手动清理。
-DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图片。
-手动清理会删除所有图片，可能导致问题排查时缺少截图依据。
-缓存文件（如地图、干员头像等）清理后需要重新生成，可能影响使用体验。</value>
   </data>
   <data name="Settings.IssueReport.Status.ImageCacheClearFailedWithReason" xml:space="preserve">
     <value>清理图像缓存失败：{0}</value>
@@ -3931,6 +4169,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Settings.Option.OperNameLanguage.Client" xml:space="preserve">
     <value>跟随游戏客户端</value>
+  </data>
+  <data name="Settings.Option.OperNameLanguage.Force" xml:space="preserve">
+    <value>强制使用指定语言</value>
   </data>
   <data name="Settings.Option.OperNameLanguage.MAA" xml:space="preserve">
     <value>跟随 MAA</value>
@@ -4058,14 +4299,14 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.RemoteControl.PollIntervalMs" xml:space="preserve">
     <value>轮询间隔（毫秒）</value>
   </data>
+  <data name="Settings.RemoteControl.RegenerateDeviceIdentity" xml:space="preserve">
+    <value>重新生成</value>
+  </data>
   <data name="Settings.RemoteControl.ReportTaskEndpoint" xml:space="preserve">
     <value>回报任务端点</value>
   </data>
   <data name="Settings.RemoteControl.ReportTaskEndpointWatermark" xml:space="preserve">
     <value>https://example.com/api/task/report</value>
-  </data>
-  <data name="Settings.RemoteControl.RegenerateDeviceIdentity" xml:space="preserve">
-    <value>重新生成</value>
   </data>
   <data name="Settings.RemoteControl.Status.SaveFailed" xml:space="preserve">
     <value>远程控制配置保存失败。</value>
@@ -4160,9 +4401,6 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.Section.ExternalNotification" xml:space="preserve">
     <value>外部通知</value>
   </data>
-  <data name="Settings.Section.Notification" xml:space="preserve">
-    <value>通知</value>
-  </data>
   <data name="Settings.Section.GUI" xml:space="preserve">
     <value>界面设置</value>
   </data>
@@ -4174,6 +4412,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Settings.Section.IssueReport" xml:space="preserve">
     <value>问题反馈</value>
+  </data>
+  <data name="Settings.Section.Notification" xml:space="preserve">
+    <value>通知</value>
   </data>
   <data name="Settings.Section.Performance" xml:space="preserve">
     <value>性能设置</value>
@@ -4199,6 +4440,39 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.SectionAction.Unknown" xml:space="preserve">
     <value>未知设置动作</value>
   </data>
+  <data name="Settings.SensitiveStorage.DiscardUnreadable" xml:space="preserve">
+    <value>丢弃不可读值并重新输入</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Message" xml:space="preserve">
+    <value>系统受保护的存储不可用。明文模式会将敏感设置（包括凭据）以未加密形式保存在独立的本地文件中。复制或同步配置目录可能泄露这些机密。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Title" xml:space="preserve">
+    <value>敏感设置存储警告</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.UsePlaintext" xml:space="preserve">
+    <value>使用明文存储</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Retry" xml:space="preserve">
+    <value>重试安全存储</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.Available" xml:space="preserve">
+    <value>敏感设置存储：{0}。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.CorruptUnreadable" xml:space="preserve">
+    <value>旧版加密敏感值无法解密。在确认丢弃并重新输入前，原配置会被保留。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.PlaintextWarning" xml:space="preserve">
+    <value>敏感设置存储：{0}。当前仍使用明文模式；复制配置目录可能泄露敏感设置。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.Unavailable" xml:space="preserve">
+    <value>敏感设置存储：{0}。不可用（{1}）；敏感操作已禁用。</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Unavailable" xml:space="preserve">
+    <value>敏感设置存储不可用。恢复存储前，敏感设置和相关操作已禁用。</value>
+  </data>
   <data name="Settings.Start.ApplyOnNextExecution" xml:space="preserve">
     <value>将在下次执行时生效</value>
   </data>
@@ -4217,29 +4491,29 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.Start.Dialog.SelectEmulatorPathCancel" xml:space="preserve">
     <value>取消</value>
   </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathCandidateCount" xml:space="preserve">
+    <value>已检测到 {0} 个候选路径</value>
+  </data>
   <data name="Settings.Start.Dialog.SelectEmulatorPathConfirm" xml:space="preserve">
     <value>确认</value>
   </data>
-  <data name="Settings.Start.Dialog.SelectEmulatorPathTitle" xml:space="preserve">
-    <value>选择模拟器路径</value>
-  </data>
-  <data name="Settings.Start.Dialog.SelectEmulatorPathNoCandidates" xml:space="preserve">
-    <value>未检测到路径</value>
-  </data>
-  <data name="Settings.Start.Dialog.SelectEmulatorPathCandidateCount" xml:space="preserve">
-    <value>已检测到 {0} 个候选路径</value>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathCustomPath" xml:space="preserve">
+    <value>自定义路径</value>
   </data>
   <data name="Settings.Start.Dialog.SelectEmulatorPathDetectedPaths" xml:space="preserve">
     <value>已检测到的路径</value>
   </data>
-  <data name="Settings.Start.Dialog.SelectEmulatorPathIntro" xml:space="preserve">
-    <value>选择已检测到的模拟器可执行文件，或在下方粘贴自定义路径。</value>
-  </data>
   <data name="Settings.Start.Dialog.SelectEmulatorPathEmptyBody" xml:space="preserve">
     <value>如果自动检测未找到模拟器，请在下方粘贴模拟器可执行文件路径。</value>
   </data>
-  <data name="Settings.Start.Dialog.SelectEmulatorPathCustomPath" xml:space="preserve">
-    <value>自定义路径</value>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathIntro" xml:space="preserve">
+    <value>选择已检测到的模拟器可执行文件，或在下方粘贴自定义路径。</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathNoCandidates" xml:space="preserve">
+    <value>未检测到路径</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathTitle" xml:space="preserve">
+    <value>选择模拟器路径</value>
   </data>
   <data name="Settings.Start.Dialog.SelectEmulatorPathWatermark" xml:space="preserve">
     <value>/path/to/emulator</value>
@@ -4250,26 +4524,26 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.Start.EmulatorExtraArgsTip" xml:space="preserve">
     <value>传递给模拟器启动命令的参数</value>
   </data>
+  <data name="Settings.Start.EmulatorPath" xml:space="preserve">
+    <value>模拟器路径</value>
+  </data>
   <data name="Settings.Start.EmulatorPathEmptyWarning" xml:space="preserve">
     <value>模拟器路径为空，「断线重试」与「启动后自动打开模拟器」已自动关闭。</value>
-  </data>
-  <data name="Settings.Start.EmulatorPathMaaConfirm.Title" xml:space="preserve">
-    <value>提示</value>
-  </data>
-  <data name="Settings.Start.EmulatorPathMaaConfirm.Message" xml:space="preserve">
-    <value>你也想在酒吧里点酒吧？</value>
-  </data>
-  <data name="Settings.Start.EmulatorPathMaaConfirm.Confirm" xml:space="preserve">
-    <value>我确定没选错</value>
   </data>
   <data name="Settings.Start.EmulatorPathMaaConfirm.Cancel" xml:space="preserve">
     <value>好的，我会重新选择</value>
   </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Confirm" xml:space="preserve">
+    <value>我确定没选错</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Message" xml:space="preserve">
+    <value>你也想在酒吧里点酒吧？</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Title" xml:space="preserve">
+    <value>提示</value>
+  </data>
   <data name="Settings.Start.EmulatorPathNotExistWarning" xml:space="preserve">
     <value>模拟器路径不存在</value>
-  </data>
-  <data name="Settings.Start.EmulatorPath" xml:space="preserve">
-    <value>模拟器路径</value>
   </data>
   <data name="Settings.Start.EmulatorPathTip" xml:space="preserve">
     <value>启动模拟器时使用此路径</value>
@@ -4282,6 +4556,27 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Settings.Start.MinimizeDirectly" xml:space="preserve">
     <value>启动后直接最小化</value>
+  </data>
+  <data name="Settings.Start.RestartDialog.Cancel" xml:space="preserve">
+    <value>稍后</value>
+  </data>
+  <data name="Settings.Start.RestartDialog.Confirm" xml:space="preserve">
+    <value>立即重启</value>
+  </data>
+  <data name="Settings.Start.RestartDialog.Message" xml:space="preserve">
+    <value>启动设置已保存。是否现在重启 MAA 以应用这些更改？</value>
+  </data>
+  <data name="Settings.Start.RestartDialog.Title" xml:space="preserve">
+    <value>重启 MAA</value>
+  </data>
+  <data name="Settings.Start.RestartLaunched" xml:space="preserve">
+    <value>已开始重启。</value>
+  </data>
+  <data name="Settings.Start.RestartManualClose" xml:space="preserve">
+    <value>已启动新的实例。请关闭当前实例以完成重启。</value>
+  </data>
+  <data name="Settings.Start.RestartPending" xml:space="preserve">
+    <value>启动设置已保存。请稍后重启 MAA 以应用这些更改。</value>
   </data>
   <data name="Settings.Start.RetryOnDisconnected" xml:space="preserve">
     <value>连接断开后重试</value>
@@ -4325,6 +4620,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.StartPerformance.Validation.Passed" xml:space="preserve">
     <value>启动/性能设置校验通过。</value>
   </data>
+  <data name="Settings.StartPerformance.Warning.EmulatorWaitSecondsClamped" xml:space="preserve">
+    <value>模拟器等待秒数已从 {0} 限制为 {1}。</value>
+  </data>
   <data name="Settings.State.Saved" xml:space="preserve">
     <value>保存成功</value>
   </data>
@@ -4355,6 +4653,12 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.Timer.CustomConfig" xml:space="preserve">
     <value>使用自定义配置</value>
   </data>
+  <data name="Settings.Timer.ForceScheduledStart" xml:space="preserve">
+    <value>强制定时启动</value>
+  </data>
+  <data name="Settings.Timer.Normalize" xml:space="preserve">
+    <value>重置定时设置</value>
+  </data>
   <data name="Settings.Timer.NotifyBeforeScheduledStart" xml:space="preserve">
     <value>定时执行前发送系统通知</value>
   </data>
@@ -4367,50 +4671,14 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.Timer.ScheduledWakeUp" xml:space="preserve">
     <value>定时启动前尝试唤醒计算机并启动 MAA</value>
   </data>
-  <data name="Settings.Timer.ScheduledWakeUpTip" xml:space="preserve">
-    <value>该功能通过 Windows 任务计划程序注册计划任务，在每个启用的定时项前 5 分钟尝试唤醒计算机并启动 MAA，随后由定时启动逻辑接管。&#10;唤醒启动时会跳过启动设置中的启动自动运行项。&#10;MAA 退出后计划任务仍会保留，关闭本开关时删除。&#10;休眠状态的定时唤醒依赖设备固件支持，部分设备仅支持从睡眠唤醒。</value>
+  <data name="Settings.Timer.ScheduledWakeUp.SyncFailed" xml:space="preserve">
+    <value>定时唤醒计划任务同步失败：{0}</value>
   </data>
   <data name="Settings.Timer.ScheduledWakeUp.Unsupported" xml:space="preserve">
     <value>当前平台不支持计划任务唤醒（需要 Windows 任务计划程序）。</value>
   </data>
-  <data name="Settings.Timer.ScheduledWakeUp.SyncFailed" xml:space="preserve">
-    <value>定时唤醒计划任务同步失败：{0}</value>
-  </data>
-  <data name="Settings.Timer.Warning.NotificationMinutesClamped" xml:space="preserve">
-    <value>定时执行前通知的提前时间已从 {0} 限制为 {1} 分钟。</value>
-  </data>
-  <data name="Settings.Timer.Warning.NotificationMinutesParseFallback" xml:space="preserve">
-    <value>定时执行前通知的提前时间解析失败，已回退为 {0} 分钟。</value>
-  </data>
-  <data name="Timer.Schedule.ForceCountdown.Title" xml:space="preserve">
-    <value>定时启动</value>
-  </data>
-  <data name="Timer.Schedule.ForceCountdown.Message" xml:space="preserve">
-    <value>定时启动将在倒计时结束后强制执行：正在运行的任务会被停止并重新开始。</value>
-  </data>
-  <data name="Timer.Schedule.ForceCountdown.Confirm" xml:space="preserve">
-    <value>立即开始</value>
-  </data>
-  <data name="Timer.Schedule.ForceCountdown.Cancel" xml:space="preserve">
-    <value>取消</value>
-  </data>
-  <data name="Timer.Schedule.ProfileMismatchWarning" xml:space="preserve">
-    <value>定时启动已跳过：当前配置与定时配置不一致。</value>
-  </data>
-  <data name="Timer.Schedule.Notification.Content" xml:space="preserve">
-    <value>定时 {0} 计划于 {1}（{2} 分钟后）开始执行，请留意游戏登录状态。</value>
-  </data>
-  <data name="Timer.Schedule.Notification.Title" xml:space="preserve">
-    <value>定时任务即将执行</value>
-  </data>
-  <data name="Timer.Schedule.CloseDownFailed" xml:space="preserve">
-    <value>关闭游戏失败。</value>
-  </data>
-  <data name="Settings.Timer.ForceScheduledStart" xml:space="preserve">
-    <value>强制定时启动</value>
-  </data>
-  <data name="Settings.Timer.Normalize" xml:space="preserve">
-    <value>重置定时设置</value>
+  <data name="Settings.Timer.ScheduledWakeUpTip" xml:space="preserve">
+    <value>该功能通过 Windows 任务计划程序注册计划任务，在每个启用的定时项前 5 分钟尝试唤醒计算机并启动 MAA，随后由定时启动逻辑接管。&#10;唤醒启动时会跳过启动设置中的启动自动运行项。&#10;MAA 退出后计划任务仍会保留，关闭本开关时删除。&#10;休眠状态的定时唤醒依赖设备固件支持，部分设备仅支持从睡眠唤醒。</value>
   </data>
   <data name="Settings.Timer.ShowWindowBeforeForceScheduledStart" xml:space="preserve">
     <value>启动前显示主窗口</value>
@@ -4451,11 +4719,44 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.Timer.Warning.MinuteParseFallback" xml:space="preserve">
     <value>定时任务 {0} 的分钟解析失败，已回退为 {1}。</value>
   </data>
+  <data name="Settings.Timer.Warning.NotificationMinutesClamped" xml:space="preserve">
+    <value>定时执行前通知的提前时间已从 {0} 限制为 {1} 分钟。</value>
+  </data>
+  <data name="Settings.Timer.Warning.NotificationMinutesParseFallback" xml:space="preserve">
+    <value>定时执行前通知的提前时间解析失败，已回退为 {0} 分钟。</value>
+  </data>
   <data name="Settings.Timer.Warning.ProfileFallback" xml:space="preserve">
     <value>定时任务 {0} 选择的配置“{1}”不存在，已回退到“{2}”。</value>
   </data>
-  <data name="Settings.StartPerformance.Warning.EmulatorWaitSecondsClamped" xml:space="preserve">
-    <value>模拟器等待秒数已从 {0} 限制为 {1}。</value>
+  <data name="Settings.VersionUpdate.Activity.CheckingResource" xml:space="preserve">
+    <value>正在检查资源更新……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.CheckingSoftware" xml:space="preserve">
+    <value>正在检查软件更新……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingGlobalSource" xml:space="preserve">
+    <value>正在使用 ｢GlobalSource｣ 下载……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingMirrorChyan" xml:space="preserve">
+    <value>正在使用 ｢MirrorChyan｣ 下载……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourcePreparing" xml:space="preserve">
+    <value>正在编制索引</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdated" xml:space="preserve">
+    <value>游戏资源已更新。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdating" xml:space="preserve">
+    <value>游戏资源正在更新。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdatingMirrorChyan" xml:space="preserve">
+    <value>正在使用 ｢MirrorChyan｣ 更新资源{0}……</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloaded" xml:space="preserve">
+    <value>软件更新包已下载完成。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloading" xml:space="preserve">
+    <value>正在下载软件更新包……</value>
   </data>
   <data name="Settings.VersionUpdate.AutoDownload" xml:space="preserve">
     <value>自动下载更新包</value>
@@ -4465,18 +4766,6 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Settings.VersionUpdate.Changelog" xml:space="preserve">
     <value>更新日志</value>
-  </data>
-  <data name="Settings.VersionUpdate.ImportPackage" xml:space="preserve">
-    <value>导入本地更新包</value>
-  </data>
-  <data name="Settings.VersionUpdate.ImportPackage.Missing" xml:space="preserve">
-    <value>所选更新包不存在，请重新选择。</value>
-  </data>
-  <data name="Settings.VersionUpdate.ImportPackage.SameVersion" xml:space="preserve">
-    <value>已注册同版本完整包，可在下次启动时修复安装。</value>
-  </data>
-  <data name="Settings.VersionUpdate.ImportPackage.Success" xml:space="preserve">
-    <value>已注册更新包，可在下次启动时安装。</value>
   </data>
   <data name="Settings.VersionUpdate.Channel" xml:space="preserve">
     <value>更新渠道</value>
@@ -4496,11 +4785,35 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.VersionUpdate.ForceGithub" xml:space="preserve">
     <value>强制使用 GitHub</value>
   </data>
+  <data name="Settings.VersionUpdate.ImportPackage" xml:space="preserve">
+    <value>导入本地更新包</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Missing" xml:space="preserve">
+    <value>所选更新包不存在，请重新选择。</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.SameVersion" xml:space="preserve">
+    <value>已注册同版本完整包，可在下次启动时修复安装。</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Success" xml:space="preserve">
+    <value>已注册更新包，可在下次启动时安装。</value>
+  </data>
   <data name="Settings.VersionUpdate.MirrorCdk" xml:space="preserve">
     <value>Mirror酱 CDK</value>
   </data>
   <data name="Settings.VersionUpdate.MirrorSite" xml:space="preserve">
     <value>Mirror酱</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Cancel" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Confirm" xml:space="preserve">
+    <value>确定</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Message" xml:space="preserve">
+    <value>已启用 Nightly 版本更新。感谢你帮助测试 MAA。</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Title" xml:space="preserve">
+    <value>Nightly 版本警告</value>
   </data>
   <data name="Settings.VersionUpdate.PanelBuildTime" xml:space="preserve">
     <value>构建时间</value>
@@ -4535,8 +4848,47 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.VersionUpdate.ResourceUpdate" xml:space="preserve">
     <value>资源更新</value>
   </data>
+  <data name="Settings.VersionUpdate.RestartDialog.Cancel" xml:space="preserve">
+    <value>稍后</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartDialog.Confirm" xml:space="preserve">
+    <value>立即重启</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartDialog.Message" xml:space="preserve">
+    <value>软件更新包已下载完成。是否现在重启 MAA 以应用更新？</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartDialog.Title" xml:space="preserve">
+    <value>更新包已准备好</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartLaunched" xml:space="preserve">
+    <value>已开始重启以应用软件更新。</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartManualClose" xml:space="preserve">
+    <value>新实例已启动，请关闭当前实例以继续应用更新。</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartPending" xml:space="preserve">
+    <value>更新包已下载完成，请稍后重启 MAA 以应用更新。</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartPendingWhileRunning" xml:space="preserve">
+    <value>更新包已下载完成。当前任务仍在运行，请在空闲时重启 MAA 以应用更新。</value>
+  </data>
   <data name="Settings.VersionUpdate.ScheduledCheck" xml:space="preserve">
     <value>定时检查更新</value>
+  </data>
+  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Cancel" xml:space="preserve">
+    <value>关闭</value>
+  </data>
+  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Confirm" xml:space="preserve">
+    <value>知道了</value>
+  </data>
+  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Message" xml:space="preserve">
+    <value>软件更新已接入。请前往“设置 &gt; Version Update”检查、下载并应用更新。</value>
+  </data>
+  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Status" xml:space="preserve">
+    <value>软件更新已可用。</value>
+  </data>
+  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Title" xml:space="preserve">
+    <value>软件更新</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwareUpdate" xml:space="preserve">
     <value>软件更新</value>
@@ -4546,36 +4898,6 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Settings.VersionUpdate.StartupCheck" xml:space="preserve">
     <value>启动时检查更新</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.CheckingSoftware" xml:space="preserve">
-    <value>正在检查软件更新……</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.CheckingResource" xml:space="preserve">
-    <value>正在检查资源更新……</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingGlobalSource" xml:space="preserve">
-    <value>正在使用 ｢GlobalSource｣ 下载……</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingMirrorChyan" xml:space="preserve">
-    <value>正在使用 ｢MirrorChyan｣ 下载……</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.ResourcePreparing" xml:space="preserve">
-    <value>正在编制索引</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.ResourceUpdated" xml:space="preserve">
-    <value>游戏资源已更新。</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.ResourceUpdating" xml:space="preserve">
-    <value>游戏资源正在更新。</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.ResourceUpdatingMirrorChyan" xml:space="preserve">
-    <value>正在使用 ｢MirrorChyan｣ 更新资源{0}……</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloaded" xml:space="preserve">
-    <value>软件更新包已下载完成。</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloading" xml:space="preserve">
-    <value>正在下载软件更新包……</value>
   </data>
   <data name="Settings.VersionUpdate.Status.CheckFailed" xml:space="preserve">
     <value>检查更新失败。</value>
@@ -4592,15 +4914,6 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.VersionUpdate.Status.FirstBootShown" xml:space="preserve">
     <value>已显示更新说明。</value>
   </data>
-  <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
-    <value>更新失败。</value>
-  </data>
-  <data name="Settings.VersionUpdate.Status.PackageUnavailable" xml:space="preserve">
-    <value>更新失败。</value>
-  </data>
-  <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
-    <value>Windows 版暂不支持应用内自动更新，请从发布页手动更新。</value>
-  </data>
   <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
     <value>Linux 便携包已下载，请解压到新目录并启动其中的 AppImage。</value>
   </data>
@@ -4612,6 +4925,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkRemainingDays" xml:space="preserve">
     <value>MirrorChyan CDK 剩余 {0:F1} 天（至 {1:yyyy-MM-dd HH:mm}）。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.MirrorChyanCdkRequired" xml:space="preserve">
+    <value>请前往 设置 &gt; Version Update 配置 Mirror酱 CDK 或切换更新源。</value>
   </data>
   <data name="Settings.VersionUpdate.Status.OpenChangelogFailed" xml:space="preserve">
     <value>打开更新日志失败。</value>
@@ -4631,6 +4947,12 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.VersionUpdate.Status.OpenResourceRepositorySucceeded" xml:space="preserve">
     <value>已打开资源仓库。</value>
   </data>
+  <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
+    <value>更新失败。</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageUnavailable" xml:space="preserve">
+    <value>更新失败。</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.PersistFailed" xml:space="preserve">
     <value>版本更新结果已刷新，但保存到配置失败。</value>
   </data>
@@ -4639,78 +4961,6 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Settings.VersionUpdate.Status.ResourceUpdateFailed" xml:space="preserve">
     <value>更新资源失败。</value>
-  </data>
-  <data name="Settings.VersionUpdate.Status.MirrorChyanCdkRequired" xml:space="preserve">
-    <value>请前往 设置 &gt; Version Update 配置 Mirror酱 CDK 或切换更新源。</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.Checking" xml:space="preserve">
-    <value>正在检查资源更新。源={0}，客户端={1}</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.CheckFailedHttp" xml:space="preserve">
-    <value>资源更新检查失败，HTTP 状态码 {0}。</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.CheckFailed" xml:space="preserve">
-    <value>资源更新检查失败。</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.CheckFailedWithMessage" xml:space="preserve">
-    <value>资源更新检查失败：{0}</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.AlreadyLatest" xml:space="preserve">
-    <value>资源已是最新版本。</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.Available" xml:space="preserve">
-    <value>检测到资源更新：{0}。</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.AvailableRequiresCdk" xml:space="preserve">
-    <value>检测到资源更新：{0}。MirrorChyan 直链下载需要 CDK。</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.Checking" xml:space="preserve">
-    <value>正在检查软件更新。通道={0}，当前版本={1}</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.PreparingPackage" xml:space="preserve">
-    <value>正在准备软件下载包。</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.PreparingNamedPackage" xml:space="preserve">
-    <value>正在准备软件下载包：{0}</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.PackageReady" xml:space="preserve">
-    <value>软件下载包已准备完成，重启后即可应用。</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.NamedPackageReady" xml:space="preserve">
-    <value>软件下载包 {0} 已准备完成，重启后即可应用。</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.PackagePrepareFailed" xml:space="preserve">
-    <value>软件下载包准备失败。</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.PackagePrepareFailedWithMessage" xml:space="preserve">
-    <value>软件下载包准备失败：{0}</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.Available" xml:space="preserve">
-    <value>检测到软件更新：{0}</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.AlreadyLatest" xml:space="preserve">
-    <value>当前 {0} 通道已是最新版本。</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.CheckFailedWithMessage" xml:space="preserve">
-    <value>软件更新检查失败：{0}</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.GithubStart" xml:space="preserve">
-    <value>开始从 Github 更新资源。</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.GithubCompleted" xml:space="preserve">
-    <value>已从 Github 完成资源更新。</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.GithubFailedWithMessage" xml:space="preserve">
-    <value>Github 资源更新失败：{0}</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.MirrorChyanStart" xml:space="preserve">
-    <value>开始从 MirrorChyan 更新资源。</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.MirrorChyanCompleted" xml:space="preserve">
-    <value>已从 MirrorChyan 完成资源更新。</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.MirrorChyanFailedWithMessage" xml:space="preserve">
-    <value>MirrorChyan 资源更新失败：{0}</value>
   </data>
   <data name="Settings.VersionUpdate.Status.SaveChannelFailed" xml:space="preserve">
     <value>版本更新通道配置保存失败。</value>
@@ -4724,12 +4974,8 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Settings.VersionUpdate.Status.SaveProxySucceeded" xml:space="preserve">
     <value>版本更新代理配置保存成功。</value>
   </data>
-  <data name="MultiInstanceUnderSamePath" xml:space="preserve">
-    <value>同一路径下只能启动一个实例！
-如需多开 MAA，请复制一份新的 MAA 到其他文件夹下，并设置使用不同的 MAA，相同的 adb 和不同的模拟器地址进行多开操作。</value>
-  </data>
-  <data name="Startup.LinuxPortablePackageMissing" xml:space="preserve">
-    <value>Linux 便携包目录不完整。请先完整解压，再运行同目录中的 MAAUnified.AppImage。</value>
+  <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
+    <value>Windows 版暂不支持应用内自动更新，请从发布页手动更新。</value>
   </data>
   <data name="SkillDaemon" xml:space="preserve">
     <value>开始挂机</value>
@@ -4919,11 +5165,17 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="StartsWithScript" xml:space="preserve">
     <value>开始前脚本</value>
   </data>
+  <data name="Startup.LinuxPortablePackageMissing" xml:space="preserve">
+    <value>Linux 便携包目录不完整。请先完整解压，再运行同目录中的 MAAUnified.AppImage。</value>
+  </data>
   <data name="StoneUsed" xml:space="preserve">
     <value>已使用源石</value>
   </data>
   <data name="StoneUsedTimes" xml:space="preserve">
     <value>石: {0}  </value>
+  </data>
+  <data name="StopTimeout" xml:space="preserve">
+    <value>停止超时，Core 未能及时响应停止请求</value>
   </data>
   <data name="Stopped" xml:space="preserve">
     <value>已停止</value>
@@ -4936,6 +5188,21 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="SwitchSpeed" xml:space="preserve">
     <value>切换倍速</value>
+  </data>
+  <data name="SwitchTheme.EmptyHint" xml:space="preserve">
+    <value>未填写主题名称，运行时将跳过该任务。</value>
+  </data>
+  <data name="SwitchTheme.Placeholder" xml:space="preserve">
+    <value>主题名称</value>
+  </data>
+  <data name="SwitchTheme.Themes" xml:space="preserve">
+    <value>候选主题</value>
+  </data>
+  <data name="SwitchTheme.ThemesTip" xml:space="preserve">
+    <value>填写游戏内主题列表中显示的名称；多个时每次运行随机选择一个，仅填一个时固定切换。</value>
+  </data>
+  <data name="SwitchTheme.Title" xml:space="preserve">
+    <value>更换主题</value>
   </data>
   <data name="TacticalAssaultOperative" xml:space="preserve">
     <value>突击战术分队</value>
@@ -4953,14 +5220,14 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
     <value>任务已完成，但出现错误！
 (用时 {0})</value>
   </data>
-  <data name="TaskErrorSummaryTitle" xml:space="preserve">
-    <value>本轮任务出现以下错误：</value>
+  <data name="TaskError" xml:space="preserve">
+    <value>任务出错: </value>
   </data>
   <data name="TaskErrorSummaryItem" xml:space="preserve">
     <value>{0}</value>
   </data>
-  <data name="TaskError" xml:space="preserve">
-    <value>任务出错: </value>
+  <data name="TaskErrorSummaryTitle" xml:space="preserve">
+    <value>本轮任务出现以下错误：</value>
   </data>
   <data name="TaskQueue.DailyStageHintDefault" xml:space="preserve">
     <value>今日关卡信息将在资源加载后展示。</value>
@@ -4971,6 +5238,18 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TaskQueue.Error.EditBlockedWhileRunning" xml:space="preserve">
     <value>运行中禁止编辑任务队列。</value>
   </data>
+  <data name="TaskQueue.Error.MoveOutOfRange" xml:space="preserve">
+    <value>任务移动索引超出范围。</value>
+  </data>
+  <data name="TaskQueue.Error.ParamsMissing" xml:space="preserve">
+    <value>任务参数不能为空。</value>
+  </data>
+  <data name="TaskQueue.Error.ProfileMissing" xml:space="preserve">
+    <value>当前配置档 `{0}` 不存在。</value>
+  </data>
+  <data name="TaskQueue.Error.ProfileMissingShort" xml:space="preserve">
+    <value>当前配置档不存在。</value>
+  </data>
   <data name="TaskQueue.Error.SelectTaskToMove" xml:space="preserve">
     <value>请先选择要移动的任务。</value>
   </data>
@@ -4979,6 +5258,129 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="TaskQueue.Error.SelectTaskToRename" xml:space="preserve">
     <value>请先选择要重命名的任务。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.AccountSwitch" xml:space="preserve">
+    <value>另一项会话操作正在进行，请先停止或等待其完成后再切换账号。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.RunOnce" xml:space="preserve">
+    <value>另一项会话操作正在进行，请先停止或等待其完成后再单次运行任务。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.Start" xml:space="preserve">
+    <value>另一项会话操作正在进行，请先停止或等待其完成后再启动任务。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.AccountSwitch" xml:space="preserve">
+    <value>定时任务正在进行，请等待其完成后再切换账号。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.RunOnce" xml:space="preserve">
+    <value>定时任务正在进行，请等待其完成后再单次运行任务。</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.Start" xml:space="preserve">
+    <value>定时任务正在进行，请等待其完成后再启动任务。</value>
+  </data>
+  <data name="TaskQueue.Error.TaskIndexOutOfRange" xml:space="preserve">
+    <value>任务索引 {0} 超出范围。</value>
+  </data>
+  <data name="TaskQueue.Error.TaskNameMissing" xml:space="preserve">
+    <value>任务名称不能为空。</value>
+  </data>
+  <data name="TaskQueue.Error.TaskNameMissingShort" xml:space="preserve">
+    <value>任务名称不能为空。</value>
+  </data>
+  <data name="TaskQueue.Error.TaskTypeMismatch" xml:space="preserve">
+    <value>当前所选任务不是 `{0}`。</value>
+  </data>
+  <data name="TaskQueue.Error.TaskTypeMissing" xml:space="preserve">
+    <value>任务类型不能为空。</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Confirm" xml:space="preserve">
+    <value>我已阅读并同意用户协议</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Confirmed" xml:space="preserve">
+    <value>已确认用户协议</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Link" xml:space="preserve">
+    <value>用户协议</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Prefix" xml:space="preserve">
+    <value>使用 MAA 前请阅读</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.RequiredForDemo" xml:space="preserve">
+    <value>请先返回 ｢使用指引｣ 确认用户协议，再完成任务演示。</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Tip" xml:space="preserve">
+    <value>尚未确认用户协议。可以继续浏览，但任务演示需确认后才能完成。</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Title" xml:space="preserve">
+    <value>用户协议</value>
+  </data>
+  <data name="TaskQueue.Guide.ConfigureTasks" xml:space="preserve">
+    <value>配置任务</value>
+  </data>
+  <data name="TaskQueue.Guide.Connection.Description" xml:space="preserve">
+    <value>配置 ADB 路径或连接预设，并测试连接是否可用。</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddFight" xml:space="preserve">
+    <value>添加理智作战</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddStartUp" xml:space="preserve">
+    <value>添加开始唤醒</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddSwitchTheme" xml:space="preserve">
+    <value>添加更换主题</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.EnableWeekly" xml:space="preserve">
+    <value>启用周常计划</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Next" xml:space="preserve">
+    <value>下一步：{0}</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Note" xml:space="preserve">
+    <value>演示只操作引导中的模拟任务，不会修改实际任务队列。</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Progress" xml:space="preserve">
+    <value>已完成 {0} / {1}</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.RenameFight" xml:space="preserve">
+    <value>重命名作战任务</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.ReorderFight" xml:space="preserve">
+    <value>调整任务顺序</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.SelectStage" xml:space="preserve">
+    <value>选择剿灭关卡</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Title" xml:space="preserve">
+    <value>任务设置演示</value>
+  </data>
+  <data name="TaskQueue.Guide.Game.Description" xml:space="preserve">
+    <value>设置客户端类型，以及游戏启动和账号切换行为。</value>
+  </data>
+  <data name="TaskQueue.Guide.OpenSettings" xml:space="preserve">
+    <value>打开对应设置</value>
+  </data>
+  <data name="TaskQueue.Guide.Performance.Description" xml:space="preserve">
+    <value>选择设备支持的性能、截图和输入选项。</value>
+  </data>
+  <data name="TaskQueue.Guide.Resume" xml:space="preserve">
+    <value>返回设置引导</value>
+  </data>
+  <data name="TaskQueue.Guide.Skip" xml:space="preserve">
+    <value>跳过指引</value>
+  </data>
+  <data name="TaskQueue.Guide.Tasks.Description" xml:space="preserve">
+    <value>选择 MAA 需要运行的任务，并调整各任务设置。</value>
+  </data>
+  <data name="TaskQueue.Guide.Title" xml:space="preserve">
+    <value>设置指引</value>
+  </data>
+  <data name="TaskQueue.Guide.Ui.Description" xml:space="preserve">
+    <value>选择适合你的界面语言、主题、背景和缩放设置。</value>
+  </data>
+  <data name="TaskQueue.Guide.Update.Description" xml:space="preserve">
+    <value>设置更新通道、资源更新和启动检查行为。</value>
+  </data>
+  <data name="TaskQueue.Guide.User.Description" xml:space="preserve">
+    <value>开始任务前，可查看文档、问题反馈和帮助链接。</value>
   </data>
   <data name="TaskQueue.Log.AllCompleted" xml:space="preserve">
     <value>全部任务完成</value>
@@ -5013,47 +5415,8 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TaskQueue.Module.Custom" xml:space="preserve">
     <value>自定义任务</value>
   </data>
-  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
-    <value>更新数据</value>
-  </data>
-  <data name="TaskQueue.Module.SingleStep" xml:space="preserve">
-    <value>单步任务</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Body" xml:space="preserve">
-    <value>SingleStep 是 Core 的单步 Copilot 入口。导入的 marker 任务需要运行时单步参数后才能执行。</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Type" xml:space="preserve">
-    <value>类型</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Subtype" xml:space="preserve">
-    <value>子类型</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Subtype.Start" xml:space="preserve">
-    <value>开始</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Subtype.Stage" xml:space="preserve">
-    <value>关卡</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Subtype.Action" xml:space="preserve">
-    <value>动作</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Details" xml:space="preserve">
-    <value>details JSON</value>
-  </data>
-  <data name="TaskQueue.SingleStep.DetailsPlaceholder" xml:space="preserve">
-    <value>{"stage_name":"..."}</value>
-  </data>
-  <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
-    <value>更新数据触发间隔</value>
-  </data>
-  <data name="TaskQueue.UserDataUpdate.Trigger.EveryTime" xml:space="preserve">
-    <value>每次触发</value>
-  </data>
-  <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
-    <value>每天一次</value>
-  </data>
-  <data name="TaskQueue.UserDataUpdate.Trigger.Weekly" xml:space="preserve">
-    <value>每周一次</value>
+  <data name="TaskQueue.Module.DepotMaintain" xml:space="preserve">
+    <value>库存保持</value>
   </data>
   <data name="TaskQueue.Module.Fight" xml:space="preserve">
     <value>理智作战</value>
@@ -5063,6 +5426,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="TaskQueue.Module.Mall" xml:space="preserve">
     <value>信用收支</value>
+  </data>
+  <data name="TaskQueue.Module.OperProgress" xml:space="preserve">
+    <value>干员培养</value>
   </data>
   <data name="TaskQueue.Module.PostAction" xml:space="preserve">
     <value>完成后</value>
@@ -5076,11 +5442,20 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TaskQueue.Module.Roguelike" xml:space="preserve">
     <value>自动肉鸽</value>
   </data>
+  <data name="TaskQueue.Module.SingleStep" xml:space="preserve">
+    <value>单步任务</value>
+  </data>
   <data name="TaskQueue.Module.StartUp" xml:space="preserve">
     <value>开始唤醒</value>
   </data>
+  <data name="TaskQueue.Module.SwitchTheme" xml:space="preserve">
+    <value>更换主题</value>
+  </data>
   <data name="TaskQueue.Module.TaskQueue" xml:space="preserve">
     <value>任务队列</value>
+  </data>
+  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
+    <value>更新数据</value>
   </data>
   <data name="TaskQueue.OverlayDisconnected" xml:space="preserve">
     <value>Overlay 未连接</value>
@@ -5112,11 +5487,11 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TaskQueue.Root.Delete" xml:space="preserve">
     <value>删除</value>
   </data>
-  <data name="TaskQueue.Root.DeleteConfirmTitle" xml:space="preserve">
-    <value>确认删除</value>
-  </data>
   <data name="TaskQueue.Root.DeleteConfirmMessage" xml:space="preserve">
     <value>确定要删除任务“{0}”吗？</value>
+  </data>
+  <data name="TaskQueue.Root.DeleteConfirmTitle" xml:space="preserve">
+    <value>确认删除</value>
   </data>
   <data name="TaskQueue.Root.GeneralSettings" xml:space="preserve">
     <value>常规设置</value>
@@ -5253,6 +5628,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TaskQueue.Root.Waiting" xml:space="preserve">
     <value>等待中...</value>
   </data>
+  <data name="TaskQueue.RunDurationLimit.Reached" xml:space="preserve">
+    <value>已达到运行时长上限（{0} 分钟），停止任务</value>
+  </data>
   <data name="TaskQueue.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
     <value>取消</value>
   </data>
@@ -5286,23 +5664,131 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TaskQueue.SelectionHint" xml:space="preserve">
     <value>从左侧任务列表选择一个任务以编辑其设置。</value>
   </data>
+  <data name="TaskQueue.SingleStep.Body" xml:space="preserve">
+    <value>SingleStep 是 Core 的单步 Copilot 入口。导入的 marker 任务需要运行时单步参数后才能执行。</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Details" xml:space="preserve">
+    <value>details JSON</value>
+  </data>
+  <data name="TaskQueue.SingleStep.DetailsPlaceholder" xml:space="preserve">
+    <value>{"stage_name":"..."}</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype" xml:space="preserve">
+    <value>子类型</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Action" xml:space="preserve">
+    <value>动作</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Stage" xml:space="preserve">
+    <value>关卡</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Start" xml:space="preserve">
+    <value>开始</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Type" xml:space="preserve">
+    <value>类型</value>
+  </data>
+  <data name="TaskQueue.Stall.Warning" xml:space="preserve">
+    <value>任务日志输出已超过 {0} 分钟无更新（当前已停滞 {1} 分钟）。请确认任务是否正常运行，若任务正常可忽略此提示，若无响应则可能需要手动干预。</value>
+  </data>
   <data name="TaskQueue.Status.Error" xml:space="preserve">
     <value>错误</value>
   </data>
   <data name="TaskQueue.Status.Idle" xml:space="preserve">
     <value>未开始</value>
   </data>
+  <data name="TaskQueue.Status.LoadedTasks" xml:space="preserve">
+    <value>已加载 {0} 个任务。</value>
+  </data>
   <data name="TaskQueue.Status.Observed" xml:space="preserve">
     <value>已记录</value>
   </data>
+  <data name="TaskQueue.Status.ParamsFlushed" xml:space="preserve">
+    <value>任务参数已落盘。</value>
+  </data>
+  <data name="TaskQueue.Status.ParamsLoaded" xml:space="preserve">
+    <value>已加载 `{0}` 的参数。</value>
+  </data>
+  <data name="TaskQueue.Status.ParamsUpdated" xml:space="preserve">
+    <value>已更新 `{0}` 的参数。</value>
+  </data>
+  <data name="TaskQueue.Status.ParamsUpdatedPersisted" xml:space="preserve">
+    <value>已更新 `{0}` 的参数并保存。</value>
+  </data>
+  <data name="TaskQueue.Status.PrecheckDowngradeNotRequired" xml:space="preserve">
+    <value>任务队列预检查无需降级处理。</value>
+  </data>
+  <data name="TaskQueue.Status.PrecheckDowngradesApplied" xml:space="preserve">
+    <value>任务队列预检查已应用 {0} 项降级。</value>
+  </data>
+  <data name="TaskQueue.Status.PrecheckPassed" xml:space="preserve">
+    <value>任务队列预检查通过。</value>
+  </data>
+  <data name="TaskQueue.Status.PrecheckWarnings" xml:space="preserve">
+    <value>任务队列预检查返回 {0} 条警告。</value>
+  </data>
   <data name="TaskQueue.Status.Running" xml:space="preserve">
     <value>运行中</value>
+  </data>
+  <data name="TaskQueue.Status.Saved" xml:space="preserve">
+    <value>任务队列已保存。</value>
   </data>
   <data name="TaskQueue.Status.Skipped" xml:space="preserve">
     <value>已跳过</value>
   </data>
   <data name="TaskQueue.Status.Success" xml:space="preserve">
     <value>已完成</value>
+  </data>
+  <data name="TaskQueue.Status.TaskAdded" xml:space="preserve">
+    <value>已添加任务 `{0}`。</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.False" xml:space="preserve">
+    <value>已禁用任务 `{0}`。</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.Once" xml:space="preserve">
+    <value>仅执行一次</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.SkipOnce" xml:space="preserve">
+    <value>仅跳过本次</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.True" xml:space="preserve">
+    <value>已启用任务 `{0}`。</value>
+  </data>
+  <data name="TaskQueue.Status.TaskMoved" xml:space="preserve">
+    <value>已将任务 `{0}` 移动到第 {1} 位。</value>
+  </data>
+  <data name="TaskQueue.Status.TaskOrderUnchanged" xml:space="preserve">
+    <value>任务顺序未变化。</value>
+  </data>
+  <data name="TaskQueue.Status.TaskRemoved" xml:space="preserve">
+    <value>已移除任务 `{0}`。</value>
+  </data>
+  <data name="TaskQueue.Status.TaskRenamed" xml:space="preserve">
+    <value>已将任务重命名为 `{0}`。</value>
+  </data>
+  <data name="TaskQueue.Status.TasksEnabledBatch.False" xml:space="preserve">
+    <value>已禁用 {0} 个任务。</value>
+  </data>
+  <data name="TaskQueue.Status.TasksEnabledBatch.True" xml:space="preserve">
+    <value>已启用 {0} 个任务。</value>
+  </data>
+  <data name="TaskQueue.Status.TasksEnabledInverted" xml:space="preserve">
+    <value>已反转 {0} 个任务的启用状态。</value>
+  </data>
+  <data name="TaskQueue.Status.ValidationPassed" xml:space="preserve">
+    <value>任务 `{0}` 校验通过。</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
+    <value>每天一次</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.EveryTime" xml:space="preserve">
+    <value>每次触发</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Weekly" xml:space="preserve">
+    <value>每周一次</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
+    <value>更新数据触发间隔</value>
   </data>
   <data name="TaskQueue.Validation.BlockingCount" xml:space="preserve">
     <value>存在 {0} 条阻断错误。</value>
@@ -5316,6 +5802,12 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TaskQueue.Validation.WarningCount" xml:space="preserve">
     <value>存在 {0} 条预警。</value>
   </data>
+  <data name="TaskQueue.Warning.MallCreditFightDowngraded" xml:space="preserve">
+    <value>已为 `{0}` 关闭信用作战，因为存在已启用的 `{1}` 任务使用当前/上次关卡选择器。</value>
+  </data>
+  <data name="TaskStallWarning" xml:space="preserve">
+    <value>任务日志已超过 {0} 分钟没有更新（当前已停滞 {1} 分钟），请检查任务是否仍在正常运行。</value>
+  </data>
   <data name="TaskStallWarning" xml:space="preserve">
     <value>任务日志输出已 {0} 分钟没有更新（当前已停滞 {1} 分钟），请检查任务是否仍在运行。</value>
   </data>
@@ -5325,20 +5817,44 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="ThisFacility" xml:space="preserve">
     <value>当前设施: </value>
   </data>
+  <data name="Timer.Schedule.CloseDownFailed" xml:space="preserve">
+    <value>关闭游戏失败。</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Cancel" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Confirm" xml:space="preserve">
+    <value>立即开始</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Message" xml:space="preserve">
+    <value>定时启动将在倒计时结束后强制执行：正在运行的任务会被停止并重新开始。</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Title" xml:space="preserve">
+    <value>定时启动</value>
+  </data>
+  <data name="Timer.Schedule.Notification.Content" xml:space="preserve">
+    <value>定时 {0} 计划于 {1}（{2} 分钟后）开始执行，请留意游戏登录状态。</value>
+  </data>
+  <data name="Timer.Schedule.Notification.Title" xml:space="preserve">
+    <value>定时任务即将执行</value>
+  </data>
+  <data name="Timer.Schedule.ProfileMismatchWarning" xml:space="preserve">
+    <value>定时启动已跳过：当前配置与定时配置不一致。</value>
+  </data>
   <data name="Toolbox.Action.PeepStarting" xml:space="preserve">
     <value>启动中...</value>
   </data>
   <data name="Toolbox.Action.PeepStopping" xml:space="preserve">
     <value>停止中...</value>
   </data>
-  <data name="Toolbox.Action.StartRecognition" xml:space="preserve">
-    <value>开始识别</value>
-  </data>
   <data name="Toolbox.Action.Recognizing" xml:space="preserve">
     <value>识别中...</value>
   </data>
   <data name="Toolbox.Action.Running" xml:space="preserve">
     <value>执行中...</value>
+  </data>
+  <data name="Toolbox.Action.StartRecognition" xml:space="preserve">
+    <value>开始识别</value>
   </data>
   <data name="Toolbox.Action.Stop" xml:space="preserve">
     <value>停止</value>
@@ -5367,6 +5883,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Toolbox.Advanced.ExternalNotification.DefaultTitle" xml:space="preserve">
     <value>MAA 测试</value>
   </data>
+  <data name="Toolbox.Advanced.ExternalNotification.Error.QueryFailed" xml:space="preserve">
+    <value>查询外部通知 Provider 失败。</value>
+  </data>
   <data name="Toolbox.Advanced.ExternalNotification.MessageBody" xml:space="preserve">
     <value>内容</value>
   </data>
@@ -5387,6 +5906,12 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Toolbox.Advanced.ExternalNotification.SendTest" xml:space="preserve">
     <value>发送测试</value>
+  </data>
+  <data name="Toolbox.Advanced.ExternalNotification.Status.LoadedProviders" xml:space="preserve">
+    <value>已加载 {0} 个外部通知 Provider。</value>
+  </data>
+  <data name="Toolbox.Advanced.ExternalNotification.Status.NoProviders" xml:space="preserve">
+    <value>当前没有可用的外部通知 Provider。</value>
   </data>
   <data name="Toolbox.Advanced.ExternalNotification.Title" xml:space="preserve">
     <value>外部通知 Provider</value>
@@ -5436,6 +5961,24 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Toolbox.Advanced.StageManager.ClientType" xml:space="preserve">
     <value>客户端</value>
   </data>
+  <data name="Toolbox.Advanced.StageManager.Error.FileNotFound" xml:space="preserve">
+    <value>文件不存在：{0}</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.InvalidStageCode" xml:space="preserve">
+    <value>无效的关卡代码：{0}</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.NoLocalResources" xml:space="preserve">
+    <value>在 `{1}` 下未找到 `{0}` 的本地关卡资源。</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.NoWebResources" xml:space="preserve">
+    <value>在 `{1}` 下未找到 `{0}` 的 Web 关卡资源。</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.ReadResources" xml:space="preserve">
+    <value>读取关卡资源失败：`{0}`：{1}</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.ServiceUnavailable" xml:space="preserve">
+    <value>关卡管理服务尚未初始化。</value>
+  </data>
   <data name="Toolbox.Advanced.StageManager.LastSelectedStage" xml:space="preserve">
     <value>上次关卡</value>
   </data>
@@ -5456,6 +5999,24 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Toolbox.Advanced.StageManager.StageCodes.Watermark" xml:space="preserve">
     <value>一行一个或用逗号分隔，例如 1-7, CE-5</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Status.ConfigLoaded" xml:space="preserve">
+    <value>已加载关卡管理配置。</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Status.ConfigSaved" xml:space="preserve">
+    <value>关卡管理配置已保存。</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Status.LocalResourcesLoaded" xml:space="preserve">
+    <value>已加载 `{0}` 的本地关卡资源。</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Status.StateLoaded" xml:space="preserve">
+    <value>已加载关卡管理状态。</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Status.Validated" xml:space="preserve">
+    <value>已校验 {0} 个关卡代码。</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Status.WebResourcesLoaded" xml:space="preserve">
+    <value>已加载 `{0}` 的 Web 关卡资源。</value>
   </data>
   <data name="Toolbox.Advanced.StageManager.Title" xml:space="preserve">
     <value>关卡管理</value>
@@ -5553,6 +6114,27 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Toolbox.Advanced.WebApi.Warning" xml:space="preserve">
     <value>该高级页保留对旧版 WebApi 接入的兼容。仅在你明确需要外部调用时启用，并建议尽量配置访问令牌。</value>
   </data>
+  <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
+    <value>知道了</value>
+  </data>
+  <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
+    <value>取消</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
+    <value>当前任务</value>
+  </data>
+  <data name="Toolbox.BusyDialog.DetailsButton" xml:space="preserve">
+    <value>详细报错</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
+    <value>{0} 仍在运行。请先停止当前任务，再启动新的小工具任务。</value>
+  </data>
+  <data name="Toolbox.BusyDialog.StopButton" xml:space="preserve">
+    <value>停止当前任务</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
+    <value>小工具正在执行</value>
+  </data>
   <data name="Toolbox.Depot.ExportArkPlanner" xml:space="preserve">
     <value>导出至企鹅物流刷图规划</value>
   </data>
@@ -5564,6 +6146,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Toolbox.Depot.NeverSynced" xml:space="preserve">
     <value>尚未同步</value>
+  </data>
+  <data name="Toolbox.Depot.Title" xml:space="preserve">
+    <value>仓库识别</value>
   </data>
   <data name="Toolbox.Error.BusyWithTool" xml:space="preserve">
     <value>当前正在执行 `{0}`，请先停止后再开启窥屏。</value>
@@ -5595,6 +6180,12 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Toolbox.Error.RecruitFailed" xml:space="preserve">
     <value>招募识别失败，请检查当前画面与连接状态。</value>
   </data>
+  <data name="Toolbox.Error.SessionActivity.OtherActive" xml:space="preserve">
+    <value>另一项会话操作正在进行，Toolbox 暂时无法启动；请先停止或等待该操作。</value>
+  </data>
+  <data name="Toolbox.Error.SessionActivity.TimerActive" xml:space="preserve">
+    <value>定时任务正在进行，Toolbox 暂时无法启动；请等待定时任务完成。</value>
+  </data>
   <data name="Toolbox.Error.ToolExecutionCancelled" xml:space="preserve">
     <value>工具执行已取消。</value>
   </data>
@@ -5621,42 +6212,6 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Toolbox.Error.YituliuTokenWriteOnly" xml:space="preserve">
     <value>Token 仅具备写入权限。</value>
-  </data>
-  <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
-    <value>知道了</value>
-  </data>
-  <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
-    <value>取消</value>
-  </data>
-  <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
-    <value>当前任务</value>
-  </data>
-  <data name="Toolbox.BusyDialog.DetailsButton" xml:space="preserve">
-    <value>详细报错</value>
-  </data>
-  <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
-    <value>{0} 仍在运行。请先停止当前任务，再启动新的小工具任务。</value>
-  </data>
-  <data name="Toolbox.BusyDialog.StopButton" xml:space="preserve">
-    <value>停止当前任务</value>
-  </data>
-  <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
-    <value>小工具正在执行</value>
-  </data>
-  <data name="Toolbox.RetryableDialog.DetailsButton" xml:space="preserve">
-    <value>详细报错</value>
-  </data>
-  <data name="Toolbox.RetryableDialog.LaterButton" xml:space="preserve">
-    <value>稍后再试</value>
-  </data>
-  <data name="Toolbox.RetryableDialog.Message" xml:space="preserve">
-    <value>你的手速怎么这么快，不过被我料到了。小工具还没准备好，稍后再试一下。</value>
-  </data>
-  <data name="Toolbox.RetryableDialog.RetryButton" xml:space="preserve">
-    <value>重试</value>
-  </data>
-  <data name="Toolbox.RetryableDialog.Title" xml:space="preserve">
-    <value>小工具还没准备好</value>
   </data>
   <data name="Toolbox.ExecutionReview.HistoryLabel" xml:space="preserve">
     <value>历史记录</value>
@@ -5730,11 +6285,11 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Toolbox.MiniGame.EventPriority" xml:space="preserve">
     <value>优先系列事件</value>
   </data>
-  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Title" xml:space="preserve">
-    <value>奇象巡展：发现暂未收录奇象</value>
-  </data>
   <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Content" xml:space="preserve">
     <value>MAA 已停止自动探索，请返回游戏完成战斗。</value>
+  </data>
+  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Title" xml:space="preserve">
+    <value>奇象巡展：发现暂未收录奇象</value>
   </data>
   <data name="Toolbox.MiniGame.Name" xml:space="preserve">
     <value>小游戏名称</value>
@@ -5801,6 +6356,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Toolbox.OperBox.Subtitle.Owned" xml:space="preserve">
     <value>{0}★ / 精英 {1} / 等级 {2} / 潜能 {3}</value>
+  </data>
+  <data name="Toolbox.OperBox.Title" xml:space="preserve">
+    <value>干员识别</value>
   </data>
   <data name="Toolbox.Peep.TargetFps" xml:space="preserve">
     <value>目标帧率</value>
@@ -5916,6 +6474,21 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Toolbox.Recruit.TagsDetectedWithList" xml:space="preserve">
     <value>已识别标签：{0}</value>
   </data>
+  <data name="Toolbox.RetryableDialog.DetailsButton" xml:space="preserve">
+    <value>详细报错</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.LaterButton" xml:space="preserve">
+    <value>稍后再试</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Message" xml:space="preserve">
+    <value>你的手速怎么这么快，不过被我料到了。小工具还没准备好，稍后再试一下。</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.RetryButton" xml:space="preserve">
+    <value>重试</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Title" xml:space="preserve">
+    <value>小工具还没准备好</value>
+  </data>
   <data name="Toolbox.Section.ExecutionReview" xml:space="preserve">
     <value>执行回顾</value>
   </data>
@@ -6015,6 +6588,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Toolbox.Tip.RecruitRecognition" xml:space="preserve">
     <value>小提示: 和主界面的自动公招是两个独立的功能，请手动打开游戏公招 Tags 界面后使用~</value>
   </data>
+  <data name="Toolbox.Title" xml:space="preserve">
+    <value>小工具</value>
+  </data>
   <data name="Toolbox.ToolName.Depot" xml:space="preserve">
     <value>仓库识别</value>
   </data>
@@ -6070,8 +6646,14 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TotalDrop" xml:space="preserve">
     <value>掉落统计: </value>
   </data>
+  <data name="Trade" xml:space="preserve">
+    <value>贸易站</value>
+  </data>
   <data name="Trader" xml:space="preserve">
     <value>节点: 诡意行商</value>
+  </data>
+  <data name="Training" xml:space="preserve">
+    <value>训练室</value>
   </data>
   <data name="TrainingCompleted" xml:space="preserve">
     <value>训练完成</value>
@@ -6094,6 +6676,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="UnitTime" xml:space="preserve">
     <value>次</value>
   </data>
+  <data name="UnknownTaskInChain" xml:space="preserve">
+    <value>任务链引用了未定义的任务（{0}），资源可能已损坏或与程序版本不匹配，已停止任务。</value>
+  </data>
   <data name="UnsupportedLevel" xml:space="preserve">
     <value>不支持的关卡，请检查关卡名或前往资源更新后重试！</value>
   </data>
@@ -6103,661 +6688,79 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="UseSkill" xml:space="preserve">
     <value>使用技能</value>
   </data>
+  <data name="VersionUpdate.Log.Resource.AlreadyLatest" xml:space="preserve">
+    <value>资源已是最新版本。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.Available" xml:space="preserve">
+    <value>检测到资源更新：{0}。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.AvailableRequiresCdk" xml:space="preserve">
+    <value>检测到资源更新：{0}。MirrorChyan 直链下载需要 CDK。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailed" xml:space="preserve">
+    <value>资源更新检查失败。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailedHttp" xml:space="preserve">
+    <value>资源更新检查失败，HTTP 状态码 {0}。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailedWithMessage" xml:space="preserve">
+    <value>资源更新检查失败：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.Checking" xml:space="preserve">
+    <value>正在检查资源更新。源={0}，客户端={1}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubCompleted" xml:space="preserve">
+    <value>已从 Github 完成资源更新。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubFailedWithMessage" xml:space="preserve">
+    <value>Github 资源更新失败：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubStart" xml:space="preserve">
+    <value>开始从 Github 更新资源。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanCompleted" xml:space="preserve">
+    <value>已从 MirrorChyan 完成资源更新。</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanFailedWithMessage" xml:space="preserve">
+    <value>MirrorChyan 资源更新失败：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanStart" xml:space="preserve">
+    <value>开始从 MirrorChyan 更新资源。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.AlreadyLatest" xml:space="preserve">
+    <value>当前 {0} 通道已是最新版本。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.Available" xml:space="preserve">
+    <value>检测到软件更新：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.CheckFailedWithMessage" xml:space="preserve">
+    <value>软件更新检查失败：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.Checking" xml:space="preserve">
+    <value>正在检查软件更新。通道={0}，当前版本={1}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.NamedPackageReady" xml:space="preserve">
+    <value>软件下载包 {0} 已准备完成，重启后即可应用。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackagePrepareFailed" xml:space="preserve">
+    <value>软件下载包准备失败。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackagePrepareFailedWithMessage" xml:space="preserve">
+    <value>软件下载包准备失败：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackageReady" xml:space="preserve">
+    <value>软件下载包已准备完成，重启后即可应用。</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PreparingNamedPackage" xml:space="preserve">
+    <value>正在准备软件下载包：{0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PreparingPackage" xml:space="preserve">
+    <value>正在准备软件下载包。</value>
+  </data>
   <data name="Visiting" xml:space="preserve">
     <value>访问好友</value>
   </data>
   <data name="Waiting" xml:space="preserve">
     <value>正在等待当前任务结束……</value>
-  </data>
-  <data name="Achievement.NewBadgeText" xml:space="preserve">
-    <value>新</value>
-  </data>
-  <data name="Main.SchemaMigration.Dialog.Cancel" xml:space="preserve">
-    <value>关闭</value>
-  </data>
-  <data name="Main.SchemaMigration.Dialog.Confirm" xml:space="preserve">
-    <value>我知道了</value>
-  </data>
-  <data name="Main.SchemaMigration.Dialog.Prompt" xml:space="preserve">
-    <value>检测到配置版本落后于最新 schema。
-当前版本: v{0}
-最新版本: v{1}
-
-{2}
-建议动作: {3}
-保存后会先备份为 avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; 再写入最新 schema。</value>
-  </data>
-  <data name="Main.SchemaMigration.Dialog.Title" xml:space="preserve">
-    <value>配置版本迁移提示</value>
-  </data>
-  <data name="PostAction.Dialog.ConfirmNow" xml:space="preserve">
-    <value>立即执行</value>
-  </data>
-  <data name="PostAction.Dialog.Message.Hibernate" xml:space="preserve">
-    <value>任务完成后将在 {0} 秒后执行休眠，期间可以取消。</value>
-  </data>
-  <data name="PostAction.Dialog.Message.LockScreen" xml:space="preserve">
-    <value>任务完成后将在 {0} 秒后执行锁屏，期间可以取消。</value>
-  </data>
-  <data name="PostAction.Dialog.Message.Shutdown" xml:space="preserve">
-    <value>任务完成后将在 {0} 秒后执行关机，期间可以取消。</value>
-  </data>
-  <data name="PostAction.Dialog.Message.Sleep" xml:space="preserve">
-    <value>任务完成后将在 {0} 秒后执行睡眠，期间可以取消。</value>
-  </data>
-  <data name="PostAction.Dialog.Title.Hibernate" xml:space="preserve">
-    <value>确认休眠</value>
-  </data>
-  <data name="PostAction.Dialog.Title.LockScreen" xml:space="preserve">
-    <value>确认锁屏</value>
-  </data>
-  <data name="PostAction.Dialog.Title.Shutdown" xml:space="preserve">
-    <value>确认关机</value>
-  </data>
-  <data name="PostAction.Dialog.Title.Sleep" xml:space="preserve">
-    <value>确认睡眠</value>
-  </data>
-  <data name="Settings.Start.RestartDialog.Cancel" xml:space="preserve">
-    <value>稍后</value>
-  </data>
-  <data name="Settings.Start.RestartDialog.Confirm" xml:space="preserve">
-    <value>立即重启</value>
-  </data>
-  <data name="Settings.Start.RestartDialog.Message" xml:space="preserve">
-    <value>启动设置已保存。是否现在重启 MAA 以应用这些更改？</value>
-  </data>
-  <data name="Settings.Start.RestartDialog.Title" xml:space="preserve">
-    <value>重启 MAA</value>
-  </data>
-  <data name="Settings.Start.RestartLaunched" xml:space="preserve">
-    <value>已开始重启。</value>
-  </data>
-  <data name="Settings.Start.RestartManualClose" xml:space="preserve">
-    <value>已启动新的实例。请关闭当前实例以完成重启。</value>
-  </data>
-  <data name="Settings.Start.RestartPending" xml:space="preserve">
-    <value>启动设置已保存。请稍后重启 MAA 以应用这些更改。</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartDialog.Cancel" xml:space="preserve">
-    <value>稍后</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartDialog.Confirm" xml:space="preserve">
-    <value>立即重启</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartDialog.Message" xml:space="preserve">
-    <value>软件更新包已下载完成。是否现在重启 MAA 以应用更新？</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartDialog.Title" xml:space="preserve">
-    <value>更新包已准备好</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartLaunched" xml:space="preserve">
-    <value>已开始重启以应用软件更新。</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartManualClose" xml:space="preserve">
-    <value>新实例已启动，请关闭当前实例以继续应用更新。</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartPending" xml:space="preserve">
-    <value>更新包已下载完成，请稍后重启 MAA 以应用更新。</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartPendingWhileRunning" xml:space="preserve">
-    <value>更新包已下载完成。当前任务仍在运行，请在空闲时重启 MAA 以应用更新。</value>
-  </data>
-  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Cancel" xml:space="preserve">
-    <value>关闭</value>
-  </data>
-  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Confirm" xml:space="preserve">
-    <value>知道了</value>
-  </data>
-  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Message" xml:space="preserve">
-    <value>软件更新已接入。请前往“设置 &gt; Version Update”检查、下载并应用更新。</value>
-  </data>
-  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Status" xml:space="preserve">
-    <value>软件更新已可用。</value>
-  </data>
-  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Title" xml:space="preserve">
-    <value>软件更新</value>
-  </data>
-  <data name="TaskQueue.Status.ParamsLoaded" xml:space="preserve">
-    <value>已加载 `{0}` 的参数。</value>
-  </data>
-  <data name="TaskQueue.Status.PrecheckPassed" xml:space="preserve">
-    <value>任务队列预检查通过。</value>
-  </data>
-  <data name="TaskQueue.Status.PrecheckWarnings" xml:space="preserve">
-    <value>任务队列预检查返回 {0} 条警告。</value>
-  </data>
-  <data name="TaskQueue.Status.PrecheckDowngradeNotRequired" xml:space="preserve">
-    <value>任务队列预检查无需降级处理。</value>
-  </data>
-  <data name="TaskQueue.Status.PrecheckDowngradesApplied" xml:space="preserve">
-    <value>任务队列预检查已应用 {0} 项降级。</value>
-  </data>
-  <data name="TaskQueue.Status.LoadedTasks" xml:space="preserve">
-    <value>已加载 {0} 个任务。</value>
-  </data>
-  <data name="TaskQueue.Status.TaskAdded" xml:space="preserve">
-    <value>已添加任务 `{0}`。</value>
-  </data>
-  <data name="TaskQueue.Status.TaskRenamed" xml:space="preserve">
-    <value>已将任务重命名为 `{0}`。</value>
-  </data>
-  <data name="TaskQueue.Status.TaskRemoved" xml:space="preserve">
-    <value>已移除任务 `{0}`。</value>
-  </data>
-  <data name="TaskQueue.Status.TaskOrderUnchanged" xml:space="preserve">
-    <value>任务顺序未变化。</value>
-  </data>
-  <data name="TaskQueue.Status.TaskMoved" xml:space="preserve">
-    <value>已将任务 `{0}` 移动到第 {1} 位。</value>
-  </data>
-  <data name="TaskQueue.Status.TaskEnabled.True" xml:space="preserve">
-    <value>已启用任务 `{0}`。</value>
-  </data>
-  <data name="TaskQueue.Status.TaskEnabled.False" xml:space="preserve">
-    <value>已禁用任务 `{0}`。</value>
-  </data>
-  <data name="TaskQueue.Status.TasksEnabledBatch.True" xml:space="preserve">
-    <value>已启用 {0} 个任务。</value>
-  </data>
-  <data name="TaskQueue.Status.TasksEnabledBatch.False" xml:space="preserve">
-    <value>已禁用 {0} 个任务。</value>
-  </data>
-  <data name="TaskQueue.Status.TasksEnabledInverted" xml:space="preserve">
-    <value>已反转 {0} 个任务的启用状态。</value>
-  </data>
-  <data name="TaskQueue.Status.ParamsUpdated" xml:space="preserve">
-    <value>已更新 `{0}` 的参数。</value>
-  </data>
-  <data name="TaskQueue.Status.ParamsUpdatedPersisted" xml:space="preserve">
-    <value>已更新 `{0}` 的参数并保存。</value>
-  </data>
-  <data name="TaskQueue.Status.ValidationPassed" xml:space="preserve">
-    <value>任务 `{0}` 校验通过。</value>
-  </data>
-  <data name="TaskQueue.Status.Saved" xml:space="preserve">
-    <value>任务队列已保存。</value>
-  </data>
-  <data name="TaskQueue.Status.ParamsFlushed" xml:space="preserve">
-    <value>任务参数已落盘。</value>
-  </data>
-  <data name="TaskQueue.Error.TaskTypeMissing" xml:space="preserve">
-    <value>任务类型不能为空。</value>
-  </data>
-  <data name="TaskQueue.Error.TaskNameMissing" xml:space="preserve">
-    <value>任务名称不能为空。</value>
-  </data>
-  <data name="TaskQueue.Error.TaskIndexOutOfRange" xml:space="preserve">
-    <value>任务索引 {0} 超出范围。</value>
-  </data>
-  <data name="TaskQueue.Error.MoveOutOfRange" xml:space="preserve">
-    <value>任务移动索引超出范围。</value>
-  </data>
-  <data name="TaskQueue.Error.ParamsMissing" xml:space="preserve">
-    <value>任务参数不能为空。</value>
-  </data>
-  <data name="TaskQueue.Error.ProfileMissing" xml:space="preserve">
-    <value>当前配置档 `{0}` 不存在。</value>
-  </data>
-  <data name="TaskQueue.Error.ProfileMissingShort" xml:space="preserve">
-    <value>当前配置档不存在。</value>
-  </data>
-  <data name="TaskQueue.Error.TaskNameMissingShort" xml:space="preserve">
-    <value>任务名称不能为空。</value>
-  </data>
-  <data name="TaskQueue.Error.TaskTypeMismatch" xml:space="preserve">
-    <value>当前所选任务不是 `{0}`。</value>
-  </data>
-  <data name="TaskQueue.Warning.MallCreditFightDowngraded" xml:space="preserve">
-    <value>已为 `{0}` 关闭信用作战，因为存在已启用的 `{1}` 任务使用当前/上次关卡选择器。</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Status.StateLoaded" xml:space="preserve">
-    <value>已加载关卡管理状态。</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Status.LocalResourcesLoaded" xml:space="preserve">
-    <value>已加载 `{0}` 的本地关卡资源。</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Status.WebResourcesLoaded" xml:space="preserve">
-    <value>已加载 `{0}` 的 Web 关卡资源。</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Status.ConfigLoaded" xml:space="preserve">
-    <value>已加载关卡管理配置。</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Status.ConfigSaved" xml:space="preserve">
-    <value>关卡管理配置已保存。</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Status.Validated" xml:space="preserve">
-    <value>已校验 {0} 个关卡代码。</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.ServiceUnavailable" xml:space="preserve">
-    <value>关卡管理服务尚未初始化。</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.InvalidStageCode" xml:space="preserve">
-    <value>无效的关卡代码：{0}</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.NoWebResources" xml:space="preserve">
-    <value>在 `{1}` 下未找到 `{0}` 的 Web 关卡资源。</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.NoLocalResources" xml:space="preserve">
-    <value>在 `{1}` 下未找到 `{0}` 的本地关卡资源。</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.ReadResources" xml:space="preserve">
-    <value>读取关卡资源失败：`{0}`：{1}</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.FileNotFound" xml:space="preserve">
-    <value>文件不存在：{0}</value>
-  </data>
-  <data name="Toolbox.Advanced.ExternalNotification.Status.NoProviders" xml:space="preserve">
-    <value>当前没有可用的外部通知 Provider。</value>
-  </data>
-  <data name="Toolbox.Advanced.ExternalNotification.Status.LoadedProviders" xml:space="preserve">
-    <value>已加载 {0} 个外部通知 Provider。</value>
-  </data>
-  <data name="Toolbox.Advanced.ExternalNotification.Error.QueryFailed" xml:space="preserve">
-    <value>查询外部通知 Provider 失败。</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.Title" xml:space="preserve">
-    <value>连接配置存在风险</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.Message" xml:space="preserve">
-    <value>{0} + adbLite={1} 组合存在 macOS RawByNc/POSIX 连接问题，可能导致连接失败或卡住。建议将 adbLite 修改为 {2}。</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.ApplyRecommended" xml:space="preserve">
-    <value>一键修改</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.ForceRun" xml:space="preserve">
-    <value>强行运行</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
-    <value>默认触控方式</value>
-  </data>
-  <data name="Settings.VersionUpdate.NightlyWarning.Title" xml:space="preserve">
-    <value>Nightly 版本警告</value>
-  </data>
-  <data name="Settings.VersionUpdate.NightlyWarning.Message" xml:space="preserve">
-    <value>已启用 Nightly 版本更新。感谢你帮助测试 MAA。</value>
-  </data>
-  <data name="Settings.VersionUpdate.NightlyWarning.Confirm" xml:space="preserve">
-    <value>确定</value>
-  </data>
-  <data name="Settings.VersionUpdate.NightlyWarning.Cancel" xml:space="preserve">
-    <value>关闭</value>
-  </data>
-  <data name="Copilot.Status.Starting" xml:space="preserve">
-    <value>启动中...</value>
-  </data>
-  <data name="Copilot.Status.ReorderSuccess" xml:space="preserve">
-    <value>已更新作业顺序。</value>
-  </data>
-  <data name="Copilot.Status.UpdateListItemSuccess" xml:space="preserve">
-    <value>已更新作业。</value>
-  </data>
-  <data name="Copilot.Error.SortStateOutOfSync" xml:space="preserve">
-    <value>作业列表顺序已变化，请重试。</value>
-  </data>
-  <data name="Copilot.Error.TaskListPersistFail" xml:space="preserve">
-    <value>Copilot 列表持久化失败。</value>
-  </data>
-  <data name="Copilot.Status.LoadSetPartialFailed" xml:space="preserve">
-    <value>以下作业加载失败：{0}</value>
-  </data>
-  <data name="Settings.SensitiveStorage.Unavailable" xml:space="preserve">
-    <value>敏感设置存储不可用。恢复存储前，敏感设置和相关操作已禁用。</value>
-  </data>
-  <data name="Settings.SensitiveStorage.Retry" xml:space="preserve">
-    <value>重试安全存储</value>
-  </data>
-  <data name="Settings.SensitiveStorage.DiscardUnreadable" xml:space="preserve">
-    <value>丢弃不可读值并重新输入</value>
-  </data>
-  <data name="Settings.SensitiveStorage.Status.PlaintextWarning" xml:space="preserve">
-    <value>敏感设置存储：{0}。当前仍使用明文模式；复制配置目录可能泄露敏感设置。</value>
-  </data>
-  <data name="Settings.SensitiveStorage.Status.Unavailable" xml:space="preserve">
-    <value>敏感设置存储：{0}。不可用（{1}）；敏感操作已禁用。</value>
-  </data>
-  <data name="Settings.SensitiveStorage.Status.CorruptUnreadable" xml:space="preserve">
-    <value>旧版加密敏感值无法解密。在确认丢弃并重新输入前，原配置会被保留。</value>
-  </data>
-  <data name="Settings.SensitiveStorage.Status.Available" xml:space="preserve">
-    <value>敏感设置存储：{0}。</value>
-  </data>
-  <data name="Settings.Game.YoStarResolutionGuide.Available" xml:space="preserve">
-    <value>YoStar EN 分辨率指南已可用。</value>
-  </data>
-  <data name="Settings.Game.YoStarResolutionGuide.Open" xml:space="preserve">
-    <value>打开 YoStar EN 分辨率指南</value>
-  </data>
-  <data name="Settings.Game.OverseasClientHint" xml:space="preserve">
-    <value>使用海外客户端？请查看适配帮助。</value>
-  </data>
-  <data name="Settings.Game.OverseasAdaptationGuide.Open" xml:space="preserve">
-    <value>打开海外客户端适配指南</value>
-  </data>
-  <data name="TaskQueue.Status.TaskEnabled.Once" xml:space="preserve">
-    <value>仅执行一次</value>
-  </data>
-  <data name="TaskQueue.Status.TaskEnabled.SkipOnce" xml:space="preserve">
-    <value>仅跳过本次</value>
-  </data>
-  <data name="TaskQueue.Guide.Title" xml:space="preserve">
-    <value>设置指引</value>
-  </data>
-  <data name="TaskQueue.Guide.Ui.Description" xml:space="preserve">
-    <value>选择适合你的界面语言、主题、背景和缩放设置。</value>
-  </data>
-  <data name="TaskQueue.Guide.Game.Description" xml:space="preserve">
-    <value>设置客户端类型，以及游戏启动和账号切换行为。</value>
-  </data>
-  <data name="TaskQueue.Guide.Connection.Description" xml:space="preserve">
-    <value>配置 ADB 路径或连接预设，并测试连接是否可用。</value>
-  </data>
-  <data name="TaskQueue.Guide.Tasks.Description" xml:space="preserve">
-    <value>选择 MAA 需要运行的任务，并调整各任务设置。</value>
-  </data>
-  <data name="TaskQueue.Guide.Performance.Description" xml:space="preserve">
-    <value>选择设备支持的性能、截图和输入选项。</value>
-  </data>
-  <data name="TaskQueue.Guide.Update.Description" xml:space="preserve">
-    <value>设置更新通道、资源更新和启动检查行为。</value>
-  </data>
-  <data name="TaskQueue.Guide.User.Description" xml:space="preserve">
-    <value>开始任务前，可查看文档、问题反馈和帮助链接。</value>
-  </data>
-  <data name="Settings.SensitiveStorage.PlaintextConsent.Title" xml:space="preserve">
-    <value>敏感设置存储警告</value>
-  </data>
-  <data name="Settings.SensitiveStorage.PlaintextConsent.Message" xml:space="preserve">
-    <value>系统受保护的存储不可用。明文模式会将敏感设置（包括凭据）以未加密形式保存在独立的本地文件中。复制或同步配置目录可能泄露这些机密。</value>
-  </data>
-  <data name="Settings.SensitiveStorage.PlaintextConsent.Cancel" xml:space="preserve">
-    <value>取消</value>
-  </data>
-  <data name="Settings.SensitiveStorage.PlaintextConsent.UsePlaintext" xml:space="preserve">
-    <value>使用明文存储</value>
-  </data>
-  <data name="Copilot.Title" xml:space="preserve">
-    <value>自动战斗</value>
-  </data>
-  <data name="Toolbox.Title" xml:space="preserve">
-    <value>小工具</value>
-  </data>
-  <data name="Toolbox.OperBox.Title" xml:space="preserve">
-    <value>干员识别</value>
-  </data>
-  <data name="Toolbox.Depot.Title" xml:space="preserve">
-    <value>仓库识别</value>
-  </data>
-  <data name="Main.Close.SaveFailed" xml:space="preserve">
-    <value>{0}保存失败</value>
-  </data>
-  <data name="Common.Configuration" xml:space="preserve">
-    <value>配置</value>
-  </data>
-  <data name="Common.List.PairFormat" xml:space="preserve">
-    <value>{0}和{1}</value>
-  </data>
-  <data name="Common.List.Separator" xml:space="preserve">
-    <value>、</value>
-  </data>
-  <data name="Common.List.FinalSeparator" xml:space="preserve">
-    <value>和</value>
-  </data>
-  <data name="TaskQueue.Guide.OpenSettings" xml:space="preserve">
-    <value>打开对应设置</value>
-  </data>
-  <data name="TaskQueue.Guide.ConfigureTasks" xml:space="preserve">
-    <value>配置任务</value>
-  </data>
-  <data name="TaskQueue.Guide.Resume" xml:space="preserve">
-    <value>返回设置引导</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.Title" xml:space="preserve">
-    <value>用户协议</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.Prefix" xml:space="preserve">
-    <value>使用 MAA 前请阅读</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.Link" xml:space="preserve">
-    <value>用户协议</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.Confirm" xml:space="preserve">
-    <value>我已阅读并同意用户协议</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.Confirmed" xml:space="preserve">
-    <value>已确认用户协议</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.Tip" xml:space="preserve">
-    <value>尚未确认用户协议。可以继续浏览，但任务演示需确认后才能完成。</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.RequiredForDemo" xml:space="preserve">
-    <value>请先返回 ｢使用指引｣ 确认用户协议，再完成任务演示。</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.Title" xml:space="preserve">
-    <value>任务设置演示</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.Note" xml:space="preserve">
-    <value>演示只操作引导中的模拟任务，不会修改实际任务队列。</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.Progress" xml:space="preserve">
-    <value>已完成 {0} / {1}</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.Next" xml:space="preserve">
-    <value>下一步：{0}</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.AddStartUp" xml:space="preserve">
-    <value>添加开始唤醒</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.AddFight" xml:space="preserve">
-    <value>添加理智作战</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.RenameFight" xml:space="preserve">
-    <value>重命名作战任务</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.SelectStage" xml:space="preserve">
-    <value>选择剿灭关卡</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.ReorderFight" xml:space="preserve">
-    <value>调整任务顺序</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.EnableWeekly" xml:space="preserve">
-    <value>启用周常计划</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.AddSwitchTheme" xml:space="preserve">
-    <value>添加更换主题</value>
-  </data>
-  <data name="TaskQueue.Guide.Skip" xml:space="preserve">
-    <value>跳过指引</value>
-  </data>
-  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine" xml:space="preserve">
-    <value>{0} 配置的 {1} 导入失败，无法读取 {1} 配置。请手动修改。</value>
-  </data>
-  <data name="Settings.ConfigurationManager.Dialog.GlobalConfiguration" xml:space="preserve">
-    <value>全局</value>
-  </data>
-  <data name="Settings.Connect.Hint.MacBundledAdbNotFound" xml:space="preserve">
-    <value>内置 ADB 不存在：{0}</value>
-  </data>
-  <data name="ConnectionFailure.Generic.Message" xml:space="preserve">
-    <value>连接失败。请“检查连接设置” -&gt; “尝试重启模拟器与 ADB” -&gt; “重启电脑”。</value>
-  </data>
-  <data name="ConnectionFailure.Callback.MessageFormat" xml:space="preserve">
-    <value>连接回调：{0}</value>
-  </data>
-  <data name="ConnectionFailure.Generic.Suggestion" xml:space="preserve">
-    <value>请检查连接设置，尝试重启模拟器与 ADB；仍失败时重启电脑。</value>
-  </data>
-  <data name="ConnectionFailure.Timeout.Message" xml:space="preserve">
-    <value>连接模拟器超时。</value>
-  </data>
-  <data name="ConnectionFailure.Timeout.Suggestion" xml:space="preserve">
-    <value>请确认模拟器已启动，连接地址和端口正确，ADB 服务可用。</value>
-  </data>
-  <data name="ConnectionFailure.TouchMode.Message" xml:space="preserve">
-    <value>当前触控模式不可用。</value>
-  </data>
-  <data name="ConnectionFailure.TouchMode.Suggestion" xml:space="preserve">
-    <value>请前往连接设置切换其他触控模式后重试。</value>
-  </data>
-  <data name="ConnectionFailure.AddressPort.Message" xml:space="preserve">
-    <value>无法连接到这个地址或端口。</value>
-  </data>
-  <data name="ConnectionFailure.AddressPort.Suggestion" xml:space="preserve">
-    <value>请确认模拟器已启动，连接地址和端口正确；常见 ADB 端口为 5555，部分模拟器会使用 5554 等端口。</value>
-  </data>
-  <data name="ConnectionFailure.AdbDevice.Message" xml:space="preserve">
-    <value>ADB 未连接到可用设备。</value>
-  </data>
-  <data name="ConnectionFailure.AdbDevice.Suggestion" xml:space="preserve">
-    <value>请在 adb devices 中确认设备为 device 状态；如果显示 unauthorized 请在模拟器内授权，如果显示 offline/no devices 请重启模拟器或 ADB 后重试。</value>
-  </data>
-  <data name="ConnectionFailure.CoreUnavailable.Message" xml:space="preserve">
-    <value>连接核心尚未就绪或已释放。</value>
-  </data>
-  <data name="ConnectionFailure.CoreUnavailable.Suggestion" xml:space="preserve">
-    <value>请稍等后重试；如果持续出现，请重启应用。</value>
-  </data>
-  <data name="ConnectionFailure.CoreFailure.MessageFormat" xml:space="preserve">
-    <value>连接核心返回失败：{0}</value>
-  </data>
-  <data name="ConnectionFailure.CoreFailure.Suggestion" xml:space="preserve">
-    <value>请检查模拟器、ADB 路径和连接配置；详情中保留了 core 回调信息。</value>
-  </data>
-  <data name="ConnectionFailure.AdbTarget.Message" xml:space="preserve">
-    <value>ADB 未连接到目标设备。</value>
-  </data>
-  <data name="ConnectionFailure.AdbTarget.Suggestion" xml:space="preserve">
-    <value>请检查连接地址和端口是否正确，常见 ADB 端口为 5555；确认模拟器已启动、ADB 已开启，并与电脑在同一网络内。</value>
-  </data>
-  <data name="ConnectionFailure.AdbStart.Message" xml:space="preserve">
-    <value>ADB 启动失败。</value>
-  </data>
-  <data name="ConnectionFailure.AdbStart.Suggestion" xml:space="preserve">
-    <value>请检查连接设置中的 ADB 路径是否指向 adb 可执行文件，而不是 dmg、zip、目录或其他安装包。</value>
-  </data>
-  <data name="ConnectionFailure.InvalidConfiguration.Message" xml:space="preserve">
-    <value>连接配置无效。</value>
-  </data>
-  <data name="ConnectionFailure.InvalidConfiguration.Suggestion" xml:space="preserve">
-    <value>请检查连接地址格式、端口、连接类型和 ADB 路径后重试。</value>
-  </data>
-  <data name="ConnectionFailure.ConnectionFailed.Message" xml:space="preserve">
-    <value>连接模拟器失败。</value>
-  </data>
-  <data name="ConnectionFailure.ConnectionFailed.Suggestion" xml:space="preserve">
-    <value>请点击“详细报错”查看核心返回的错误信息，并据此检查模拟器和 ADB 连接。</value>
-  </data>
-  <data name="ConnectionFailure.FixSettings.Suggestion" xml:space="preserve">
-    <value>请先修正连接设置后再重试。</value>
-  </data>
-  <data name="ConnectionFailure.AdbCommand.Message" xml:space="preserve">
-    <value>ADB 命令执行失败。</value>
-  </data>
-  <data name="ConnectionFailure.AdbCommand.Suggestion" xml:space="preserve">
-    <value>请点击“详细报错”查看 ADB 输出；确认 ADB 可执行，或尝试重启模拟器与 ADB。</value>
-  </data>
-  <data name="Settings.ConfigurationManager.Status.SwitchBlockedWhileRunning" xml:space="preserve">
-    <value>任务运行或停止期间不能切换配置，请等待任务结束后再试。</value>
-  </data>
-  <data name="Settings.Connect.Hint.MuMuPathNotFound" xml:space="preserve">
-    <value>MuMu 模拟器路径不存在：{0}</value>
-  </data>
-  <data name="Settings.Connect.Hint.MuMuExternalRendererMissing" xml:space="preserve">
-    <value>MuMu 模拟器路径缺少 external_renderer_ipc.dll：{0}</value>
-  </data>
-  <data name="Settings.Connect.Hint.LdPlayerPathNotFound" xml:space="preserve">
-    <value>LDPlayer 模拟器路径不存在：{0}</value>
-  </data>
-  <data name="Settings.Connect.Hint.LdPlayerOpenGlMissing" xml:space="preserve">
-    <value>LDPlayer 模拟器路径缺少 ldopengl64.dll：{0}</value>
-  </data>
-  <data name="Settings.Connect.Status.MuMuPathAutoDetected" xml:space="preserve">
-    <value>已自动检测到 MuMu 模拟器路径：{0}</value>
-  </data>
-  <data name="Settings.Connect.Status.LdPlayerPathAutoDetected" xml:space="preserve">
-    <value>已自动检测到 LDPlayer 模拟器路径：{0}</value>
-  </data>
-  <data name="TaskQueue.Error.SessionActivity.Timer.Start" xml:space="preserve">
-    <value>定时任务正在进行，请等待其完成后再启动任务。</value>
-  </data>
-  <data name="TaskQueue.Error.SessionActivity.Other.Start" xml:space="preserve">
-    <value>另一项会话操作正在进行，请先停止或等待其完成后再启动任务。</value>
-  </data>
-  <data name="TaskQueue.Error.SessionActivity.Timer.RunOnce" xml:space="preserve">
-    <value>定时任务正在进行，请等待其完成后再单次运行任务。</value>
-  </data>
-  <data name="TaskQueue.Error.SessionActivity.Other.RunOnce" xml:space="preserve">
-    <value>另一项会话操作正在进行，请先停止或等待其完成后再单次运行任务。</value>
-  </data>
-  <data name="TaskQueue.Error.SessionActivity.Timer.AccountSwitch" xml:space="preserve">
-    <value>定时任务正在进行，请等待其完成后再切换账号。</value>
-  </data>
-  <data name="TaskQueue.Error.SessionActivity.Other.AccountSwitch" xml:space="preserve">
-    <value>另一项会话操作正在进行，请先停止或等待其完成后再切换账号。</value>
-  </data>
-  <data name="Copilot.Error.SessionActivity.TimerActive" xml:space="preserve">
-    <value>定时任务正在进行，Copilot 暂时无法启动；请等待定时任务完成。</value>
-  </data>
-  <data name="Copilot.Error.SessionActivity.OtherActive" xml:space="preserve">
-    <value>另一项会话操作正在进行，Copilot 暂时无法启动；请先停止或等待该操作。</value>
-  </data>
-  <data name="Toolbox.Error.SessionActivity.TimerActive" xml:space="preserve">
-    <value>定时任务正在进行，Toolbox 暂时无法启动；请等待定时任务完成。</value>
-  </data>
-  <data name="Toolbox.Error.SessionActivity.OtherActive" xml:space="preserve">
-    <value>另一项会话操作正在进行，Toolbox 暂时无法启动；请先停止或等待该操作。</value>
-  </data>
-  <data name="StopTimeout" xml:space="preserve">
-    <value>停止超时，Core 未能及时响应停止请求</value>
-  </data>
-  <data name="RestartRecommendation" xml:space="preserve">
-    <value>建议重启 MAA 以恢复正常状态</value>
-  </data>
-  <data name="OutOfMemoryError" xml:space="preserve">
-    <value>{0}任务因内存不足停止，请关闭部分程序或重启 MAA 后重试</value>
-  </data>
-  <data name="GpuDeviceRemovedRestartRequired" xml:space="preserve">
-    <value>{0}任务因 GPU 推理设备失效而停止，可能是显卡驱动更新或 GPU 重置所致。{key=RestartRecommendation}</value>
-  </data>
-  <data name="ResolutionChanged" xml:space="preserve">
-    <value>模拟器分辨率已变更，连接已断开。请重新开始任务以应用新分辨率</value>
-  </data>
-  <data name="ResolutionNotSupportedCurrentResolution" xml:space="preserve">
-    <value>当前分辨率：{0}x{1}</value>
-  </data>
-  <data name="TaskQueue.Stall.Warning" xml:space="preserve">
-    <value>任务日志输出已超过 {0} 分钟无更新（当前已停滞 {1} 分钟）。请确认任务是否正常运行，若任务正常可忽略此提示，若无响应则可能需要手动干预。</value>
-  </data>
-  <data name="TaskQueue.RunDurationLimit.Reached" xml:space="preserve">
-    <value>已达到运行时长上限（{0} 分钟），停止任务</value>
-  </data>
-  <data name="Settings.Game.EnableStallTimeout" xml:space="preserve">
-    <value>启用日志更新停滞检测</value>
-  </data>
-  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
-    <value>日志输出停滞超时时间（分钟）</value>
-  </data>
-  <data name="Settings.Game.EnableRunDurationLimit" xml:space="preserve">
-    <value>限制单次运行时长</value>
-  </data>
-  <data name="Settings.Game.EnableRunDurationLimit.Tip" xml:space="preserve">
-    <value>勾选＝每轮生效，半选＝仅本次；到点停止当前运行。</value>
-  </data>
-  <data name="Settings.Game.RunDurationLimitMinutes" xml:space="preserve">
-    <value>运行时长上限（分钟）</value>
-  </data>
-  <data name="Settings.Game.RunDurationLimitExecutePostActions" xml:space="preserve">
-    <value>停止后执行完成后动作</value>
-  </data>
-  <data name="ResourceBrokenTaskBlocked" xml:space="preserve">
-    <value>资源已损坏，任务无法启动。{key=ResourceBrokenRepairGuidance}</value>
-  </data>
-  <data name="ResourceBrokenRepairGuidance" xml:space="preserve">
-    <value>请前往 设置 > 版本更新 检查资源更新（或重新下载完整安装包）后重启 MAA；重新加载资源成功后会自动解除限制。</value>
-  </data>
-  <data name="UnknownTaskInChain" xml:space="preserve">
-    <value>任务链引用了未定义的任务（{0}），资源可能已损坏或与程序版本不匹配，已停止任务。</value>
-  </data>
-  <data name="CoreLoadingTip" xml:space="preserve">
-    <value>MAA 内核尚未加载完成，请稍后再试。</value>
   </data>
 </root>

@@ -144,6 +144,7 @@
     "RoguelikeStrategyGold",
     "RoguelikeStrategyLastReward",
     "RoguelikeStrategyMonthlySquad",
+    "RoguelikeThemeBlackFlow",
     "RoguelikeThemeJieGarden",
     "RoguelikeThemeMizuki",
     "RoguelikeThemePhantom",
@@ -1084,11 +1085,11 @@
     ]
   },
   "allowedInversions": {
-    "zh-cn": 217,
-    "zh-tw": 208,
-    "en-us": 218,
-    "ja-jp": 205,
-    "ko-kr": 205,
-    "pallas": 43
+    "zh-cn": 0,
+    "zh-tw": 0,
+    "en-us": 0,
+    "ja-jp": 0,
+    "ko-kr": 0,
+    "pallas": 0
   }
 }

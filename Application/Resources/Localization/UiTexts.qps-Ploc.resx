@@ -15,23 +15,26 @@
   <data name="AllTaskCompleteContent" xml:space="preserve">
     <value>[!! MÅÅ ħåş çöɱþļéţéď åļļ ţåşķş üñďéř ţħé {Preset} çöñƒîĝüřåţîöñ öñ {DateTime} (îñ {TimeDiff}) !!]</value>
   </data>
-  <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
-    <value>[!! Şéñď ñöţîƒîçåţîöñ ŵħéñ ţåşķ ļöĝ öüţþüţ şţåļļş !!]</value>
-  </data>
-  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
-    <value>[!! Çļéåř åļļ !!]</value>
+  <data name="Common.Edit.Copy" xml:space="preserve">
+    <value>[!! Çöþý !!]</value>
   </data>
   <data name="Common.Edit.Cut" xml:space="preserve">
     <value>[!! Çüţ !!]</value>
-  </data>
-  <data name="Common.Edit.Copy" xml:space="preserve">
-    <value>[!! Çöþý !!]</value>
   </data>
   <data name="Common.Edit.Paste" xml:space="preserve">
     <value>[!! Þåşţé !!]</value>
   </data>
   <data name="Common.Edit.SelectAll" xml:space="preserve">
     <value>[!! Şéļéçţ åļļ !!]</value>
+  </data>
+  <data name="Copilot.Error.SelectTaskToUpdate" xml:space="preserve">
+    <value>[!! Şéļéçţ å çöþîļöţ îţéɱ ţö üþďåţé. !!]</value>
+  </data>
+  <data name="Copilot.Error.UpdateListItemPersistFail" xml:space="preserve">
+    <value>[!! Ûþďåţé ƒåîļéď: ļîşţ şåṽé ƒåîļéď. !!]</value>
+  </data>
+  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
+    <value>[!! Çļéåř åļļ !!]</value>
   </data>
   <data name="Copilot.List.Button.Disable" xml:space="preserve">
     <value>[!! Ďîşåƀļé !!]</value>
@@ -53,12 +56,6 @@
   </data>
   <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
     <value>[!! Đéļéţé ƀåţţļé ļîşţ !!]</value>
-  </data>
-  <data name="Copilot.Error.SelectTaskToUpdate" xml:space="preserve">
-    <value>[!! Şéļéçţ å çöþîļöţ îţéɱ ţö üþďåţé. !!]</value>
-  </data>
-  <data name="Copilot.Error.UpdateListItemPersistFail" xml:space="preserve">
-    <value>[!! Ûþďåţé ƒåîļéď: ļîşţ şåṽé ƒåîļéď. !!]</value>
   </data>
   <data name="Copilot.Status.ClearCancelled" xml:space="preserve">
     <value>[!! Đéļéţîñĝ åļļ çöþîļöţ ţåşķş ŵåş çåñçéļļéď. !!]</value>
@@ -87,113 +84,55 @@
   <data name="Copilot.Tip.ClearList" xml:space="preserve">
     <value>[!! Đéļéţé åļļ çöþîļöţ ţåşķş îñ ţħé ƀåţţļé ļîşţ. !!]</value>
   </data>
+  <data name="MacRawByNcRisk.Dialog.ApplyRecommended" xml:space="preserve">
+    <value>[!! Åþþļý Ƒîẋ !!]</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
+    <value>[!! ďéƒåüļţ ţöüçĥ ɱöďé !!]</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.ForceRun" xml:space="preserve">
+    <value>[!! Ƒöřçé Řüñ !!]</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Message" xml:space="preserve">
+    <value>[!! {0} + åďƀĻîţé={1} çåñ ţřîĝĝéř ţĥé ɱåçÖŞ ŘåŵƁýÑç/ÞÖŞÎẊ çöññéçţîöñ îşşüé, ŵĥîçĥ ɱåý çåüşé çöññéçţîöñ ƒåîļüřéş öř ĥåñĝş. Ŵé řéçöɱɱéñď şéţţîñĝ åďƀĻîţé ţö {2}. !!]</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Title" xml:space="preserve">
+    <value>[!! Řîşķý çöññéçţîöñ şéţţîñĝş !!]</value>
+  </data>
+  <data name="MultiInstanceUnderSamePath" xml:space="preserve">
+    <value>[!! Öñļý öñé îñşţåñçé çåñ ƀé ļåüñçĥéď üñďéř ţĥé şåɱé þåţĥ!
+Îƒ ýöü ŵåñţ ţö řüñ ɱüļţîþļé MÅÅ åţ ţĥé şåɱé ţîɱé, þļéåşé çöþý ţĥé ŵĥöļé MÅÅ åñď şţåřţ üñďéř ďîƒƒéřéñţ þåţĥ ŵîţĥ ţĥé şåɱé åďƀ åñď ďîƒƒéřéñţ çöññéçţ åďďřéşş. !!]</value>
+  </data>
+  <data name="PlatformCapability.Error.AutostartAdminDenied" xml:space="preserve">
+    <value>[!! Åďɱîñîşţřåţöř ɱöďé ďöéş ñöţ şüþþöřţ şţåřţüþ öñ ƀööţ. Îţ îş ñöţ řéçöɱɱéñďéď ţö řüñ MAA ŵîţħ åďɱîñîşţřåţöř þřîṽîļéĝéş ƒöř åñ éẋţéñďéď þéřîöď.
+Îƒ ñéçéşşåřý, þļéåşé ĝö ţö Çöñţřöļ Þåñéļ > Ŵîñďöŵş Ţööļş > Ţåşķ Şçħéďüļéř ţö çřéåţé å çüşţöɱ ţåşķ. Ŵĥéñ şéţţîñĝ ţĥé ţřîĝĝéř, ɱåķé şüřé ţö çĥéçķ ｢Řüñ ŵîţĥ ħîĝĥéşţ þřîṽîļéĝéş｣ !!]</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable" xml:space="preserve">
+    <value>[!! Ţöåşţ ñöţîƒîçåţîöñş åřé üñåvåîļåƀļé: {0} !!]</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByGroupPolicy" xml:space="preserve">
+    <value>[!! Ďîşåƀļéď ƀý Windows Ĝřöüþ Þöļîçý !!]</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByManifest" xml:space="preserve">
+    <value>[!! Ďîşåƀļéď ƀý åþþ ɱåñîƒéşţ (Package.appxmanifest) !!]</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForApplication" xml:space="preserve">
+    <value>[!! Ţħé üşéř ħåş ďîşåƀļéď ñöţîƒîçåţîöñş ƒöř ţħîş åþþ îñ Windows Şéţţîñĝş. !!]</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForUser" xml:space="preserve">
+    <value>[!! Ţħé üşéř ħåş ďîşåƀļéď åļļ åþþ ñöţîƒîçåţîöñş îñ Windows Şéţţîñĝş. !!]</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
+    <value>[!! Şéñď ñöţîƒîçåţîöñ ŵħéñ ţåşķ ļöĝ öüţþüţ şţåļļş !!]</value>
+  </data>
   <data name="Settings.RemoteControl.RegenerateDeviceIdentity" xml:space="preserve">
     <value>[!! Řéĝéñéřåţé !!]</value>
   </data>
-  <data name="TaskQueue.Root.RunTaskOnce" xml:space="preserve">
-    <value>[!! Řüñ Öñçé !!]</value>
+  <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
+    <value>[!! Ţĥé Ļîñüẋ þöřţåƀļé þåçķåĝé ĥåş ƀééñ ďöŵñļöåďéď. Éẋţřåçţ îţ ţö å ñéŵ ďîřéçţöřý åñď ļåüñçĥ ţĥé ÅþþÌɱåĝé ţĥéřé. !!]</value>
   </data>
-  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
-    <value>[!! Ûþďåţé Đåţå !!]</value>
-  </data>
-  <data name="TaskQueue.Module.SingleStep" xml:space="preserve">
-    <value>[!! Şîñĝļé Şţéþ !!]</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Body" xml:space="preserve">
-    <value>[!! ŞîñĝļéŞţéþ îş å Çöŕé şîñĝļé-şţéþ çöþîļöţ éñţŕý. Îmþöŕţéď måŕķéŕ ţåşķş ñééď ŕûñţîmé şţéþ þåŕåméţéŕş ƀéƒöŕé ţĥéý çåñ ŕûñ. !!]</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Type" xml:space="preserve">
-    <value>[!! Ţýþé !!]</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Subtype" xml:space="preserve">
-    <value>[!! Şûƀţýþé !!]</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Subtype.Start" xml:space="preserve">
-    <value>[!! Şţåŕţ !!]</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Subtype.Stage" xml:space="preserve">
-    <value>[!! Şţåĝé !!]</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Subtype.Action" xml:space="preserve">
-    <value>[!! Åçţîöñ !!]</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Details" xml:space="preserve">
-    <value>[!! ďéţåîļş ĴŞÖÑ !!]</value>
-  </data>
-  <data name="TaskQueue.SingleStep.DetailsPlaceholder" xml:space="preserve">
-    <value>{"stage_name":"..."}</value>
-  </data>
-  <data name="TaskQueue.Status.ParamsLoaded" xml:space="preserve">
-    <value>[!! Łöåđéď þåřåɱş ƒöř `{0}`. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.PrecheckPassed" xml:space="preserve">
-    <value>[!! ŦåşķQüéüé þřéçħéçķ þåşşéď. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.PrecheckWarnings" xml:space="preserve">
-    <value>[!! ŦåşķQüéüé þřéçħéçķ řéţüřñéď {0} ŵåřñîñĝ(ş). !!]</value>
-  </data>
-  <data name="TaskQueue.Status.PrecheckDowngradeNotRequired" xml:space="preserve">
-    <value>[!! ŦåşķQüéüé þřéçħéçķ đöŵñĝřåďé ñöţ řéqüîřéď. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.PrecheckDowngradesApplied" xml:space="preserve">
-    <value>[!! ŦåşķQüéüé þřéçħéçķ åþþļîéď {0} đöŵñĝřåďé(ş). !!]</value>
-  </data>
-  <data name="TaskQueue.Status.LoadedTasks" xml:space="preserve">
-    <value>[!! Łöåđéď {0} ţåşķ(ş). !!]</value>
-  </data>
-  <data name="TaskQueue.Status.TaskAdded" xml:space="preserve">
-    <value>[!! Åďďéď ţåşķ `{0}`. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.TaskRenamed" xml:space="preserve">
-    <value>[!! Ŧåşķ řéñåɱéď ţö `{0}`. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.TaskRemoved" xml:space="preserve">
-    <value>[!! Řéɱöṽéď ţåşķ `{0}`. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.TaskOrderUnchanged" xml:space="preserve">
-    <value>[!! Ŧåşķ öřđéř üñçħåñĝéď. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.TaskMoved" xml:space="preserve">
-    <value>[!! Ḿöṽéď ţåşķ `{0}` ţö þöşîţîöñ {1}. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.TaskEnabled.True" xml:space="preserve">
-    <value>[!! Ŧåşķ `{0}` éñåƀļéď. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.TaskEnabled.False" xml:space="preserve">
-    <value>[!! Ŧåşķ `{0}` ďîşåƀļéď. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.TasksEnabledBatch.True" xml:space="preserve">
-    <value>[!! Éñåƀļéď {0} ţåşķ(ş). !!]</value>
-  </data>
-  <data name="TaskQueue.Status.TasksEnabledBatch.False" xml:space="preserve">
-    <value>[!! Ďîşåƀļéď {0} ţåşķ(ş). !!]</value>
-  </data>
-  <data name="TaskQueue.Status.TasksEnabledInverted" xml:space="preserve">
-    <value>[!! Îñṽéřţéď éñåƀļéď şţåţé ƒöř {0} ţåşķ(ş). !!]</value>
-  </data>
-  <data name="TaskQueue.Status.ParamsUpdated" xml:space="preserve">
-    <value>[!! Ûþďåţéď þåřåɱş ƒöř `{0}`. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.ParamsUpdatedPersisted" xml:space="preserve">
-    <value>[!! Ûþďåţéď þåřåɱş ƒöř `{0}` åñď þéřşîşţéď. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.ValidationPassed" xml:space="preserve">
-    <value>[!! Ŧåşķ `{0}` þåşşéď ṽåļîďåţîöñ. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.Saved" xml:space="preserve">
-    <value>[!! Ŧåşķ qüéüé şåṽéď. !!]</value>
-  </data>
-  <data name="TaskQueue.Status.ParamsFlushed" xml:space="preserve">
-    <value>[!! Ŧåşķ þåřåɱş ƒļüşħéď. !!]</value>
-  </data>
-  <data name="TaskQueue.Error.TaskTypeMissing" xml:space="preserve">
-    <value>[!! Ŧåşķ ţýþé çåññöţ ƀé éɱþţý. !!]</value>
-  </data>
-  <data name="TaskQueue.Error.TaskNameMissing" xml:space="preserve">
-    <value>[!! Ŧåşķ ñåɱé çåññöţ ƀé éɱþţý. !!]</value>
-  </data>
-  <data name="TaskQueue.Error.TaskIndexOutOfRange" xml:space="preserve">
-    <value>[!! Ŧåşķ îñďéẋ {0} îş öüţ öƒ řåñĝé. !!]</value>
+  <data name="Startup.LinuxPortablePackageMissing" xml:space="preserve">
+    <value>[!! Ţĥé Ļîñüẋ þöřţåƀļé þåçķåĝé îş îñçöɱþļéţé. Þļéåşé éẋţřåçţ ţĥé ƒüļļ þåçķåĝé, ţĥéñ ļåüñçĥ MÅÅÛñîƒîéď.ÅþþÌɱåĝé ƒřöɱ ţĥåţ ďîřéçţöřý. !!]</value>
   </data>
   <data name="TaskQueue.Error.MoveOutOfRange" xml:space="preserve">
     <value>[!! Ŧåşķ ɱöṽé îñďéẋ îş öüţ öƒ řåñĝé. !!]</value>
@@ -207,23 +146,146 @@
   <data name="TaskQueue.Error.ProfileMissingShort" xml:space="preserve">
     <value>[!! Çüřřéñţ þřöƒîļé îş ɱîşşîñĝ. !!]</value>
   </data>
+  <data name="TaskQueue.Error.TaskIndexOutOfRange" xml:space="preserve">
+    <value>[!! Ŧåşķ îñďéẋ {0} îş öüţ öƒ řåñĝé. !!]</value>
+  </data>
+  <data name="TaskQueue.Error.TaskNameMissing" xml:space="preserve">
+    <value>[!! Ŧåşķ ñåɱé çåññöţ ƀé éɱþţý. !!]</value>
+  </data>
   <data name="TaskQueue.Error.TaskNameMissingShort" xml:space="preserve">
     <value>[!! Ŧåşķ ñåɱé çåññöţ ƀé éɱþţý. !!]</value>
   </data>
   <data name="TaskQueue.Error.TaskTypeMismatch" xml:space="preserve">
     <value>[!! Şéļéçţéď ţåşķ îş ñöţ å `{0}` ţåşķ. !!]</value>
   </data>
+  <data name="TaskQueue.Error.TaskTypeMissing" xml:space="preserve">
+    <value>[!! Ŧåşķ ţýþé çåññöţ ƀé éɱþţý. !!]</value>
+  </data>
+  <data name="TaskQueue.Module.SingleStep" xml:space="preserve">
+    <value>[!! Şîñĝļé Şţéþ !!]</value>
+  </data>
+  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
+    <value>[!! Ûþďåţé Đåţå !!]</value>
+  </data>
+  <data name="TaskQueue.Root.RunTaskOnce" xml:space="preserve">
+    <value>[!! Řüñ Öñçé !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Body" xml:space="preserve">
+    <value>[!! ŞîñĝļéŞţéþ îş å Çöŕé şîñĝļé-şţéþ çöþîļöţ éñţŕý. Îmþöŕţéď måŕķéŕ ţåşķş ñééď ŕûñţîmé şţéþ þåŕåméţéŕş ƀéƒöŕé ţĥéý çåñ ŕûñ. !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Details" xml:space="preserve">
+    <value>[!! ďéţåîļş ĴŞÖÑ !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.DetailsPlaceholder" xml:space="preserve">
+    <value>{"stage_name":"..."}</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype" xml:space="preserve">
+    <value>[!! Şûƀţýþé !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Action" xml:space="preserve">
+    <value>[!! Åçţîöñ !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Stage" xml:space="preserve">
+    <value>[!! Şţåĝé !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Start" xml:space="preserve">
+    <value>[!! Şţåŕţ !!]</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Type" xml:space="preserve">
+    <value>[!! Ţýþé !!]</value>
+  </data>
+  <data name="TaskQueue.Status.LoadedTasks" xml:space="preserve">
+    <value>[!! Łöåđéď {0} ţåşķ(ş). !!]</value>
+  </data>
+  <data name="TaskQueue.Status.ParamsFlushed" xml:space="preserve">
+    <value>[!! Ŧåşķ þåřåɱş ƒļüşħéď. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.ParamsLoaded" xml:space="preserve">
+    <value>[!! Łöåđéď þåřåɱş ƒöř `{0}`. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.ParamsUpdated" xml:space="preserve">
+    <value>[!! Ûþďåţéď þåřåɱş ƒöř `{0}`. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.ParamsUpdatedPersisted" xml:space="preserve">
+    <value>[!! Ûþďåţéď þåřåɱş ƒöř `{0}` åñď þéřşîşţéď. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.PrecheckDowngradeNotRequired" xml:space="preserve">
+    <value>[!! ŦåşķQüéüé þřéçħéçķ đöŵñĝřåďé ñöţ řéqüîřéď. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.PrecheckDowngradesApplied" xml:space="preserve">
+    <value>[!! ŦåşķQüéüé þřéçħéçķ åþþļîéď {0} đöŵñĝřåďé(ş). !!]</value>
+  </data>
+  <data name="TaskQueue.Status.PrecheckPassed" xml:space="preserve">
+    <value>[!! ŦåşķQüéüé þřéçħéçķ þåşşéď. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.PrecheckWarnings" xml:space="preserve">
+    <value>[!! ŦåşķQüéüé þřéçħéçķ řéţüřñéď {0} ŵåřñîñĝ(ş). !!]</value>
+  </data>
+  <data name="TaskQueue.Status.Saved" xml:space="preserve">
+    <value>[!! Ŧåşķ qüéüé şåṽéď. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.TaskAdded" xml:space="preserve">
+    <value>[!! Åďďéď ţåşķ `{0}`. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.False" xml:space="preserve">
+    <value>[!! Ŧåşķ `{0}` ďîşåƀļéď. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.True" xml:space="preserve">
+    <value>[!! Ŧåşķ `{0}` éñåƀļéď. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.TaskMoved" xml:space="preserve">
+    <value>[!! Ḿöṽéď ţåşķ `{0}` ţö þöşîţîöñ {1}. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.TaskOrderUnchanged" xml:space="preserve">
+    <value>[!! Ŧåşķ öřđéř üñçħåñĝéď. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.TaskRemoved" xml:space="preserve">
+    <value>[!! Řéɱöṽéď ţåşķ `{0}`. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.TaskRenamed" xml:space="preserve">
+    <value>[!! Ŧåşķ řéñåɱéď ţö `{0}`. !!]</value>
+  </data>
+  <data name="TaskQueue.Status.TasksEnabledBatch.False" xml:space="preserve">
+    <value>[!! Ďîşåƀļéď {0} ţåşķ(ş). !!]</value>
+  </data>
+  <data name="TaskQueue.Status.TasksEnabledBatch.True" xml:space="preserve">
+    <value>[!! Éñåƀļéď {0} ţåşķ(ş). !!]</value>
+  </data>
+  <data name="TaskQueue.Status.TasksEnabledInverted" xml:space="preserve">
+    <value>[!! Îñṽéřţéď éñåƀļéď şţåţé ƒöř {0} ţåşķ(ş). !!]</value>
+  </data>
+  <data name="TaskQueue.Status.ValidationPassed" xml:space="preserve">
+    <value>[!! Ŧåşķ `{0}` þåşşéď ṽåļîďåţîöñ. !!]</value>
+  </data>
   <data name="TaskQueue.Warning.MallCreditFightDowngraded" xml:space="preserve">
     <value>[!! Ďîşåƀļéď Ḿåļļ çřéďîţ ƒîĝħţ ƒöř `{0}` ƀéçåüşé åñ éñåƀļéď `{1}` ţåşķ üşéş ţħé çüřřéñţ/ļåşţ şţåĝé şéļéçţöř. !!]</value>
   </data>
-  <data name="Toolbox.Advanced.StageManager.Status.StateLoaded" xml:space="preserve">
-    <value>[!! Łöåđéď şţåĝé ɱåñåĝéř şţåţé. !!]</value>
+  <data name="Toolbox.Advanced.ExternalNotification.Error.QueryFailed" xml:space="preserve">
+    <value>[!! Ƒåîļéď ţö qüéřý éẋţéřñåļ ñöţîƒîçåţîöñ þřöṽîďéřş. !!]</value>
   </data>
-  <data name="Toolbox.Advanced.StageManager.Status.LocalResourcesLoaded" xml:space="preserve">
-    <value>[!! Łöåđéď ļöçåļ şţåĝé řéşöüřçéş ƒöř `{0}`. !!]</value>
+  <data name="Toolbox.Advanced.ExternalNotification.Status.LoadedProviders" xml:space="preserve">
+    <value>[!! Łöåđéď {0} éẋţéřñåļ ñöţîƒîçåţîöñ þřöṽîďéř(ş). !!]</value>
   </data>
-  <data name="Toolbox.Advanced.StageManager.Status.WebResourcesLoaded" xml:space="preserve">
-    <value>[!! Łöåđéď ŵéƀ şţåĝé řéşöüřçéş ƒöř `{0}`. !!]</value>
+  <data name="Toolbox.Advanced.ExternalNotification.Status.NoProviders" xml:space="preserve">
+    <value>[!! Ñö éẋţéřñåļ ñöţîƒîçåţîöñ þřöṽîďéř åṽåîļåƀļé. !!]</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.FileNotFound" xml:space="preserve">
+    <value>[!! Ƒîļé ñöţ ƒöüñď: {0} !!]</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.InvalidStageCode" xml:space="preserve">
+    <value>[!! Îñṽåļîď şţåĝé çöďé: {0} !!]</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.NoLocalResources" xml:space="preserve">
+    <value>[!! Ñö ļöçåļ şţåĝé řéşöüřçéş ƒöüñď ƒöř `{0}` üñďéř `{1}`. !!]</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.NoWebResources" xml:space="preserve">
+    <value>[!! Ñö ŵéƀ şţåĝé řéşöüřçéş ƒöüñď ƒöř `{0}` üñďéř `{1}`. !!]</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.ReadResources" xml:space="preserve">
+    <value>[!! Ƒåîļéď ţö řéåď şţåĝé řéşöüřçéş ƒřöɱ `{0}`: {1} !!]</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.ServiceUnavailable" xml:space="preserve">
+    <value>[!! Şţåĝé ɱåñåĝéř şéřṽîçé îş ñöţ îñîţîåļîžéď. !!]</value>
   </data>
   <data name="Toolbox.Advanced.StageManager.Status.ConfigLoaded" xml:space="preserve">
     <value>[!! Łöåđéď şţåĝé ɱåñåĝéř çöñƒîĝ. !!]</value>
@@ -231,78 +293,16 @@
   <data name="Toolbox.Advanced.StageManager.Status.ConfigSaved" xml:space="preserve">
     <value>[!! Şţåĝé ɱåñåĝéř çöñƒîĝ şåṽéď. !!]</value>
   </data>
+  <data name="Toolbox.Advanced.StageManager.Status.LocalResourcesLoaded" xml:space="preserve">
+    <value>[!! Łöåđéď ļöçåļ şţåĝé řéşöüřçéş ƒöř `{0}`. !!]</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Status.StateLoaded" xml:space="preserve">
+    <value>[!! Łöåđéď şţåĝé ɱåñåĝéř şţåţé. !!]</value>
+  </data>
   <data name="Toolbox.Advanced.StageManager.Status.Validated" xml:space="preserve">
     <value>[!! Ṽåļîďåţéď {0} şţåĝé çöďé(ş). !!]</value>
   </data>
-  <data name="Toolbox.Advanced.StageManager.Error.ServiceUnavailable" xml:space="preserve">
-    <value>[!! Şţåĝé ɱåñåĝéř şéřṽîçé îş ñöţ îñîţîåļîžéď. !!]</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.InvalidStageCode" xml:space="preserve">
-    <value>[!! Îñṽåļîď şţåĝé çöďé: {0} !!]</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.NoWebResources" xml:space="preserve">
-    <value>[!! Ñö ŵéƀ şţåĝé řéşöüřçéş ƒöüñď ƒöř `{0}` üñďéř `{1}`. !!]</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.NoLocalResources" xml:space="preserve">
-    <value>[!! Ñö ļöçåļ şţåĝé řéşöüřçéş ƒöüñď ƒöř `{0}` üñďéř `{1}`. !!]</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.ReadResources" xml:space="preserve">
-    <value>[!! Ƒåîļéď ţö řéåď şţåĝé řéşöüřçéş ƒřöɱ `{0}`: {1} !!]</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.FileNotFound" xml:space="preserve">
-    <value>[!! Ƒîļé ñöţ ƒöüñď: {0} !!]</value>
-  </data>
-  <data name="Toolbox.Advanced.ExternalNotification.Status.NoProviders" xml:space="preserve">
-    <value>[!! Ñö éẋţéřñåļ ñöţîƒîçåţîöñ þřöṽîďéř åṽåîļåƀļé. !!]</value>
-  </data>
-  <data name="Toolbox.Advanced.ExternalNotification.Status.LoadedProviders" xml:space="preserve">
-    <value>[!! Łöåđéď {0} éẋţéřñåļ ñöţîƒîçåţîöñ þřöṽîďéř(ş). !!]</value>
-  </data>
-  <data name="Toolbox.Advanced.ExternalNotification.Error.QueryFailed" xml:space="preserve">
-    <value>[!! Ƒåîļéď ţö qüéřý éẋţéřñåļ ñöţîƒîçåţîöñ þřöṽîďéřş. !!]</value>
-  </data>
-  <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
-    <value>[!! Ţĥé Ļîñüẋ þöřţåƀļé þåçķåĝé ĥåş ƀééñ ďöŵñļöåďéď. Éẋţřåçţ îţ ţö å ñéŵ ďîřéçţöřý åñď ļåüñçĥ ţĥé ÅþþÌɱåĝé ţĥéřé. !!]</value>
-  </data>
-  <data name="MultiInstanceUnderSamePath" xml:space="preserve">
-    <value>[!! Öñļý öñé îñşţåñçé çåñ ƀé ļåüñçĥéď üñďéř ţĥé şåɱé þåţĥ!
-Îƒ ýöü ŵåñţ ţö řüñ ɱüļţîþļé MÅÅ åţ ţĥé şåɱé ţîɱé, þļéåşé çöþý ţĥé ŵĥöļé MÅÅ åñď şţåřţ üñďéř ďîƒƒéřéñţ þåţĥ ŵîţĥ ţĥé şåɱé åďƀ åñď ďîƒƒéřéñţ çöññéçţ åďďřéşş. !!]</value>
-  </data>
-  <data name="Startup.LinuxPortablePackageMissing" xml:space="preserve">
-    <value>[!! Ţĥé Ļîñüẋ þöřţåƀļé þåçķåĝé îş îñçöɱþļéţé. Þļéåşé éẋţřåçţ ţĥé ƒüļļ þåçķåĝé, ţĥéñ ļåüñçĥ MÅÅÛñîƒîéď.ÅþþÌɱåĝé ƒřöɱ ţĥåţ ďîřéçţöřý. !!]</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.Title" xml:space="preserve">
-    <value>[!! Řîşķý çöññéçţîöñ şéţţîñĝş !!]</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.Message" xml:space="preserve">
-    <value>[!! {0} + åďƀĻîţé={1} çåñ ţřîĝĝéř ţĥé ɱåçÖŞ ŘåŵƁýÑç/ÞÖŞÎẊ çöññéçţîöñ îşşüé, ŵĥîçĥ ɱåý çåüşé çöññéçţîöñ ƒåîļüřéş öř ĥåñĝş. Ŵé řéçöɱɱéñď şéţţîñĝ åďƀĻîţé ţö {2}. !!]</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.ApplyRecommended" xml:space="preserve">
-    <value>[!! Åþþļý Ƒîẋ !!]</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.ForceRun" xml:space="preserve">
-    <value>[!! Ƒöřçé Řüñ !!]</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
-    <value>[!! ďéƒåüļţ ţöüçĥ ɱöďé !!]</value>
-  </data>
-  <data name="PlatformCapability.Notification.Unavailable.DisabledForApplication" xml:space="preserve">
-    <value>[!! Ţħé üşéř ħåş ďîşåƀļéď ñöţîƒîçåţîöñş ƒöř ţħîş åþþ îñ Windows Şéţţîñĝş. !!]</value>
-  </data>
-  <data name="PlatformCapability.Notification.Unavailable" xml:space="preserve">
-    <value>[!! Ţöåşţ ñöţîƒîçåţîöñş åřé üñåvåîļåƀļé: {0} !!]</value>
-  </data>
-  <data name="PlatformCapability.Notification.Unavailable.DisabledForUser" xml:space="preserve">
-    <value>[!! Ţħé üşéř ħåş ďîşåƀļéď åļļ åþþ ñöţîƒîçåţîöñş îñ Windows Şéţţîñĝş. !!]</value>
-  </data>
-  <data name="PlatformCapability.Notification.Unavailable.DisabledByGroupPolicy" xml:space="preserve">
-    <value>[!! Ďîşåƀļéď ƀý Windows Ĝřöüþ Þöļîçý !!]</value>
-  </data>
-  <data name="PlatformCapability.Notification.Unavailable.DisabledByManifest" xml:space="preserve">
-    <value>[!! Ďîşåƀļéď ƀý åþþ ɱåñîƒéşţ (Package.appxmanifest) !!]</value>
-  </data>
-  <data name="PlatformCapability.Error.AutostartAdminDenied" xml:space="preserve">
-    <value>[!! Åďɱîñîşţřåţöř ɱöďé ďöéş ñöţ şüþþöřţ şţåřţüþ öñ ƀööţ. Îţ îş ñöţ řéçöɱɱéñďéď ţö řüñ MAA ŵîţħ åďɱîñîşţřåţöř þřîṽîļéĝéş ƒöř åñ éẋţéñďéď þéřîöď.
-Îƒ ñéçéşşåřý, þļéåşé ĝö ţö Çöñţřöļ Þåñéļ > Ŵîñďöŵş Ţööļş > Ţåşķ Şçħéďüļéř ţö çřéåţé å çüşţöɱ ţåşķ. Ŵĥéñ şéţţîñĝ ţĥé ţřîĝĝéř, ɱåķé şüřé ţö çĥéçķ ｢Řüñ ŵîţĥ ħîĝĥéşţ þřîṽîļéĝéş｣ !!]</value>
+  <data name="Toolbox.Advanced.StageManager.Status.WebResourcesLoaded" xml:space="preserve">
+    <value>[!! Łöåđéď ŵéƀ şţåĝé řéşöüřçéş ƒöř `{0}`. !!]</value>
   </data>
 </root>

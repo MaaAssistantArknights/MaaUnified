@@ -12,6 +12,9 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="Achievement.NewBadgeText" xml:space="preserve">
+    <value>NEW</value>
+  </data>
   <data name="ActingCommandError" xml:space="preserve">
     <value>PRTS error</value>
   </data>
@@ -27,12 +30,12 @@
   <data name="AlgorithmFinish" xml:space="preserve">
     <value>Algorithm Finish</value>
   </data>
+  <data name="AllTaskCompleteContent" xml:space="preserve">
+    <value>MAA has completed all tasks under the {Preset} configuration on {DateTime} (in {TimeDiff})</value>
+  </data>
   <data name="AllTasksComplete" xml:space="preserve">
     <value>All task(s) completed!
 (in {0})</value>
-  </data>
-  <data name="AllTaskCompleteContent" xml:space="preserve">
-    <value>MAA has completed all tasks under the {Preset} configuration on {DateTime} (in {TimeDiff})</value>
   </data>
   <data name="AsYourHeartDesires" xml:space="preserve">
     <value>As Your Heart Desires (Random)</value>
@@ -125,20 +128,32 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="CombatOps" xml:space="preserve">
     <value>Node: Combat Operation</value>
   </data>
-  <data name="Common.ErrorPrefix" xml:space="preserve">
-    <value>Error</value>
-  </data>
-  <data name="Common.Edit.Cut" xml:space="preserve">
-    <value>Cut</value>
+  <data name="Common.Configuration" xml:space="preserve">
+    <value>Configuration</value>
   </data>
   <data name="Common.Edit.Copy" xml:space="preserve">
     <value>Copy</value>
+  </data>
+  <data name="Common.Edit.Cut" xml:space="preserve">
+    <value>Cut</value>
   </data>
   <data name="Common.Edit.Paste" xml:space="preserve">
     <value>Paste</value>
   </data>
   <data name="Common.Edit.SelectAll" xml:space="preserve">
     <value>Select all</value>
+  </data>
+  <data name="Common.ErrorPrefix" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="Common.List.FinalSeparator" xml:space="preserve">
+    <value> and </value>
+  </data>
+  <data name="Common.List.PairFormat" xml:space="preserve">
+    <value>{0} and {1}</value>
+  </data>
+  <data name="Common.List.Separator" xml:space="preserve">
+    <value>, </value>
   </data>
   <data name="Common.LoadingTaskHint" xml:space="preserve">
     <value>Select a task from the left list first.</value>
@@ -161,8 +176,89 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="ConnectingToEmulator" xml:space="preserve">
     <value>Connecting to emulator……</value>
   </data>
+  <data name="ConnectionFailure.AdbCommand.Message" xml:space="preserve">
+    <value>ADB command failed.</value>
+  </data>
+  <data name="ConnectionFailure.AdbCommand.Suggestion" xml:space="preserve">
+    <value>Open error details to inspect ADB output; make sure ADB is executable, or restart the emulator and ADB.</value>
+  </data>
+  <data name="ConnectionFailure.AdbDevice.Message" xml:space="preserve">
+    <value>ADB is not connected to an available device.</value>
+  </data>
+  <data name="ConnectionFailure.AdbDevice.Suggestion" xml:space="preserve">
+    <value>Check adb devices and make sure the target is in the device state. If it shows unauthorized, authorize it in the emulator; if it shows offline/no devices, restart the emulator or ADB and try again.</value>
+  </data>
+  <data name="ConnectionFailure.AdbStart.Message" xml:space="preserve">
+    <value>ADB failed to start.</value>
+  </data>
+  <data name="ConnectionFailure.AdbStart.Suggestion" xml:space="preserve">
+    <value>Check that the ADB path points to the adb executable, not a dmg, zip, folder, or installer package.</value>
+  </data>
+  <data name="ConnectionFailure.AdbTarget.Message" xml:space="preserve">
+    <value>ADB did not connect to the target device.</value>
+  </data>
+  <data name="ConnectionFailure.AdbTarget.Suggestion" xml:space="preserve">
+    <value>Check that the address and port are correct; common ADB port is 5555. Make sure the emulator is running, ADB is enabled, and the device is on the same network.</value>
+  </data>
+  <data name="ConnectionFailure.AddressPort.Message" xml:space="preserve">
+    <value>Could not connect to this address or port.</value>
+  </data>
+  <data name="ConnectionFailure.AddressPort.Suggestion" xml:space="preserve">
+    <value>Make sure the emulator is running and the address and port are correct; common ADB ports include 5555, while some emulators use ports such as 5554.</value>
+  </data>
+  <data name="ConnectionFailure.Callback.MessageFormat" xml:space="preserve">
+    <value>Connection callback: {0}</value>
+  </data>
+  <data name="ConnectionFailure.ConnectionFailed.Message" xml:space="preserve">
+    <value>Failed to connect to the emulator.</value>
+  </data>
+  <data name="ConnectionFailure.ConnectionFailed.Suggestion" xml:space="preserve">
+    <value>Open error details to inspect the core error output, then check the emulator and ADB connection.</value>
+  </data>
+  <data name="ConnectionFailure.CoreFailure.MessageFormat" xml:space="preserve">
+    <value>The connection core reported a failure: {0}</value>
+  </data>
+  <data name="ConnectionFailure.CoreFailure.Suggestion" xml:space="preserve">
+    <value>Check the emulator, ADB path, and connection config; core callback details are preserved below.</value>
+  </data>
+  <data name="ConnectionFailure.CoreUnavailable.Message" xml:space="preserve">
+    <value>The connection core is not ready or has been disposed.</value>
+  </data>
+  <data name="ConnectionFailure.CoreUnavailable.Suggestion" xml:space="preserve">
+    <value>Try again after a moment; restart the app if it keeps happening.</value>
+  </data>
+  <data name="ConnectionFailure.FixSettings.Suggestion" xml:space="preserve">
+    <value>Fix the connection settings first, then try again.</value>
+  </data>
+  <data name="ConnectionFailure.Generic.Message" xml:space="preserve">
+    <value>Connection failed. Check connection settings -&gt; try restarting the emulator and ADB -&gt; reboot the computer.</value>
+  </data>
+  <data name="ConnectionFailure.Generic.Suggestion" xml:space="preserve">
+    <value>Check connection settings, try restarting the emulator and ADB, then reboot if it still fails.</value>
+  </data>
+  <data name="ConnectionFailure.InvalidConfiguration.Message" xml:space="preserve">
+    <value>The connection configuration is invalid.</value>
+  </data>
+  <data name="ConnectionFailure.InvalidConfiguration.Suggestion" xml:space="preserve">
+    <value>Check the address format, port, connection type, and ADB path, then try again.</value>
+  </data>
+  <data name="ConnectionFailure.Timeout.Message" xml:space="preserve">
+    <value>Connecting to the emulator timed out.</value>
+  </data>
+  <data name="ConnectionFailure.Timeout.Suggestion" xml:space="preserve">
+    <value>Make sure the emulator is running, the address and port are correct, and ADB is available.</value>
+  </data>
+  <data name="ConnectionFailure.TouchMode.Message" xml:space="preserve">
+    <value>The current touch mode is not available.</value>
+  </data>
+  <data name="ConnectionFailure.TouchMode.Suggestion" xml:space="preserve">
+    <value>Switch to another touch mode in connection settings, then try again.</value>
+  </data>
   <data name="ContinueRefresh" xml:space="preserve">
     <value>No recruitment permit, trying to refresh Tags</value>
+  </data>
+  <data name="Control" xml:space="preserve">
+    <value>Control Center</value>
   </data>
   <data name="Copilot.Action.Start" xml:space="preserve">
     <value>Start</value>
@@ -208,36 +304,6 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   </data>
   <data name="Copilot.Button.PasteSet" xml:space="preserve">
     <value>Set</value>
-  </data>
-  <data name="Copilot.List.InlineJsonHint" xml:space="preserve">
-    <value>inline JSON</value>
-  </data>
-  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
-    <value>Delete all</value>
-  </data>
-  <data name="Copilot.List.Button.Disable" xml:space="preserve">
-    <value>Disable</value>
-  </data>
-  <data name="Copilot.List.Button.Enable" xml:space="preserve">
-    <value>Enable</value>
-  </data>
-  <data name="Copilot.List.Button.LoadSingle" xml:space="preserve">
-    <value>Load single</value>
-  </data>
-  <data name="Copilot.List.Button.ToggleRaid" xml:space="preserve">
-    <value>Toggle raid</value>
-  </data>
-  <data name="Copilot.List.ClearAllConfirm.Confirm" xml:space="preserve">
-    <value>Delete all</value>
-  </data>
-  <data name="Copilot.List.ClearAllConfirm.Message" xml:space="preserve">
-    <value>All copilot tasks in the battle list will be removed. This cannot be undone.</value>
-  </data>
-  <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
-    <value>Delete battle list</value>
-  </data>
-  <data name="Copilot.List.RaidLabel" xml:space="preserve">
-    <value>Raid</value>
   </data>
   <data name="Copilot.Error.AddEmptyTaskPersistFail" xml:space="preserve">
     <value>Add failed: list save failed.</value>
@@ -317,11 +383,20 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Copilot.Error.SelectTaskToUpdate" xml:space="preserve">
     <value>Select a copilot item to update.</value>
   </data>
+  <data name="Copilot.Error.SessionActivity.OtherActive" xml:space="preserve">
+    <value>Another session operation is active. Copilot cannot start until it is stopped or finishes.</value>
+  </data>
+  <data name="Copilot.Error.SessionActivity.TimerActive" xml:space="preserve">
+    <value>A scheduled task is active. Copilot cannot start until it finishes.</value>
+  </data>
   <data name="Copilot.Error.SessionStateNotAllowed" xml:space="preserve">
     <value>Session state `{0}` does not allow {2}.</value>
   </data>
   <data name="Copilot.Error.SortPersistFail" xml:space="preserve">
     <value>Sort failed: list save failed.</value>
+  </data>
+  <data name="Copilot.Error.SortStateOutOfSync" xml:space="preserve">
+    <value>The copilot list order changed. Try again.</value>
   </data>
   <data name="Copilot.Error.StartInputFileNotFound" xml:space="preserve">
     <value>Copilot file not found: {0}</value>
@@ -338,23 +413,11 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Copilot.Error.StopRunOwnerBlocked" xml:space="preserve">
     <value>Copilot stop blocked: current run owner is `{0}`.</value>
   </data>
+  <data name="Copilot.Error.TaskListPersistFail" xml:space="preserve">
+    <value>The copilot list could not be saved.</value>
+  </data>
   <data name="Copilot.Error.UpdateListItemPersistFail" xml:space="preserve">
     <value>Update failed: list save failed.</value>
-  </data>
-  <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
-    <value>Confirm</value>
-  </data>
-  <data name="Copilot.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
-    <value>Error details</value>
-  </data>
-  <data name="Copilot.RunOwnerBlockedDialog.Message" xml:space="preserve">
-    <value>{0} is still running. Stop the current task before starting Copilot.</value>
-  </data>
-  <data name="Copilot.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
-    <value>Stop task</value>
-  </data>
-  <data name="Copilot.RunOwnerBlockedDialog.Title" xml:space="preserve">
-    <value>Copilot start blocked</value>
   </data>
   <data name="Copilot.Error.ValidateTabMismatch" xml:space="preserve">
     <value>Selected copilot does not match current tab.</value>
@@ -408,6 +471,36 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   </data>
   <data name="Copilot.Input.StageNameWatermark" xml:space="preserve">
     <value>Stage name</value>
+  </data>
+  <data name="Copilot.List.Button.ClearAll" xml:space="preserve">
+    <value>Delete all</value>
+  </data>
+  <data name="Copilot.List.Button.Disable" xml:space="preserve">
+    <value>Disable</value>
+  </data>
+  <data name="Copilot.List.Button.Enable" xml:space="preserve">
+    <value>Enable</value>
+  </data>
+  <data name="Copilot.List.Button.LoadSingle" xml:space="preserve">
+    <value>Load single</value>
+  </data>
+  <data name="Copilot.List.Button.ToggleRaid" xml:space="preserve">
+    <value>Toggle raid</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Confirm" xml:space="preserve">
+    <value>Delete all</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Message" xml:space="preserve">
+    <value>All copilot tasks in the battle list will be removed. This cannot be undone.</value>
+  </data>
+  <data name="Copilot.List.ClearAllConfirm.Title" xml:space="preserve">
+    <value>Delete battle list</value>
+  </data>
+  <data name="Copilot.List.InlineJsonHint" xml:space="preserve">
+    <value>inline JSON</value>
+  </data>
+  <data name="Copilot.List.RaidLabel" xml:space="preserve">
+    <value>Raid</value>
   </data>
   <data name="Copilot.Option.AddTrust" xml:space="preserve">
     <value>Add low-trust operators</value>
@@ -466,6 +559,21 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Copilot.Rating.Prompt" xml:space="preserve">
     <value>How is this copilot? Leave feedback.</value>
   </data>
+  <data name="Copilot.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
+    <value>Confirm</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.DetailsButton" xml:space="preserve">
+    <value>Error details</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Message" xml:space="preserve">
+    <value>{0} is still running. Stop the current task before starting Copilot.</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.StopButton" xml:space="preserve">
+    <value>Stop task</value>
+  </data>
+  <data name="Copilot.RunOwnerBlockedDialog.Title" xml:space="preserve">
+    <value>Copilot start blocked</value>
+  </data>
   <data name="Copilot.Status.AddCurrentFailed" xml:space="preserve">
     <value>Add failed.</value>
   </data>
@@ -496,11 +604,11 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Copilot.Status.CleanInactiveNone" xml:space="preserve">
     <value>No inactive items to clean.</value>
   </data>
-  <data name="Copilot.Status.ClearSuccess" xml:space="preserve">
-    <value>All copilot tasks deleted.</value>
-  </data>
   <data name="Copilot.Status.ClearCancelled" xml:space="preserve">
     <value>Deleting all copilot tasks was cancelled.</value>
+  </data>
+  <data name="Copilot.Status.ClearSuccess" xml:space="preserve">
+    <value>All copilot tasks deleted.</value>
   </data>
   <data name="Copilot.Status.CorruptedListIgnored" xml:space="preserve">
     <value>Ignored corrupted copilot list configuration.</value>
@@ -532,6 +640,18 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Copilot.Status.InputUpdated" xml:space="preserve">
     <value>Copilot input updated.</value>
   </data>
+  <data name="Copilot.Status.ListItemDisabled" xml:space="preserve">
+    <value>Copilot item disabled.</value>
+  </data>
+  <data name="Copilot.Status.ListItemEnabled" xml:space="preserve">
+    <value>Copilot item enabled.</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidDisabled" xml:space="preserve">
+    <value>Switched to normal difficulty.</value>
+  </data>
+  <data name="Copilot.Status.ListItemRaidEnabled" xml:space="preserve">
+    <value>Switched to raid difficulty.</value>
+  </data>
   <data name="Copilot.Status.LoadClipboardFailed" xml:space="preserve">
     <value>Failed to read clipboard copilot.</value>
   </data>
@@ -544,23 +664,14 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Copilot.Status.LoadSetFailed" xml:space="preserve">
     <value>Failed to load copilot set.</value>
   </data>
+  <data name="Copilot.Status.LoadSetPartialFailed" xml:space="preserve">
+    <value>Failed to load the following copilot items: {0}</value>
+  </data>
   <data name="Copilot.Status.LoadedFeedbackDislikeSuccess" xml:space="preserve">
     <value>Dislike submitted.</value>
   </data>
   <data name="Copilot.Status.LoadedFeedbackLikeSuccess" xml:space="preserve">
     <value>Like submitted.</value>
-  </data>
-  <data name="Copilot.Status.ListItemDisabled" xml:space="preserve">
-    <value>Copilot item disabled.</value>
-  </data>
-  <data name="Copilot.Status.ListItemEnabled" xml:space="preserve">
-    <value>Copilot item enabled.</value>
-  </data>
-  <data name="Copilot.Status.ListItemRaidDisabled" xml:space="preserve">
-    <value>Switched to normal difficulty.</value>
-  </data>
-  <data name="Copilot.Status.ListItemRaidEnabled" xml:space="preserve">
-    <value>Switched to raid difficulty.</value>
   </data>
   <data name="Copilot.Status.MoveDownSuccess" xml:space="preserve">
     <value>Selected item moved down.</value>
@@ -577,6 +688,9 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Copilot.Status.RemoveSuccess" xml:space="preserve">
     <value>Selected copilot item removed.</value>
   </data>
+  <data name="Copilot.Status.ReorderSuccess" xml:space="preserve">
+    <value>Reordered the copilot list.</value>
+  </data>
   <data name="Copilot.Status.SelectedItem" xml:space="preserve">
     <value>Selected copilot: {0}</value>
   </data>
@@ -585,6 +699,9 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   </data>
   <data name="Copilot.Status.StartFailed" xml:space="preserve">
     <value>Start failed.</value>
+  </data>
+  <data name="Copilot.Status.Starting" xml:space="preserve">
+    <value>Starting...</value>
   </data>
   <data name="Copilot.Status.StopFailed" xml:space="preserve">
     <value>Stop failed.</value>
@@ -597,6 +714,9 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   </data>
   <data name="Copilot.Status.UpdateListItemNameSuccess" xml:space="preserve">
     <value>Copilot item name updated: {0}</value>
+  </data>
+  <data name="Copilot.Status.UpdateListItemSuccess" xml:space="preserve">
+    <value>Copilot item updated.</value>
   </data>
   <data name="Copilot.Tab.Display.Main" xml:space="preserve">
     <value>Main / Story / SideStory</value>
@@ -670,11 +790,17 @@ Enabling this may skip checks and can cause failures.</value>
   <data name="Copilot.Tip.UserAdditionalFormat" xml:space="preserve">
     <value>Use ';' to split entries and ',' to split name/skill, e.g. Exusiai,3;Eyjafjalla,1</value>
   </data>
+  <data name="Copilot.Title" xml:space="preserve">
+    <value>Copilot</value>
+  </data>
   <data name="Copilot.Warn.ListSingleItem" xml:space="preserve">
     <value>Battle list mode is used with only one item. Direct run is recommended.</value>
   </data>
   <data name="CopilotUserAdditionalNameInvalid" xml:space="preserve">
     <value>Additional custom {key=Operator} name invalid: {0}, please check spelling</value>
+  </data>
+  <data name="CoreLoadingTip" xml:space="preserve">
+    <value>The MAA core is still loading. Please try again shortly.</value>
   </data>
   <data name="CreditFight" xml:space="preserve">
     <value>Combat with Support to earn Credits</value>
@@ -805,11 +931,11 @@ Remaining credits: </value>
   <data name="Dialog.Error.CloseButton" xml:space="preserve">
     <value>Close</value>
   </data>
-  <data name="Dialog.Error.ConnectFailedTitle" xml:space="preserve">
-    <value>Failed to connect to emulator</value>
-  </data>
   <data name="Dialog.Error.CodeLabel" xml:space="preserve">
     <value>Code</value>
+  </data>
+  <data name="Dialog.Error.ConnectFailedTitle" xml:space="preserve">
+    <value>Failed to connect to emulator</value>
   </data>
   <data name="Dialog.Error.ContextLabel" xml:space="preserve">
     <value>Context</value>
@@ -823,20 +949,20 @@ Remaining credits: </value>
   <data name="Dialog.Error.DetailsLabel" xml:space="preserve">
     <value>Details</value>
   </data>
+  <data name="Dialog.Error.HelpButton" xml:space="preserve">
+    <value>FAQ</value>
+  </data>
   <data name="Dialog.Error.IgnoreButton" xml:space="preserve">
     <value>Ignore</value>
   </data>
   <data name="Dialog.Error.IssueReportButton" xml:space="preserve">
     <value>IssueReport</value>
   </data>
-  <data name="Dialog.Error.HelpButton" xml:space="preserve">
-    <value>FAQ</value>
+  <data name="Dialog.Error.MessageLabel" xml:space="preserve">
+    <value>Message</value>
   </data>
   <data name="Dialog.Error.QqGroupButton" xml:space="preserve">
     <value>Join QQ Group</value>
-  </data>
-  <data name="Dialog.Error.MessageLabel" xml:space="preserve">
-    <value>Message</value>
   </data>
   <data name="Dialog.Error.SectionTitle" xml:space="preserve">
     <value>Error</value>
@@ -868,6 +994,9 @@ Remaining credits: </value>
   <data name="Dialog.Warning.Title" xml:space="preserve">
     <value>Warning</value>
   </data>
+  <data name="Dorm" xml:space="preserve">
+    <value>Dormitory</value>
+  </data>
   <data name="DreadfulFoe" xml:space="preserve">
     <value>Stage: Dreadful Foe</value>
   </data>
@@ -895,6 +1024,9 @@ Remaining credits: </value>
   <data name="FailedToOpenClient" xml:space="preserve">
     <value>Failed to open the client. Please check the configuration file</value>
   </data>
+  <data name="Fight.AddStage" xml:space="preserve">
+    <value>Add candidate</value>
+  </data>
   <data name="Fight.AllowUseStoneSave" xml:space="preserve">
     <value>Save ｢Use Originium｣</value>
   </data>
@@ -919,6 +1051,12 @@ Remaining credits: </value>
   <data name="Fight.AssignedMaterial" xml:space="preserve">
     <value>Material</value>
   </data>
+  <data name="Fight.CustomStageCode" xml:space="preserve">
+    <value>Manual entry of stage names</value>
+  </data>
+  <data name="Fight.CustomStageCodeTip" xml:space="preserve">
+    <value>Support most main stage names and stage names from the original list.</value>
+  </data>
   <data name="Fight.DefaultStage" xml:space="preserve">
     <value>Cur/Last</value>
   </data>
@@ -934,14 +1072,14 @@ Remaining credits: </value>
   <data name="Fight.DropCount" xml:space="preserve">
     <value>Drop count</value>
   </data>
+  <data name="Fight.DropId" xml:space="preserve">
+    <value>Drop ID</value>
+  </data>
   <data name="Fight.DropQuantityMode" xml:space="preserve">
     <value>Quantity</value>
   </data>
   <data name="Fight.DropTargetMode" xml:space="preserve">
     <value>Target mode</value>
-  </data>
-  <data name="Fight.DropId" xml:space="preserve">
-    <value>Drop ID</value>
   </data>
   <data name="Fight.EnableTargetDrop" xml:space="preserve">
     <value>Target drop</value>
@@ -1006,6 +1144,9 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   <data name="Fight.Stone" xml:space="preserve">
     <value>Stone</value>
   </data>
+  <data name="Fight.TargetInventory" xml:space="preserve">
+    <value>Target inventory</value>
+  </data>
   <data name="Fight.Times" xml:space="preserve">
     <value>Times</value>
   </data>
@@ -1018,14 +1159,11 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   <data name="Fight.UseCustomAnnihilation" xml:space="preserve">
     <value>Custom annihilation</value>
   </data>
-  <data name="Fight.UseExpiringMedicine" xml:space="preserve">
-    <value>Unlimited use of expiring (&lt;48h) sanity potion</value>
-  </data>
-  <data name="Fight.TargetInventory" xml:space="preserve">
-    <value>Target inventory</value>
-  </data>
   <data name="Fight.UseExpireMedicineForActivity" xml:space="preserve">
     <value>Use sanity potions expiring this week within 48h before activity ends</value>
+  </data>
+  <data name="Fight.UseExpiringMedicine" xml:space="preserve">
+    <value>Unlimited use of expiring (&lt;48h) sanity potion</value>
   </data>
   <data name="Fight.UseMedicine" xml:space="preserve">
     <value>Use Sanity Potion</value>
@@ -1039,38 +1177,29 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   <data name="Fight.UseWeeklySchedule" xml:space="preserve">
     <value>Enable weekly schedule</value>
   </data>
-  <data name="Fight.AddStage" xml:space="preserve">
-    <value>Add candidate</value>
-  </data>
-  <data name="Fight.CustomStageCode" xml:space="preserve">
-    <value>Manual entry of stage names</value>
-  </data>
-  <data name="Fight.CustomStageCodeTip" xml:space="preserve">
-    <value>Support most main stage names and stage names from the original list.</value>
-  </data>
   <data name="Fight.UseWeeklyScheduleTip" xml:space="preserve">
     <value>The day of week here follows in-game reset time rather than local clock time.</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Friday" xml:space="preserve">
+    <value>Fri</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Monday" xml:space="preserve">
+    <value>Mon</value>
+  </data>
+  <data name="Fight.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>Sat</value>
   </data>
   <data name="Fight.WeeklySchedule.Sunday" xml:space="preserve">
     <value>Sun</value>
   </data>
-  <data name="Fight.WeeklySchedule.Monday" xml:space="preserve">
-    <value>Mon</value>
+  <data name="Fight.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>Thu</value>
   </data>
   <data name="Fight.WeeklySchedule.Tuesday" xml:space="preserve">
     <value>Tue</value>
   </data>
   <data name="Fight.WeeklySchedule.Wednesday" xml:space="preserve">
     <value>Wed</value>
-  </data>
-  <data name="Fight.WeeklySchedule.Thursday" xml:space="preserve">
-    <value>Thu</value>
-  </data>
-  <data name="Fight.WeeklySchedule.Friday" xml:space="preserve">
-    <value>Fri</value>
-  </data>
-  <data name="Fight.WeeklySchedule.Saturday" xml:space="preserve">
-    <value>Sat</value>
   </data>
   <data name="FightCompleted" xml:space="preserve">
     <value>Combat completed</value>
@@ -1131,6 +1260,9 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   </data>
   <data name="GiveUpUploadingPenguins" xml:space="preserve">
     <value>Abort upload to Penguin Statistics</value>
+  </data>
+  <data name="GpuDeviceRemovedRestartRequired" xml:space="preserve">
+    <value>The {0} task stopped because the GPU inference device became unavailable, possibly after a graphics driver update or GPU reset. {key=RestartRecommendation}</value>
   </data>
   <data name="HasReturned" xml:space="preserve">
     <value>Has returned</value>
@@ -1273,11 +1405,17 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   <data name="Infrast.Drones" xml:space="preserve">
     <value>Drones</value>
   </data>
-  <data name="Control" xml:space="preserve">
-    <value>Control Center</value>
+  <data name="Infrast.Error.CustomFileNotFound" xml:space="preserve">
+    <value>Custom file not found: {0}</value>
   </data>
-  <data name="Dorm" xml:space="preserve">
-    <value>Dormitory</value>
+  <data name="Infrast.Error.ParseFailed" xml:space="preserve">
+    <value>Failed to parse custom infrast file.</value>
+  </data>
+  <data name="Infrast.Error.PlanOutOfRange" xml:space="preserve">
+    <value>Plan index {0} is out of range for `{1}`.</value>
+  </data>
+  <data name="Infrast.Facility" xml:space="preserve">
+    <value>Facility Order</value>
   </data>
   <data name="Infrast.Fiammetta.Recovery" xml:space="preserve">
     <value>Enable Fiammetta morale recovery</value>
@@ -1293,171 +1431,6 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   </data>
   <data name="Infrast.Fiammetta.Targets.Tip" xml:space="preserve">
     <value>Recovering Shamare and Tequila can theoretically enable 007, but automatic shift changes rarely achieve it, so selecting them is not recommended.</value>
-  </data>
-  <data name="Infrast.UseAbyssalHunter" xml:space="preserve">
-    <value>Use Abyssal Hunter cross-facility team</value>
-  </data>
-  <data name="Infrast.UseAbyssalHunter.Tip" xml:space="preserve">
-    <value>Required operators: Gladiia (E2), Ulpianus, Skadi, Specter, and Andreana. Due to algorithm limitations, when Pinus Sylvestris is also selected, the two teams will not participate in scheduling together.</value>
-  </data>
-  <data name="Infrast.UsePerceptionInformation" xml:space="preserve">
-    <value>Use Perception Information cross-facility team</value>
-  </data>
-  <data name="Infrast.UsePerceptionInformation.Tip" xml:space="preserve">
-    <value>Required operators: Whisperain (E2), Rosmontis (E2), and Ebenholz (E2). Operators included in calculation: Dusk, Virtuosa, Iris, and Czerny. Higher priority than Worldly Plight.</value>
-  </data>
-  <data name="Infrast.UsePinusSylvestris" xml:space="preserve">
-    <value>Use Pinus Sylvestris cross-facility team</value>
-  </data>
-  <data name="Infrast.UsePinusSylvestris.Tip" xml:space="preserve">
-    <value>Required operators: Flametail (E2), Viviana (E2), and at least one of Wild Mane (E2), Ashlock (E2), or Fartooth (E2). Operators included in calculation: Gravel.</value>
-  </data>
-  <data name="Infrast.UseWeeklySchedule" xml:space="preserve">
-    <value>Enable weekly schedule</value>
-  </data>
-  <data name="Infrast.UseWeeklySchedule.Tip" xml:space="preserve">
-    <value>Weekdays follow the in-game time, not real time. For example, if the game resets at 4:00, 3:59 still counts as the previous day.</value>
-  </data>
-  <data name="Infrast.UseWorldlyPlight" xml:space="preserve">
-    <value>Use Worldly Plight cross-facility team</value>
-  </data>
-  <data name="Infrast.UseWorldlyPlight.Tip" xml:space="preserve">
-    <value>Required operators: Mulberry (E2) and Mr. Nothing (E2). Operators included in calculation: Chongyue, Ling, and Dusk.</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Friday" xml:space="preserve">
-    <value>Fri</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Monday" xml:space="preserve">
-    <value>Mon</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Saturday" xml:space="preserve">
-    <value>Sat</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Sunday" xml:space="preserve">
-    <value>Sun</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Thursday" xml:space="preserve">
-    <value>Thu</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Tuesday" xml:space="preserve">
-    <value>Tue</value>
-  </data>
-  <data name="Infrast.WeeklySchedule.Wednesday" xml:space="preserve">
-    <value>Wed</value>
-  </data>
-  <data name="Mfg" xml:space="preserve">
-    <value>Factory</value>
-  </data>
-  <data name="Office" xml:space="preserve">
-    <value>Office</value>
-  </data>
-  <data name="OperProgress.AddPlan" xml:space="preserve">
-    <value>Add operator</value>
-  </data>
-  <data name="OperProgress.EmptyHint" xml:space="preserve">
-    <value>No operator plan yet; this task is skipped at run time.</value>
-  </data>
-  <data name="OperProgress.Mastery1" xml:space="preserve">
-    <value>Mastery 1</value>
-  </data>
-  <data name="OperProgress.Mastery2" xml:space="preserve">
-    <value>Mastery 2</value>
-  </data>
-  <data name="OperProgress.Mastery3" xml:space="preserve">
-    <value>Mastery 3</value>
-  </data>
-  <data name="OperProgress.MoveDown" xml:space="preserve">
-    <value>Move down</value>
-  </data>
-  <data name="OperProgress.MoveUp" xml:space="preserve">
-    <value>Move up</value>
-  </data>
-  <data name="OperProgress.NameRequired" xml:space="preserve">
-    <value>Enter an operator name first.</value>
-  </data>
-  <data name="OperProgress.NotSet" xml:space="preserve">
-    <value>---</value>
-  </data>
-  <data name="OperProgress.OperatorName" xml:space="preserve">
-    <value>Operator</value>
-  </data>
-  <data name="OperProgress.OperatorNameTip" xml:space="preserve">
-    <value>Any language variant is accepted and normalized on save to the name Core recognizes.</value>
-  </data>
-  <data name="OperProgress.OperatorNameWatermark" xml:space="preserve">
-    <value>Operator name</value>
-  </data>
-  <data name="OperProgress.Plans" xml:space="preserve">
-    <value>Progression plans</value>
-  </data>
-  <data name="OperProgress.Remove" xml:space="preserve">
-    <value>Remove</value>
-  </data>
-  <data name="OperProgress.Title" xml:space="preserve">
-    <value>Operator Progression</value>
-  </data>
-  <data name="OperProgress.UnknownOperator" xml:space="preserve">
-    <value>Unknown operator name; MaaCore will reject this plan.</value>
-  </data>
-  <data name="Power" xml:space="preserve">
-    <value>Power Plant</value>
-  </data>
-  <data name="Processing" xml:space="preserve">
-    <value>Workshop</value>
-  </data>
-  <data name="Reception" xml:space="preserve">
-    <value>Reception Room</value>
-  </data>
-  <data name="RecruitingTips" xml:space="preserve">
-    <value>Recruiting Tips</value>
-  </data>
-  <data name="RecruitmentOfStar" xml:space="preserve">
-    <value>{0}★ has been recruited!</value>
-  </data>
-  <data name="SwitchTheme.EmptyHint" xml:space="preserve">
-    <value>No theme name entered; this task is skipped at run time.</value>
-  </data>
-  <data name="SwitchTheme.Placeholder" xml:space="preserve">
-    <value>Theme name</value>
-  </data>
-  <data name="SwitchTheme.Themes" xml:space="preserve">
-    <value>Candidate themes</value>
-  </data>
-  <data name="SwitchTheme.ThemesTip" xml:space="preserve">
-    <value>Enter theme names as shown in the in-game theme list. Multiple entries pick one at random each run; a single entry always switches to it.</value>
-  </data>
-  <data name="SwitchTheme.Title" xml:space="preserve">
-    <value>Switch Theme</value>
-  </data>
-  <data name="TaskQueue.Module.DepotMaintain" xml:space="preserve">
-    <value>Depot Maintenance</value>
-  </data>
-  <data name="TaskQueue.Module.OperProgress" xml:space="preserve">
-    <value>Operator Progression</value>
-  </data>
-  <data name="TaskQueue.Module.SwitchTheme" xml:space="preserve">
-    <value>Switch Theme</value>
-  </data>
-  <data name="TaskStallWarning" xml:space="preserve">
-    <value>Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running.</value>
-  </data>
-  <data name="Trade" xml:space="preserve">
-    <value>Trading Post</value>
-  </data>
-  <data name="Training" xml:space="preserve">
-    <value>Training Room</value>
-  </data>
-  <data name="Infrast.Error.CustomFileNotFound" xml:space="preserve">
-    <value>Custom file not found: {0}</value>
-  </data>
-  <data name="Infrast.Error.ParseFailed" xml:space="preserve">
-    <value>Failed to parse custom infrast file.</value>
-  </data>
-  <data name="Infrast.Error.PlanOutOfRange" xml:space="preserve">
-    <value>Plan index {0} is out of range for `{1}`.</value>
-  </data>
-  <data name="Infrast.Facility" xml:space="preserve">
-    <value>Facility Order</value>
   </data>
   <data name="Infrast.File" xml:space="preserve">
     <value>Custom Infrast File</value>
@@ -1536,6 +1509,57 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   </data>
   <data name="Infrast.Trust" xml:space="preserve">
     <value>Dorm trust</value>
+  </data>
+  <data name="Infrast.UseAbyssalHunter" xml:space="preserve">
+    <value>Use Abyssal Hunter cross-facility team</value>
+  </data>
+  <data name="Infrast.UseAbyssalHunter.Tip" xml:space="preserve">
+    <value>Required operators: Gladiia (E2), Ulpianus, Skadi, Specter, and Andreana. Due to algorithm limitations, when Pinus Sylvestris is also selected, the two teams will not participate in scheduling together.</value>
+  </data>
+  <data name="Infrast.UsePerceptionInformation" xml:space="preserve">
+    <value>Use Perception Information cross-facility team</value>
+  </data>
+  <data name="Infrast.UsePerceptionInformation.Tip" xml:space="preserve">
+    <value>Required operators: Whisperain (E2), Rosmontis (E2), and Ebenholz (E2). Operators included in calculation: Dusk, Virtuosa, Iris, and Czerny. Higher priority than Worldly Plight.</value>
+  </data>
+  <data name="Infrast.UsePinusSylvestris" xml:space="preserve">
+    <value>Use Pinus Sylvestris cross-facility team</value>
+  </data>
+  <data name="Infrast.UsePinusSylvestris.Tip" xml:space="preserve">
+    <value>Required operators: Flametail (E2), Viviana (E2), and at least one of Wild Mane (E2), Ashlock (E2), or Fartooth (E2). Operators included in calculation: Gravel.</value>
+  </data>
+  <data name="Infrast.UseWeeklySchedule" xml:space="preserve">
+    <value>Enable weekly schedule</value>
+  </data>
+  <data name="Infrast.UseWeeklySchedule.Tip" xml:space="preserve">
+    <value>Weekdays follow the in-game time, not real time. For example, if the game resets at 4:00, 3:59 still counts as the previous day.</value>
+  </data>
+  <data name="Infrast.UseWorldlyPlight" xml:space="preserve">
+    <value>Use Worldly Plight cross-facility team</value>
+  </data>
+  <data name="Infrast.UseWorldlyPlight.Tip" xml:space="preserve">
+    <value>Required operators: Mulberry (E2) and Mr. Nothing (E2). Operators included in calculation: Chongyue, Ling, and Dusk.</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Friday" xml:space="preserve">
+    <value>Fri</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Monday" xml:space="preserve">
+    <value>Mon</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Saturday" xml:space="preserve">
+    <value>Sat</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Sunday" xml:space="preserve">
+    <value>Sun</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Thursday" xml:space="preserve">
+    <value>Thu</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Tuesday" xml:space="preserve">
+    <value>Tue</value>
+  </data>
+  <data name="Infrast.WeeklySchedule.Wednesday" xml:space="preserve">
+    <value>Wed</value>
   </data>
   <data name="InfrastDormDoubleConfirmed" xml:space="preserve">
     <value>{key=Operator} conflict</value>
@@ -1651,22 +1675,26 @@ Target inventory: use saved Toolbox depot data and only farm the missing amount 
   <data name="LeaderSquad" xml:space="preserve">
     <value>Leader Squad</value>
   </data>
+  <data name="MacRawByNcRisk.Dialog.ApplyRecommended" xml:space="preserve">
+    <value>Apply Fix</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
+    <value>default touch mode</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.ForceRun" xml:space="preserve">
+    <value>Force Run</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Message" xml:space="preserve">
+    <value>{0} + adbLite={1} can trigger the macOS RawByNc/POSIX connection issue, which may cause connection failures or hangs. We recommend setting adbLite to {2}.</value>
+  </data>
+  <data name="MacRawByNcRisk.Dialog.Title" xml:space="preserve">
+    <value>Risky connection settings</value>
+  </data>
   <data name="Main.Blocking.Title" xml:space="preserve">
     <value>Config validation blocked ({0}): Start/LinkStart disabled</value>
   </data>
-  <data name="Main.ConfigRepair.Dialog.Cancel" xml:space="preserve">
-    <value>Close</value>
-  </data>
-  <data name="Main.ConfigRepair.Dialog.Confirm" xml:space="preserve">
-    <value>I Understand</value>
-  </data>
-  <data name="Main.ConfigRepair.Dialog.Prompt" xml:space="preserve">
-    <value>Problems were found while reading the configuration and an automatic recovery was applied.
-{0}
-Suggested action: {1}</value>
-  </data>
-  <data name="Main.ConfigRepair.Dialog.Title" xml:space="preserve">
-    <value>Configuration Recovery Notice</value>
+  <data name="Main.Close.SaveFailed" xml:space="preserve">
+    <value>Failed to save {0}.</value>
   </data>
   <data name="Main.CloseConfirm.Cancel" xml:space="preserve">
     <value>Cancel</value>
@@ -1686,6 +1714,20 @@ Are you sure you want to exit?</value>
   </data>
   <data name="Main.CloseConfirm.Update.Title" xml:space="preserve">
     <value>MAA is updating</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Cancel" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Confirm" xml:space="preserve">
+    <value>I Understand</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Prompt" xml:space="preserve">
+    <value>Problems were found while reading the configuration and an automatic recovery was applied.
+{0}
+Suggested action: {1}</value>
+  </data>
+  <data name="Main.ConfigRepair.Dialog.Title" xml:space="preserve">
+    <value>Configuration Recovery Notice</value>
   </data>
   <data name="Main.Connection.Button" xml:space="preserve">
     <value>Connect</value>
@@ -1825,6 +1867,24 @@ Are you sure you want to exit?</value>
   <data name="Main.RootPage.Pending.Toolbox.Message" xml:space="preserve">
     <value>Toolbox will continue loading after the first screen is ready.</value>
   </data>
+  <data name="Main.SchemaMigration.Dialog.Cancel" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Main.SchemaMigration.Dialog.Confirm" xml:space="preserve">
+    <value>I Understand</value>
+  </data>
+  <data name="Main.SchemaMigration.Dialog.Prompt" xml:space="preserve">
+    <value>The configuration schema is older than the latest version.
+Current version: v{0}
+Latest version: v{1}
+
+{2}
+Suggested action: {3}
+A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created before writing the latest schema.</value>
+  </data>
+  <data name="Main.SchemaMigration.Dialog.Title" xml:space="preserve">
+    <value>Configuration Schema Migration Notice</value>
+  </data>
   <data name="Main.Sidebar.GrowlAndCapability" xml:space="preserve">
     <value>Messages &amp; Capability</value>
   </data>
@@ -1941,6 +2001,9 @@ Do not enable this when OF-1 is locked.</value>
   <data name="MedicineUsedTimesWithExpiring" xml:space="preserve">
     <value>Medicine: {0},{1}(Expiring)  </value>
   </data>
+  <data name="Mfg" xml:space="preserve">
+    <value>Factory</value>
+  </data>
   <data name="MissingOperators" xml:space="preserve">
     <value>{key=Operator}s of the following {key=Operator} groups are missing: </value>
   </data>
@@ -1949,6 +2012,10 @@ Do not enable this when OF-1 is locked.</value>
   </data>
   <data name="MissionStart.FightTask" xml:space="preserve">
     <value>Mission started {0} times (-{1} Sanity)</value>
+  </data>
+  <data name="MultiInstanceUnderSamePath" xml:space="preserve">
+    <value>Only one instance can be launched under the same path!
+If you want to run multiple MAA at the same time, please copy the whole MAA and start under different path with the same adb and different connect address.</value>
   </data>
   <data name="NoDrop" xml:space="preserve">
     <value>Nothing</value>
@@ -1962,8 +2029,62 @@ Do not enable this when OF-1 is locked.</value>
   <data name="NotSwitch" xml:space="preserve">
     <value>Don't Switch</value>
   </data>
+  <data name="Office" xml:space="preserve">
+    <value>Office</value>
+  </data>
+  <data name="OperProgress.AddPlan" xml:space="preserve">
+    <value>Add operator</value>
+  </data>
+  <data name="OperProgress.EmptyHint" xml:space="preserve">
+    <value>No operator plan yet; this task is skipped at run time.</value>
+  </data>
+  <data name="OperProgress.Mastery1" xml:space="preserve">
+    <value>Mastery 1</value>
+  </data>
+  <data name="OperProgress.Mastery2" xml:space="preserve">
+    <value>Mastery 2</value>
+  </data>
+  <data name="OperProgress.Mastery3" xml:space="preserve">
+    <value>Mastery 3</value>
+  </data>
+  <data name="OperProgress.MoveDown" xml:space="preserve">
+    <value>Move down</value>
+  </data>
+  <data name="OperProgress.MoveUp" xml:space="preserve">
+    <value>Move up</value>
+  </data>
+  <data name="OperProgress.NameRequired" xml:space="preserve">
+    <value>Enter an operator name first.</value>
+  </data>
+  <data name="OperProgress.NotSet" xml:space="preserve">
+    <value>---</value>
+  </data>
+  <data name="OperProgress.OperatorName" xml:space="preserve">
+    <value>Operator</value>
+  </data>
+  <data name="OperProgress.OperatorNameTip" xml:space="preserve">
+    <value>Any language variant is accepted and normalized on save to the name Core recognizes.</value>
+  </data>
+  <data name="OperProgress.OperatorNameWatermark" xml:space="preserve">
+    <value>Operator name</value>
+  </data>
+  <data name="OperProgress.Plans" xml:space="preserve">
+    <value>Progression plans</value>
+  </data>
+  <data name="OperProgress.Remove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="OperProgress.Title" xml:space="preserve">
+    <value>Operator Progression</value>
+  </data>
+  <data name="OperProgress.UnknownOperator" xml:space="preserve">
+    <value>Unknown operator name; MaaCore will reject this plan.</value>
+  </data>
   <data name="Operator" xml:space="preserve">
     <value>Operator</value>
+  </data>
+  <data name="OutOfMemoryError" xml:space="preserve">
+    <value>The {0} task stopped due to insufficient memory. Close some programs or restart MAA and try again</value>
   </data>
   <data name="OvercomingYourWeaknesses" xml:space="preserve">
     <value>Overcoming Your Weaknesses (Guard, Supporter, Medic)</value>
@@ -2023,21 +2144,6 @@ If necessary, please go to Control Panel > Windows Tools > Task Scheduler to cre
   <data name="PlatformCapability.Error.NotificationUnsupported" xml:space="preserve">
     <value>Notifications are unsupported in the current environment</value>
   </data>
-  <data name="PlatformCapability.Notification.Unavailable" xml:space="preserve">
-    <value>Toast notifications are unavailable: {0}</value>
-  </data>
-  <data name="PlatformCapability.Notification.Unavailable.DisabledForApplication" xml:space="preserve">
-    <value>The user has disabled notifications for this app in Windows Settings.</value>
-  </data>
-  <data name="PlatformCapability.Notification.Unavailable.DisabledForUser" xml:space="preserve">
-    <value>The user has disabled all app notifications in Windows Settings.</value>
-  </data>
-  <data name="PlatformCapability.Notification.Unavailable.DisabledByGroupPolicy" xml:space="preserve">
-    <value>Disabled by Windows Group Policy</value>
-  </data>
-  <data name="PlatformCapability.Notification.Unavailable.DisabledByManifest" xml:space="preserve">
-    <value>Disabled by app manifest (Package.appxmanifest)</value>
-  </data>
   <data name="PlatformCapability.Error.OverlayStartFailed" xml:space="preserve">
     <value>Failed to start overlay</value>
   </data>
@@ -2058,6 +2164,21 @@ If necessary, please go to Control Panel > Windows Tools > Task Scheduler to cre
   </data>
   <data name="PlatformCapability.Error.TrayUnsupported" xml:space="preserve">
     <value>Tray is unsupported in the current environment</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable" xml:space="preserve">
+    <value>Toast notifications are unavailable: {0}</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByGroupPolicy" xml:space="preserve">
+    <value>Disabled by Windows Group Policy</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledByManifest" xml:space="preserve">
+    <value>Disabled by app manifest (Package.appxmanifest)</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForApplication" xml:space="preserve">
+    <value>The user has disabled notifications for this app in Windows Settings.</value>
+  </data>
+  <data name="PlatformCapability.Notification.Unavailable.DisabledForUser" xml:space="preserve">
+    <value>The user has disabled all app notifications in Windows Settings.</value>
   </data>
   <data name="PlatformCapability.Snapshot.Unavailable" xml:space="preserve">
     <value>Capability snapshot unavailable: {0}</value>
@@ -2122,6 +2243,33 @@ If necessary, please go to Control Panel > Windows Tools > Task Scheduler to cre
   <data name="PostAction.Cmd.Watermark" xml:space="preserve">
     <value>Leave empty to downgrade to logging only</value>
   </data>
+  <data name="PostAction.Dialog.ConfirmNow" xml:space="preserve">
+    <value>Run Now</value>
+  </data>
+  <data name="PostAction.Dialog.Message.Hibernate" xml:space="preserve">
+    <value>MAA will hibernate this computer in {0} seconds unless you cancel.</value>
+  </data>
+  <data name="PostAction.Dialog.Message.LockScreen" xml:space="preserve">
+    <value>MAA will lock the screen in {0} seconds unless you cancel.</value>
+  </data>
+  <data name="PostAction.Dialog.Message.Shutdown" xml:space="preserve">
+    <value>MAA will shut down this computer in {0} seconds unless you cancel.</value>
+  </data>
+  <data name="PostAction.Dialog.Message.Sleep" xml:space="preserve">
+    <value>MAA will put this computer to sleep in {0} seconds unless you cancel.</value>
+  </data>
+  <data name="PostAction.Dialog.Title.Hibernate" xml:space="preserve">
+    <value>Confirm Hibernate</value>
+  </data>
+  <data name="PostAction.Dialog.Title.LockScreen" xml:space="preserve">
+    <value>Confirm Lock Screen</value>
+  </data>
+  <data name="PostAction.Dialog.Title.Shutdown" xml:space="preserve">
+    <value>Confirm Shutdown</value>
+  </data>
+  <data name="PostAction.Dialog.Title.Sleep" xml:space="preserve">
+    <value>Confirm Sleep</value>
+  </data>
   <data name="PostAction.ExitArknights" xml:space="preserve">
     <value>Exit Arknights</value>
   </data>
@@ -2157,12 +2305,6 @@ Right-clicking other options will check/uncheck this option simultaneously</valu
   <data name="PostAction.Shutdown" xml:space="preserve">
     <value>Shutdown</value>
   </data>
-  <data name="PostAction.Sleep" xml:space="preserve">
-    <value>Sleep</value>
-  </data>
-  <data name="PostAction.Title" xml:space="preserve">
-    <value>Post Action</value>
-  </data>
   <data name="PostAction.SkipOnError" xml:space="preserve">
     <value>Skip if any task failed</value>
   </data>
@@ -2173,6 +2315,12 @@ Only failures of tasks in the left-hand task list count; Copilot and Toolbox err
   <data name="PostAction.SkippedDueToError" xml:space="preserve">
     <value>Post actions skipped, failed task(s): {0}</value>
   </data>
+  <data name="PostAction.Sleep" xml:space="preserve">
+    <value>Sleep</value>
+  </data>
+  <data name="PostAction.Title" xml:space="preserve">
+    <value>Post Action</value>
+  </data>
   <data name="PostAction.Unsupported" xml:space="preserve">
     <value>This action is unsupported on current platform and will be downgraded to logging.</value>
   </data>
@@ -2182,6 +2330,12 @@ Only failures of tasks in the left-hand task list count; Copilot and Toolbox err
   <data name="PostAction.Warn.UnsupportedDowngrade" xml:space="preserve">
     <value>Some selected post actions are not executable and will be downgraded to logging.</value>
   </data>
+  <data name="Power" xml:space="preserve">
+    <value>Power Plant</value>
+  </data>
+  <data name="Processing" xml:space="preserve">
+    <value>Workshop</value>
+  </data>
   <data name="ProductChanged" xml:space="preserve">
     <value>Product has changed</value>
   </data>
@@ -2190,6 +2344,9 @@ Only failures of tasks in the left-hand task list count; Copilot and Toolbox err
   </data>
   <data name="ProductUnknown" xml:space="preserve">
     <value>Unknown Product</value>
+  </data>
+  <data name="Reception" xml:space="preserve">
+    <value>Reception Room</value>
   </data>
   <data name="Reclamation.ClearStore" xml:space="preserve">
     <value>Clear Store after finished</value>
@@ -2233,11 +2390,11 @@ With save file: farm points through crafting (advanced).
   <data name="Reclamation.Option.Mode.RA1" xml:space="preserve">
     <value>RA-1</value>
   </data>
-  <data name="Reclamation.Option.Mode.RA4" xml:space="preserve">
-    <value>RA-4</value>
-  </data>
   <data name="Reclamation.Option.Mode.RA15" xml:space="preserve">
     <value>RA-15</value>
+  </data>
+  <data name="Reclamation.Option.Mode.RA4" xml:space="preserve">
+    <value>RA-4</value>
   </data>
   <data name="Reclamation.Option.Theme.FireClosed" xml:space="preserve">
     <value>Fire Within the Sand (The event is not open)</value>
@@ -2362,6 +2519,12 @@ With save file: farm points through crafting (advanced).
   <data name="RecruitingTips" xml:space="preserve">
     <value>Recruiting Tips</value>
   </data>
+  <data name="RecruitingTips" xml:space="preserve">
+    <value>Recruiting Tips</value>
+  </data>
+  <data name="RecruitmentOfStar" xml:space="preserve">
+    <value>{0}★ has been recruited!</value>
+  </data>
   <data name="RecruitmentOfStar" xml:space="preserve">
     <value>{0}★ has been recruited!</value>
   </data>
@@ -2370,6 +2533,21 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="ResearchSquad" xml:space="preserve">
     <value>Research Squad</value>
+  </data>
+  <data name="ResolutionChanged" xml:space="preserve">
+    <value>Emulator resolution has changed, connection closed. Please restart the task to apply the new resolution</value>
+  </data>
+  <data name="ResolutionNotSupportedCurrentResolution" xml:space="preserve">
+    <value>Current resolution: {0}x{1}</value>
+  </data>
+  <data name="ResourceBrokenRepairGuidance" xml:space="preserve">
+    <value>Go to Settings > Version update to check for a resource update (or download the full package again) and restart MAA. The block is lifted once the resources reload successfully.</value>
+  </data>
+  <data name="ResourceBrokenTaskBlocked" xml:space="preserve">
+    <value>The resources are damaged, so tasks cannot be started. {key=ResourceBrokenRepairGuidance}</value>
+  </data>
+  <data name="RestartRecommendation" xml:space="preserve">
+    <value>It is recommended to restart MAA to restore normal state</value>
   </data>
   <data name="Retreat" xml:space="preserve">
     <value>Retreat</value>
@@ -2554,6 +2732,9 @@ With save file: farm points through crafting (advanced).
   <data name="RoguelikeStrategyMonthlySquad" xml:space="preserve">
     <value>Grind Monthly Squad, clear as far as possible</value>
   </data>
+  <data name="RoguelikeThemeBlackFlow" xml:space="preserve">
+    <value>Black Flow</value>
+  </data>
   <data name="RoguelikeThemeJieGarden" xml:space="preserve">
     <value>Sui's Garden</value>
   </data>
@@ -2602,17 +2783,20 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.About.Announcement.Save" xml:space="preserve">
     <value>Save announcement</value>
   </data>
+  <data name="Settings.About.Bilibili" xml:space="preserve">
+    <value>bilibili</value>
+  </data>
   <data name="Settings.About.CheckAnnouncement" xml:space="preserve">
     <value>Check announcements</value>
+  </data>
+  <data name="Settings.About.Dialog.BottomHint" xml:space="preserve">
+    <value>Unread announcements cannot be dismissed yet.</value>
   </data>
   <data name="Settings.About.Dialog.Cancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
   <data name="Settings.About.Dialog.Confirm" xml:space="preserve">
     <value>Confirm</value>
-  </data>
-  <data name="Settings.About.Dialog.ConfirmLocked" xml:space="preserve">
-    <value>Read announcement first</value>
   </data>
   <data name="Settings.About.Dialog.ConfirmBlocked1" xml:space="preserve">
     <value>You haven't finished reading. Please confirm after you finish.</value>
@@ -2623,20 +2807,32 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.About.Dialog.ConfirmBlocked3" xml:space="preserve">
     <value>Still clicking</value>
   </data>
+  <data name="Settings.About.Dialog.ConfirmLocked" xml:space="preserve">
+    <value>Read announcement first</value>
+  </data>
   <data name="Settings.About.Dialog.DoNotRemindThisAnnouncementAgain" xml:space="preserve">
     <value>Do not show this announcement again</value>
   </data>
   <data name="Settings.About.Dialog.DoNotShowAnnouncement" xml:space="preserve">
     <value>Do not show announcement</value>
   </data>
-  <data name="Settings.About.Dialog.Title" xml:space="preserve">
-    <value>Announcement</value>
+  <data name="Settings.About.Dialog.Lead" xml:space="preserve">
+    <value>Please read the latest announcement carefully before closing this window.</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaCurrentSection" xml:space="preserve">
+    <value>Current section</value>
+  </data>
+  <data name="Settings.About.Dialog.MetaSectionFormat" xml:space="preserve">
+    <value>Section {0} / {1}</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadFinishedHint" xml:space="preserve">
+    <value>Announcement fully read. You can close this dialog now.</value>
+  </data>
+  <data name="Settings.About.Dialog.ReadHint" xml:space="preserve">
+    <value>Scroll to the bottom before closing, or hide this announcement until the next update.</value>
   </data>
   <data name="Settings.About.Dialog.ReadProgress.PendingBadge" xml:space="preserve">
     <value>READ LOCK</value>
-  </data>
-  <data name="Settings.About.Dialog.ReadProgress.PendingTitle" xml:space="preserve">
-    <value>Scroll to the bottom to unlock confirm.</value>
   </data>
   <data name="Settings.About.Dialog.ReadProgress.PendingCaption" xml:space="preserve">
     <value>Keep scrolling through every section. Confirm and do-not-remind will unlock together when you reach the end.</value>
@@ -2644,11 +2840,11 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.About.Dialog.ReadProgress.PendingFooterHint" xml:space="preserve">
     <value>This option unlocks after you finish reading, so the full action area stays together and easy to scan.</value>
   </data>
+  <data name="Settings.About.Dialog.ReadProgress.PendingTitle" xml:space="preserve">
+    <value>Scroll to the bottom to unlock confirm.</value>
+  </data>
   <data name="Settings.About.Dialog.ReadProgress.ReadyBadge" xml:space="preserve">
     <value>UNLOCKED</value>
-  </data>
-  <data name="Settings.About.Dialog.ReadProgress.ReadyTitle" xml:space="preserve">
-    <value>Confirm is now available.</value>
   </data>
   <data name="Settings.About.Dialog.ReadProgress.ReadyCaption" xml:space="preserve">
     <value>You can confirm now, and you can choose not to show this announcement again.</value>
@@ -2656,29 +2852,23 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.About.Dialog.ReadProgress.ReadyFooterHint" xml:space="preserve">
     <value>If you do not want to see this announcement again until it changes, tick the option on the left and confirm from the button on the right.</value>
   </data>
-  <data name="Settings.About.Dialog.SectionsTitle" xml:space="preserve">
-    <value>Announcement Sections</value>
+  <data name="Settings.About.Dialog.ReadProgress.ReadyTitle" xml:space="preserve">
+    <value>Confirm is now available.</value>
   </data>
   <data name="Settings.About.Dialog.SectionsCaption" xml:space="preserve">
     <value>Choose a section on the left to read the full announcement.</value>
   </data>
-  <data name="Settings.About.Dialog.Lead" xml:space="preserve">
-    <value>Please read the latest announcement carefully before closing this window.</value>
+  <data name="Settings.About.Dialog.SectionsTitle" xml:space="preserve">
+    <value>Announcement Sections</value>
   </data>
-  <data name="Settings.About.Dialog.BottomHint" xml:space="preserve">
-    <value>Unread announcements cannot be dismissed yet.</value>
+  <data name="Settings.About.Dialog.Title" xml:space="preserve">
+    <value>Announcement</value>
   </data>
-  <data name="Settings.About.Dialog.ReadHint" xml:space="preserve">
-    <value>Scroll to the bottom before closing, or hide this announcement until the next update.</value>
+  <data name="Settings.About.Discord" xml:space="preserve">
+    <value>Discord</value>
   </data>
-  <data name="Settings.About.Dialog.ReadFinishedHint" xml:space="preserve">
-    <value>Announcement fully read. You can close this dialog now.</value>
-  </data>
-  <data name="Settings.About.Dialog.MetaCurrentSection" xml:space="preserve">
-    <value>Current section</value>
-  </data>
-  <data name="Settings.About.Dialog.MetaSectionFormat" xml:space="preserve">
-    <value>Section {0} / {1}</value>
+  <data name="Settings.About.Github" xml:space="preserve">
+    <value>Source code: GitHub</value>
   </data>
   <data name="Settings.About.OpenCommunity" xml:space="preserve">
     <value>Open community portal</value>
@@ -2689,23 +2879,11 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.About.OpenOfficialWebsite" xml:space="preserve">
     <value>Open official website</value>
   </data>
-  <data name="Settings.About.Bilibili" xml:space="preserve">
-    <value>bilibili</value>
-  </data>
-  <data name="Settings.About.Github" xml:space="preserve">
-    <value>Source code: GitHub</value>
-  </data>
-  <data name="Settings.About.QqGroup" xml:space="preserve">
-    <value>QQ group</value>
-  </data>
   <data name="Settings.About.QqChannel" xml:space="preserve">
     <value>QQ channel</value>
   </data>
-  <data name="Settings.About.Telegram" xml:space="preserve">
-    <value>Telegram</value>
-  </data>
-  <data name="Settings.About.Discord" xml:space="preserve">
-    <value>Discord</value>
+  <data name="Settings.About.QqGroup" xml:space="preserve">
+    <value>QQ group</value>
   </data>
   <data name="Settings.About.Status.AnnouncementDialogCancelled" xml:space="preserve">
     <value>Announcement dialog cancelled.</value>
@@ -2743,20 +2921,26 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.About.Status.OpenOfficialWebsiteSucceeded" xml:space="preserve">
     <value>Official website opened.</value>
   </data>
+  <data name="Settings.About.Telegram" xml:space="preserve">
+    <value>Telegram</value>
+  </data>
   <data name="Settings.Achievement.Backup" xml:space="preserve">
     <value>Back Up Achievements</value>
   </data>
   <data name="Settings.Achievement.Dialog" xml:space="preserve">
     <value>Achievement dialog</value>
   </data>
-  <data name="Settings.Achievement.Dialog.FilterWatermark" xml:space="preserve">
-    <value>Filter achievements</value>
+  <data name="Settings.Achievement.Dialog.ClearFilters" xml:space="preserve">
+    <value>Clear filters</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyDescription" xml:space="preserve">
+    <value>Try a different keyword or filter.</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.EmptyTitle" xml:space="preserve">
+    <value>No matching achievements</value>
   </data>
   <data name="Settings.Achievement.Dialog.FilterAll" xml:space="preserve">
     <value>All</value>
-  </data>
-  <data name="Settings.Achievement.Dialog.FilterUnlocked" xml:space="preserve">
-    <value>Unlocked</value>
   </data>
   <data name="Settings.Achievement.Dialog.FilterInProgress" xml:space="preserve">
     <value>In Progress</value>
@@ -2764,23 +2948,20 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.Achievement.Dialog.FilterNew" xml:space="preserve">
     <value>New</value>
   </data>
+  <data name="Settings.Achievement.Dialog.FilterUnlocked" xml:space="preserve">
+    <value>Unlocked</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.FilterWatermark" xml:space="preserve">
+    <value>Filter achievements</value>
+  </data>
+  <data name="Settings.Achievement.Dialog.OverviewFormat" xml:space="preserve">
+    <value>Unlocked {0} / {1} · {2}% complete</value>
+  </data>
   <data name="Settings.Achievement.Dialog.ProgressFormat" xml:space="preserve">
     <value>Progress: {0}</value>
   </data>
   <data name="Settings.Achievement.Dialog.ResultsFormat" xml:space="preserve">
     <value>Showing {0} achievements</value>
-  </data>
-  <data name="Settings.Achievement.Dialog.ClearFilters" xml:space="preserve">
-    <value>Clear filters</value>
-  </data>
-  <data name="Settings.Achievement.Dialog.EmptyTitle" xml:space="preserve">
-    <value>No matching achievements</value>
-  </data>
-  <data name="Settings.Achievement.Dialog.EmptyDescription" xml:space="preserve">
-    <value>Try a different keyword or filter.</value>
-  </data>
-  <data name="Settings.Achievement.Dialog.OverviewFormat" xml:space="preserve">
-    <value>Unlocked {0} / {1} · {2}% complete</value>
   </data>
   <data name="Settings.Achievement.Dialog.Snapshot" xml:space="preserve">
     <value>Achievement dialog snapshot</value>
@@ -2902,11 +3083,11 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.Action.Close" xml:space="preserve">
     <value>Close</value>
   </data>
-  <data name="Settings.Action.GotIt" xml:space="preserve">
-    <value>Got it</value>
-  </data>
   <data name="Settings.Action.Delete" xml:space="preserve">
     <value>Delete</value>
+  </data>
+  <data name="Settings.Action.GotIt" xml:space="preserve">
+    <value>Got it</value>
   </data>
   <data name="Settings.Action.ImportAnyway" xml:space="preserve">
     <value>Import Anyway</value>
@@ -3064,11 +3245,11 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ConfigurationManager.Dialog.ExportCurrentTitle" xml:space="preserve">
     <value>Export Current Profile</value>
   </data>
+  <data name="Settings.ConfigurationManager.Dialog.GlobalConfiguration" xml:space="preserve">
+    <value>Global</value>
+  </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportConfigTitle" xml:space="preserve">
     <value>Import Profile</value>
-  </data>
-  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValuesTitle" xml:space="preserve">
-    <value>Some Settings Failed to Import</value>
   </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportLegacyTitle" xml:space="preserve">
     <value>Import Legacy Profile</value>
@@ -3081,6 +3262,12 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.ConfigurationManager.Dialog.ImportUnifiedFolderTitle" xml:space="preserve">
     <value>Select Unified Folder</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine" xml:space="preserve">
+    <value>Failed to import {1} in {0}. The {1} configuration could not be read. Please edit it manually.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValuesTitle" xml:space="preserve">
+    <value>Some Settings Failed to Import</value>
   </data>
   <data name="Settings.ConfigurationManager.Error.ExportPathEmpty" xml:space="preserve">
     <value>Export path is empty.</value>
@@ -3121,9 +3308,6 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ConfigurationManager.Import.DirectoryInvalid" xml:space="preserve">
     <value>No valid folder was selected.</value>
   </data>
-  <data name="Settings.ConfigurationManager.Import.LegacyFilenameInvalid" xml:space="preserve">
-    <value>The legacy profile file name is invalid. Please choose gui.json or gui.new.json.</value>
-  </data>
   <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingBoth" xml:space="preserve">
     <value>The selected folder does not contain gui.new.json or gui.json.</value>
   </data>
@@ -3132,6 +3316,9 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.ConfigurationManager.Import.LegacyDirectoryMissingGuiNew" xml:space="preserve">
     <value>The selected folder does not contain gui.new.json.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Import.LegacyFilenameInvalid" xml:space="preserve">
+    <value>The legacy profile file name is invalid. Please choose gui.json or gui.new.json.</value>
   </data>
   <data name="Settings.ConfigurationManager.Import.LegacyInvalidFilesOnly" xml:space="preserve">
     <value>The selection contains legacy profile files with invalid names.</value>
@@ -3148,14 +3335,23 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ConfigurationManager.Import.TooManyFiles" xml:space="preserve">
     <value>Legacy import supports at most two files; unified config JSON supports only one file.</value>
   </data>
-  <data name="Settings.ConfigurationManager.Import.UnifiedSingleFileOnly" xml:space="preserve">
-    <value>Unified config JSON supports only one file.</value>
-  </data>
   <data name="Settings.ConfigurationManager.Import.UnifiedDirectoryMissing" xml:space="preserve">
     <value>No config/avalonia.json or avalonia.json was found in the selected folder.</value>
   </data>
+  <data name="Settings.ConfigurationManager.Import.UnifiedSingleFileOnly" xml:space="preserve">
+    <value>Unified config JSON supports only one file.</value>
+  </data>
   <data name="Settings.ConfigurationManager.Import.UnrecognizedFiles" xml:space="preserve">
     <value>The selected import files are not recognized. Please choose an exported profile JSON, gui.json, or gui.new.json.</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportLegacy" xml:space="preserve">
+    <value>Import legacy profile</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportLegacy.ContextRefresh" xml:space="preserve">
+    <value>Refresh after legacy import</value>
+  </data>
+  <data name="Settings.ConfigurationManager.ImportLegacy.PendingConfirmation" xml:space="preserve">
+    <value>Awaiting legacy import confirmation</value>
   </data>
   <data name="Settings.ConfigurationManager.ImportMode.LegacyWindows" xml:space="preserve">
     <value>Legacy MAA</value>
@@ -3178,14 +3374,8 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ConfigurationManager.ImportMode.UnifiedDescription" xml:space="preserve">
     <value>Select the MAAUnified folder.</value>
   </data>
-  <data name="Settings.ConfigurationManager.ImportLegacy" xml:space="preserve">
-    <value>Import legacy profile</value>
-  </data>
-  <data name="Settings.ConfigurationManager.ImportLegacy.ContextRefresh" xml:space="preserve">
-    <value>Refresh after legacy import</value>
-  </data>
-  <data name="Settings.ConfigurationManager.ImportLegacy.PendingConfirmation" xml:space="preserve">
-    <value>Awaiting legacy import confirmation</value>
+  <data name="Settings.ConfigurationManager.ImportSucceededInline" xml:space="preserve">
+    <value>Imported successfully</value>
   </data>
   <data name="Settings.ConfigurationManager.Load" xml:space="preserve">
     <value>Load profile</value>
@@ -3211,15 +3401,6 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ConfigurationManager.SaveAsNew" xml:space="preserve">
     <value>Save As New</value>
   </data>
-  <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
-    <value>Saved successfully</value>
-  </data>
-  <data name="Settings.ConfigurationManager.SwitchSucceededInline" xml:space="preserve">
-    <value>Switched to {0}</value>
-  </data>
-  <data name="Settings.ConfigurationManager.ImportSucceededInline" xml:space="preserve">
-    <value>Imported successfully</value>
-  </data>
   <data name="Settings.ConfigurationManager.SaveAsNewFailedInline" xml:space="preserve">
     <value>Save failed: {0}</value>
   </data>
@@ -3238,8 +3419,8 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ConfigurationManager.SaveAsNewFailedReason.SourceProfileMissing" xml:space="preserve">
     <value>The current profile is missing. Refresh the list and try again.</value>
   </data>
-  <data name="Settings.ConfigurationManager.Title" xml:space="preserve">
-    <value>Configuration Manager</value>
+  <data name="Settings.ConfigurationManager.SaveAsNewSucceededInline" xml:space="preserve">
+    <value>Saved successfully</value>
   </data>
   <data name="Settings.ConfigurationManager.SaveCurrent" xml:space="preserve">
     <value>Save current profile</value>
@@ -3307,6 +3488,9 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ConfigurationManager.Status.SaveCurrentSucceeded" xml:space="preserve">
     <value>Current profile was saved.</value>
   </data>
+  <data name="Settings.ConfigurationManager.Status.SwitchBlockedWhileRunning" xml:space="preserve">
+    <value>The profile cannot be switched while a task is running or stopping. Wait for it to finish and try again.</value>
+  </data>
   <data name="Settings.ConfigurationManager.Status.SwitchFailed" xml:space="preserve">
     <value>Failed to switch profile.</value>
   </data>
@@ -3315,6 +3499,12 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.ConfigurationManager.Switch" xml:space="preserve">
     <value>Switch profile</value>
+  </data>
+  <data name="Settings.ConfigurationManager.SwitchSucceededInline" xml:space="preserve">
+    <value>Switched to {0}</value>
+  </data>
+  <data name="Settings.ConfigurationManager.Title" xml:space="preserve">
+    <value>Configuration Manager</value>
   </data>
   <data name="Settings.Connect.AdbLiteEnabled" xml:space="preserve">
     <value>Enable AdbLite</value>
@@ -3397,6 +3587,21 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.Connect.Hint.ConnectionAddressEmpty" xml:space="preserve">
     <value>Connection address is empty. Enter "IP:port" and try again.</value>
   </data>
+  <data name="Settings.Connect.Hint.LdPlayerOpenGlMissing" xml:space="preserve">
+    <value>LDPlayer emulator path is missing ldopengl64.dll: {0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.LdPlayerPathNotFound" xml:space="preserve">
+    <value>LDPlayer emulator path does not exist: {0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.MacBundledAdbNotFound" xml:space="preserve">
+    <value>Bundled ADB was not found: {0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.MuMuExternalRendererMissing" xml:space="preserve">
+    <value>MuMu emulator path is missing external_renderer_ipc.dll: {0}</value>
+  </data>
+  <data name="Settings.Connect.Hint.MuMuPathNotFound" xml:space="preserve">
+    <value>MuMu emulator path does not exist: {0}</value>
+  </data>
   <data name="Settings.Connect.InstanceId" xml:space="preserve">
     <value>Instance index</value>
   </data>
@@ -3442,6 +3647,12 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.Connect.Status.DownloadingAdb" xml:space="preserve">
     <value>Downloading ADB...</value>
   </data>
+  <data name="Settings.Connect.Status.LdPlayerPathAutoDetected" xml:space="preserve">
+    <value>LDPlayer emulator path auto-detected: {0}</value>
+  </data>
+  <data name="Settings.Connect.Status.MuMuPathAutoDetected" xml:space="preserve">
+    <value>MuMu emulator path auto-detected: {0}</value>
+  </data>
   <data name="Settings.Connect.Status.ReplacedAdb" xml:space="preserve">
     <value>ADB replaced: {0}</value>
   </data>
@@ -3451,6 +3662,9 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.Connect.TouchMode" xml:space="preserve">
     <value>Touch mode</value>
   </data>
+  <data name="Settings.ExternalNotification.Blacklist" xml:space="preserve">
+    <value>Content blacklist (one regex per line)</value>
+  </data>
   <data name="Settings.ExternalNotification.DefaultMessage" xml:space="preserve">
     <value>This is MAA external notification test information. If you see this content, the notification was sent successfully!</value>
   </data>
@@ -3459,33 +3673,6 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.ExternalNotification.EnableDetails" xml:space="preserve">
     <value>Include detailed content</value>
-  </data>
-  <data name="Settings.ExternalNotification.IncludePreviousLogs" xml:space="preserve">
-    <value>Attach recent logs</value>
-  </data>
-  <data name="Settings.ExternalNotification.MaxEntries" xml:space="preserve">
-    <value>Recent log entries</value>
-  </data>
-  <data name="Settings.ExternalNotification.TimeMinutes" xml:space="preserve">
-    <value>Log time window (minutes, 0 disables)</value>
-  </data>
-  <data name="Settings.ExternalNotification.FilterPreviousLogs" xml:space="preserve">
-    <value>Filter recent logs by blacklist</value>
-  </data>
-  <data name="Settings.ExternalNotification.SendAfterLogCount" xml:space="preserve">
-    <value>Notify after new log count</value>
-  </data>
-  <data name="Settings.ExternalNotification.NewLogCount" xml:space="preserve">
-    <value>New log count threshold</value>
-  </data>
-  <data name="Settings.ExternalNotification.SendWhenContentMatches" xml:space="preserve">
-    <value>Notify when log matches whitelist</value>
-  </data>
-  <data name="Settings.ExternalNotification.Whitelist" xml:space="preserve">
-    <value>Content whitelist (one regex per line)</value>
-  </data>
-  <data name="Settings.ExternalNotification.Blacklist" xml:space="preserve">
-    <value>Content blacklist (one regex per line)</value>
   </data>
   <data name="Settings.ExternalNotification.Enabled" xml:space="preserve">
     <value>Enable external notifications</value>
@@ -3511,6 +3698,18 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ExternalNotification.Error.Unsupported" xml:space="preserve">
     <value>External notification is unsupported in this environment: {0} ({1})</value>
   </data>
+  <data name="Settings.ExternalNotification.FilterPreviousLogs" xml:space="preserve">
+    <value>Filter recent logs by blacklist</value>
+  </data>
+  <data name="Settings.ExternalNotification.IncludePreviousLogs" xml:space="preserve">
+    <value>Attach recent logs</value>
+  </data>
+  <data name="Settings.ExternalNotification.MaxEntries" xml:space="preserve">
+    <value>Recent log entries</value>
+  </data>
+  <data name="Settings.ExternalNotification.NewLogCount" xml:space="preserve">
+    <value>New log count threshold</value>
+  </data>
   <data name="Settings.ExternalNotification.OnlyCompleteNote" xml:space="preserve">
     <value>By default, only a summary is sent when a task completes. You can also enable error and timeout notifications if needed.</value>
   </data>
@@ -3520,23 +3719,29 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ExternalNotification.ProviderParametersNote" xml:space="preserve">
     <value>Fill in the JSON parameters required by your notification provider.</value>
   </data>
-  <data name="Settings.ExternalNotification.SendWhenComplete" xml:space="preserve">
-    <value>Notify on completion</value>
-  </data>
-  <data name="Settings.ExternalNotification.SendWhenError" xml:space="preserve">
-    <value>Notify on error</value>
-  </data>
-  <data name="Settings.ExternalNotification.SendWhenTimeout" xml:space="preserve">
-    <value>Notify on timeout</value>
-  </data>
-  <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
-    <value>Send notification when task log output stalls</value>
+  <data name="Settings.ExternalNotification.SendAfterLogCount" xml:space="preserve">
+    <value>Notify after new log count</value>
   </data>
   <data name="Settings.ExternalNotification.SendBeforeScheduledStart" xml:space="preserve">
     <value>Before scheduled start</value>
   </data>
   <data name="Settings.ExternalNotification.SendBeforeScheduledStartTip" xml:space="preserve">
     <value>Send an external notification before a scheduled task starts.&#10;The lead time is configured in Timer settings.</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenComplete" xml:space="preserve">
+    <value>Notify on completion</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenContentMatches" xml:space="preserve">
+    <value>Notify when log matches whitelist</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenError" xml:space="preserve">
+    <value>Notify on error</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenStalled" xml:space="preserve">
+    <value>Send notification when task log output stalls</value>
+  </data>
+  <data name="Settings.ExternalNotification.SendWhenTimeout" xml:space="preserve">
+    <value>Notify on timeout</value>
   </data>
   <data name="Settings.ExternalNotification.Status.OperationFailed" xml:space="preserve">
     <value>External notification operation failed.</value>
@@ -3565,6 +3770,15 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.ExternalNotification.TestTitle" xml:space="preserve">
     <value>Test notification title</value>
   </data>
+  <data name="Settings.ExternalNotification.TimeMinutes" xml:space="preserve">
+    <value>Log time window (minutes, 0 disables)</value>
+  </data>
+  <data name="Settings.ExternalNotification.Whitelist" xml:space="preserve">
+    <value>Content whitelist (one regex per line)</value>
+  </data>
+  <data name="Settings.GUI.HideCloseButton" xml:space="preserve">
+    <value>Hide close button</value>
+  </data>
   <data name="Settings.GUI.InverseClearMode" xml:space="preserve">
     <value>Main screen button mode</value>
   </data>
@@ -3577,6 +3791,15 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.GUI.LogItemDateFormat.PreviewCaption" xml:space="preserve">
     <value>Preview</value>
   </data>
+  <data name="Settings.GUI.MainTasksInvertNullFunction" xml:space="preserve">
+    <value>Reverse right-click effect for main task</value>
+  </data>
+  <data name="Settings.GUI.MainTasksInvertNullFunctionTip" xml:space="preserve">
+    <value>Default: Apply once; Checked: Skip once</value>
+  </data>
+  <data name="Settings.GUI.MaxNumberOfLogThumbnails" xml:space="preserve">
+    <value>Maximum number of log thumbnails</value>
+  </data>
   <data name="Settings.GUI.MinimizeToTray" xml:space="preserve">
     <value>Hide to tray when minimized</value>
   </data>
@@ -3585,6 +3808,9 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.GUI.OperNameLanguage" xml:space="preserve">
     <value>Operator name display language</value>
+  </data>
+  <data name="Settings.GUI.PallasHangoverMessage" xml:space="preserve">
+    <value>I won't drink so much next time……</value>
   </data>
   <data name="Settings.GUI.SoftwareRendering.RestartDialog.Cancel" xml:space="preserve">
     <value>Later</value>
@@ -3616,53 +3842,35 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.GUI.UiScalePercentTip" xml:space="preserve">
     <value>Allowed range: 70% to 140%.</value>
   </data>
+  <data name="Settings.GUI.UseCardLog" xml:space="preserve">
+    <value>Use card style log</value>
+  </data>
+  <data name="Settings.GUI.UseNotify" xml:space="preserve">
+    <value>Show system notifications</value>
+  </data>
   <data name="Settings.GUI.UseSoftwareRendering" xml:space="preserve">
     <value>Use software rendering</value>
   </data>
   <data name="Settings.GUI.UseTray" xml:space="preserve">
     <value>Show tray icon</value>
   </data>
-  <data name="Settings.GUI.UseNotify" xml:space="preserve">
-    <value>Show system notifications</value>
-  </data>
-  <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
-    <value>Scroll window title</value>
-  </data>
-  <data name="Settings.GUI.HideCloseButton" xml:space="preserve">
-    <value>Hide close button</value>
-  </data>
-  <data name="Settings.GUI.UseCardLog" xml:space="preserve">
-    <value>Use card style log</value>
-  </data>
-  <data name="Settings.GUI.MaxNumberOfLogThumbnails" xml:space="preserve">
-    <value>Maximum number of log thumbnails</value>
-  </data>
-  <data name="Settings.GUI.MainTasksInvertNullFunction" xml:space="preserve">
-    <value>Reverse right-click effect for main task</value>
-  </data>
-  <data name="Settings.GUI.MainTasksInvertNullFunctionTip" xml:space="preserve">
-    <value>Default: Apply once; Checked: Skip once</value>
-  </data>
-  <data name="Settings.GUI.WindowTitleSelectShowList" xml:space="preserve">
-    <value>Title Bar Display Content</value>
+  <data name="Settings.GUI.WindowTitleField.ClientType" xml:space="preserve">
+    <value>Client Type</value>
   </data>
   <data name="Settings.GUI.WindowTitleField.ConfigurationName" xml:space="preserve">
     <value>Config</value>
   </data>
-  <data name="Settings.GUI.WindowTitleField.ConnectionPreset" xml:space="preserve">
-    <value>Connection Preset</value>
-  </data>
   <data name="Settings.GUI.WindowTitleField.ConnectionAddress" xml:space="preserve">
     <value>Connection address</value>
   </data>
-  <data name="Settings.GUI.WindowTitleField.ClientType" xml:space="preserve">
-    <value>Client Type</value>
+  <data name="Settings.GUI.WindowTitleField.ConnectionPreset" xml:space="preserve">
+    <value>Connection Preset</value>
   </data>
-  <data name="Settings.GUI.PallasHangoverMessage" xml:space="preserve">
-    <value>I won't drink so much next time……</value>
+  <data name="Settings.GUI.WindowTitleScrollable" xml:space="preserve">
+    <value>Scroll window title</value>
   </data>
-  <data name="Settings.Option.OperNameLanguage.Force" xml:space="preserve">
-    <value>Force use of specified language</value>
+  <data name="Settings.GUI.WindowTitleSelectShowList" xml:space="preserve">
+    <value>Title Bar Display Content</value>
   </data>
   <data name="Settings.Game.BlockSleep" xml:space="preserve">
     <value>Prevent the system from sleeping</value>
@@ -3679,6 +3887,15 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.Game.EnablePenguin" xml:space="preserve">
     <value>Enable Penguin Stats upload</value>
   </data>
+  <data name="Settings.Game.EnableRunDurationLimit" xml:space="preserve">
+    <value>Limit run duration</value>
+  </data>
+  <data name="Settings.Game.EnableRunDurationLimit.Tip" xml:space="preserve">
+    <value>Checked: every run. Indeterminate: this run only. Stops the run when the limit is reached.</value>
+  </data>
+  <data name="Settings.Game.EnableStallTimeout" xml:space="preserve">
+    <value>Detect stalled log updates</value>
+  </data>
   <data name="Settings.Game.EnableYituliu" xml:space="preserve">
     <value>Enable Yituliu upload</value>
   </data>
@@ -3688,11 +3905,26 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.Game.EndsWithScriptTip" xml:space="preserve">
     <value>Run after tasks finish</value>
   </data>
+  <data name="Settings.Game.OverseasAdaptationGuide.Open" xml:space="preserve">
+    <value>Open Overseas Adaptation Guide</value>
+  </data>
+  <data name="Settings.Game.OverseasClientHint" xml:space="preserve">
+    <value>Using an overseas client? See adaptation help.</value>
+  </data>
   <data name="Settings.Game.PenguinId" xml:space="preserve">
     <value>Penguin Stats user ID</value>
   </data>
   <data name="Settings.Game.ReminderIntervalMinutes" xml:space="preserve">
     <value>Reminder interval (minutes)</value>
+  </data>
+  <data name="Settings.Game.RunDurationLimitExecutePostActions" xml:space="preserve">
+    <value>Run completion actions after stopping</value>
+  </data>
+  <data name="Settings.Game.RunDurationLimitMinutes" xml:space="preserve">
+    <value>Run duration limit (min)</value>
+  </data>
+  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
+    <value>Log output stall timeout (min)</value>
   </data>
   <data name="Settings.Game.StartsWithScript" xml:space="preserve">
     <value>Script before start</value>
@@ -3708,6 +3940,12 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.Game.UseScriptOnManualStop" xml:space="preserve">
     <value>Run scripts on manual stop</value>
+  </data>
+  <data name="Settings.Game.YoStarResolutionGuide.Available" xml:space="preserve">
+    <value>YoStar EN resolution guide is available.</value>
+  </data>
+  <data name="Settings.Game.YoStarResolutionGuide.Open" xml:space="preserve">
+    <value>Open YoStar EN Resolution Guide</value>
   </data>
   <data name="Settings.Gui.Language.Change" xml:space="preserve">
     <value>Change GUI language</value>
@@ -3805,11 +4043,23 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.IssueReport.Build" xml:space="preserve">
     <value>Build issue report</value>
   </data>
+  <data name="Settings.IssueReport.CheckHelpBeforeReportingIssue" xml:space="preserve">
+    <value>Please check the ｢{key=Help}｣ before reporting any issues.</value>
+  </data>
+  <data name="Settings.IssueReport.CheckUpdateBeforeReportingIssue" xml:space="preserve">
+    <value>Please upgrade first and test if the issue persists in the new version. Confirm it's not a common issue before reporting.</value>
+  </data>
   <data name="Settings.IssueReport.ClearImageCache" xml:space="preserve">
     <value>Clear image cache</value>
   </data>
   <data name="Settings.IssueReport.ClearImageCacheConfirm" xml:space="preserve">
     <value>Manual cleanup is usually unnecessary.&#10;Images in the DEBUG directory have a quantity limit, and old images are automatically cleaned when exceeded.&#10;Manual cleanup deletes all images, which may result in missing screenshots for troubleshooting.&#10;Cache files (such as maps, operator avatars, etc.) need to be regenerated after clearing, which may affect user experience.</value>
+  </data>
+  <data name="Settings.IssueReport.ClearImageCacheTip" xml:space="preserve">
+    <value>Manual cleanup is usually unnecessary.
+Images in the DEBUG directory have a quantity limit, and old images are automatically cleaned when exceeded.
+Manual cleanup deletes all images, which may result in missing screenshots for troubleshooting.
+Cache files (such as maps, operator avatars, etc.) need to be regenerated after clearing, which may affect user experience.</value>
   </data>
   <data name="Settings.IssueReport.DeveloperMode" xml:space="preserve">
     <value>Developer mode</value>
@@ -3835,12 +4085,6 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.IssueReport.OpenRuntimeLogWindow" xml:space="preserve">
     <value>Open runtime log window</value>
   </data>
-  <data name="Settings.IssueReport.CheckUpdateBeforeReportingIssue" xml:space="preserve">
-    <value>Please upgrade first and test if the issue persists in the new version. Confirm it's not a common issue before reporting.</value>
-  </data>
-  <data name="Settings.IssueReport.CheckHelpBeforeReportingIssue" xml:space="preserve">
-    <value>Please check the ｢{key=Help}｣ before reporting any issues.</value>
-  </data>
   <data name="Settings.IssueReport.PreflightNote" xml:space="preserve">
     <value>Read the FAQ before submitting feedback. Attaching the log archive helps with troubleshooting.</value>
   </data>
@@ -3855,12 +4099,6 @@ With save file: farm points through crafting (advanced).
   </data>
   <data name="Settings.IssueReport.Status.ImageCacheClearFailed" xml:space="preserve">
     <value>Failed to clear image cache.</value>
-  </data>
-  <data name="Settings.IssueReport.ClearImageCacheTip" xml:space="preserve">
-    <value>Manual cleanup is usually unnecessary.
-Images in the DEBUG directory have a quantity limit, and old images are automatically cleaned when exceeded.
-Manual cleanup deletes all images, which may result in missing screenshots for troubleshooting.
-Cache files (such as maps, operator avatars, etc.) need to be regenerated after clearing, which may affect user experience.</value>
   </data>
   <data name="Settings.IssueReport.Status.ImageCacheClearFailedWithReason" xml:space="preserve">
     <value>Failed to clear image cache: {0}</value>
@@ -3930,6 +4168,9 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   </data>
   <data name="Settings.Option.OperNameLanguage.Client" xml:space="preserve">
     <value>Follow game client</value>
+  </data>
+  <data name="Settings.Option.OperNameLanguage.Force" xml:space="preserve">
+    <value>Force use of specified language</value>
   </data>
   <data name="Settings.Option.OperNameLanguage.MAA" xml:space="preserve">
     <value>Follow MAA</value>
@@ -4057,14 +4298,14 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.RemoteControl.PollIntervalMs" xml:space="preserve">
     <value>Polling interval (ms)</value>
   </data>
+  <data name="Settings.RemoteControl.RegenerateDeviceIdentity" xml:space="preserve">
+    <value>Regenerate</value>
+  </data>
   <data name="Settings.RemoteControl.ReportTaskEndpoint" xml:space="preserve">
     <value>Report task endpoint</value>
   </data>
   <data name="Settings.RemoteControl.ReportTaskEndpointWatermark" xml:space="preserve">
     <value>https://example.com/api/task/report</value>
-  </data>
-  <data name="Settings.RemoteControl.RegenerateDeviceIdentity" xml:space="preserve">
-    <value>Regenerate</value>
   </data>
   <data name="Settings.RemoteControl.Status.SaveFailed" xml:space="preserve">
     <value>Failed to save remote control settings.</value>
@@ -4159,9 +4400,6 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.Section.ExternalNotification" xml:space="preserve">
     <value>External notifications</value>
   </data>
-  <data name="Settings.Section.Notification" xml:space="preserve">
-    <value>Notifications</value>
-  </data>
   <data name="Settings.Section.GUI" xml:space="preserve">
     <value>GUI</value>
   </data>
@@ -4173,6 +4411,9 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   </data>
   <data name="Settings.Section.IssueReport" xml:space="preserve">
     <value>Issue Report</value>
+  </data>
+  <data name="Settings.Section.Notification" xml:space="preserve">
+    <value>Notifications</value>
   </data>
   <data name="Settings.Section.Performance" xml:space="preserve">
     <value>Performance</value>
@@ -4198,6 +4439,39 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.SectionAction.Unknown" xml:space="preserve">
     <value>Section action unknown</value>
   </data>
+  <data name="Settings.SensitiveStorage.DiscardUnreadable" xml:space="preserve">
+    <value>Discard unreadable value and re-enter</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Message" xml:space="preserve">
+    <value>System-protected storage is unavailable. Plaintext mode stores sensitive settings, including credentials, unencrypted in a separate local file. Copying or syncing the configuration directory can expose those secrets.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.Title" xml:space="preserve">
+    <value>Sensitive storage warning</value>
+  </data>
+  <data name="Settings.SensitiveStorage.PlaintextConsent.UsePlaintext" xml:space="preserve">
+    <value>Use plaintext</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Retry" xml:space="preserve">
+    <value>Retry secure storage</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.Available" xml:space="preserve">
+    <value>Sensitive storage: {0}.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.CorruptUnreadable" xml:space="preserve">
+    <value>A legacy encrypted sensitive value cannot be decrypted. The original config is preserved until you confirm discarding it and re-enter the value.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.PlaintextWarning" xml:space="preserve">
+    <value>Sensitive storage: {0}. Plaintext mode remains active; copying the configuration directory can expose sensitive settings.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Status.Unavailable" xml:space="preserve">
+    <value>Sensitive storage: {0}. Unavailable ({1}); sensitive operations are disabled.</value>
+  </data>
+  <data name="Settings.SensitiveStorage.Unavailable" xml:space="preserve">
+    <value>Sensitive storage is unavailable. Sensitive settings and operations are disabled until storage is restored.</value>
+  </data>
   <data name="Settings.Start.ApplyOnNextExecution" xml:space="preserve">
     <value>Will take effect on the next run</value>
   </data>
@@ -4216,29 +4490,29 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.Start.Dialog.SelectEmulatorPathCancel" xml:space="preserve">
     <value>Cancel</value>
   </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathCandidateCount" xml:space="preserve">
+    <value>{0} candidate path(s)</value>
+  </data>
   <data name="Settings.Start.Dialog.SelectEmulatorPathConfirm" xml:space="preserve">
     <value>Confirm</value>
   </data>
-  <data name="Settings.Start.Dialog.SelectEmulatorPathTitle" xml:space="preserve">
-    <value>Select Emulator Path</value>
-  </data>
-  <data name="Settings.Start.Dialog.SelectEmulatorPathNoCandidates" xml:space="preserve">
-    <value>No detected paths</value>
-  </data>
-  <data name="Settings.Start.Dialog.SelectEmulatorPathCandidateCount" xml:space="preserve">
-    <value>{0} candidate path(s)</value>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathCustomPath" xml:space="preserve">
+    <value>Custom path</value>
   </data>
   <data name="Settings.Start.Dialog.SelectEmulatorPathDetectedPaths" xml:space="preserve">
     <value>Detected paths</value>
   </data>
-  <data name="Settings.Start.Dialog.SelectEmulatorPathIntro" xml:space="preserve">
-    <value>Pick a detected emulator executable or paste a custom path below.</value>
-  </data>
   <data name="Settings.Start.Dialog.SelectEmulatorPathEmptyBody" xml:space="preserve">
     <value>Paste the emulator executable path below if auto-detection did not find one.</value>
   </data>
-  <data name="Settings.Start.Dialog.SelectEmulatorPathCustomPath" xml:space="preserve">
-    <value>Custom path</value>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathIntro" xml:space="preserve">
+    <value>Pick a detected emulator executable or paste a custom path below.</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathNoCandidates" xml:space="preserve">
+    <value>No detected paths</value>
+  </data>
+  <data name="Settings.Start.Dialog.SelectEmulatorPathTitle" xml:space="preserve">
+    <value>Select Emulator Path</value>
   </data>
   <data name="Settings.Start.Dialog.SelectEmulatorPathWatermark" xml:space="preserve">
     <value>/path/to/emulator</value>
@@ -4249,26 +4523,26 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.Start.EmulatorExtraArgsTip" xml:space="preserve">
     <value>Arguments passed to the emulator launch command</value>
   </data>
+  <data name="Settings.Start.EmulatorPath" xml:space="preserve">
+    <value>Emulator path</value>
+  </data>
   <data name="Settings.Start.EmulatorPathEmptyWarning" xml:space="preserve">
     <value>Emulator path is empty; "Retry on disconnect" and "Auto-launch emulator" have been turned off.</value>
-  </data>
-  <data name="Settings.Start.EmulatorPathMaaConfirm.Title" xml:space="preserve">
-    <value>Tip</value>
-  </data>
-  <data name="Settings.Start.EmulatorPathMaaConfirm.Message" xml:space="preserve">
-    <value>Do you also want to order a bar in a bar?</value>
-  </data>
-  <data name="Settings.Start.EmulatorPathMaaConfirm.Confirm" xml:space="preserve">
-    <value>I'm sure I haven't selected the wrong one</value>
   </data>
   <data name="Settings.Start.EmulatorPathMaaConfirm.Cancel" xml:space="preserve">
     <value>Okay, I will choose again</value>
   </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Confirm" xml:space="preserve">
+    <value>I'm sure I haven't selected the wrong one</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Message" xml:space="preserve">
+    <value>Do you also want to order a bar in a bar?</value>
+  </data>
+  <data name="Settings.Start.EmulatorPathMaaConfirm.Title" xml:space="preserve">
+    <value>Tip</value>
+  </data>
   <data name="Settings.Start.EmulatorPathNotExistWarning" xml:space="preserve">
     <value>The emulator path does not exist</value>
-  </data>
-  <data name="Settings.Start.EmulatorPath" xml:space="preserve">
-    <value>Emulator path</value>
   </data>
   <data name="Settings.Start.EmulatorPathTip" xml:space="preserve">
     <value>This path is used when launching the emulator</value>
@@ -4281,6 +4555,27 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   </data>
   <data name="Settings.Start.MinimizeDirectly" xml:space="preserve">
     <value>Start minimized</value>
+  </data>
+  <data name="Settings.Start.RestartDialog.Cancel" xml:space="preserve">
+    <value>Later</value>
+  </data>
+  <data name="Settings.Start.RestartDialog.Confirm" xml:space="preserve">
+    <value>Restart Now</value>
+  </data>
+  <data name="Settings.Start.RestartDialog.Message" xml:space="preserve">
+    <value>Startup settings were saved. Restart MAA now to apply these changes?</value>
+  </data>
+  <data name="Settings.Start.RestartDialog.Title" xml:space="preserve">
+    <value>Restart MAA</value>
+  </data>
+  <data name="Settings.Start.RestartLaunched" xml:space="preserve">
+    <value>Restart has started.</value>
+  </data>
+  <data name="Settings.Start.RestartManualClose" xml:space="preserve">
+    <value>A new instance has started. Close the current instance to finish restarting.</value>
+  </data>
+  <data name="Settings.Start.RestartPending" xml:space="preserve">
+    <value>Startup settings were saved. Restart MAA later to apply these changes.</value>
   </data>
   <data name="Settings.Start.RetryOnDisconnected" xml:space="preserve">
     <value>Retry after a disconnected connection</value>
@@ -4324,6 +4619,9 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.StartPerformance.Validation.Passed" xml:space="preserve">
     <value>Start/performance settings validation passed.</value>
   </data>
+  <data name="Settings.StartPerformance.Warning.EmulatorWaitSecondsClamped" xml:space="preserve">
+    <value>Emulator wait seconds were clamped from {0} to {1}.</value>
+  </data>
   <data name="Settings.State.Saved" xml:space="preserve">
     <value>Saved</value>
   </data>
@@ -4354,6 +4652,12 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.Timer.CustomConfig" xml:space="preserve">
     <value>Use custom configuration</value>
   </data>
+  <data name="Settings.Timer.ForceScheduledStart" xml:space="preserve">
+    <value>Force scheduled start</value>
+  </data>
+  <data name="Settings.Timer.Normalize" xml:space="preserve">
+    <value>Normalize timer settings</value>
+  </data>
   <data name="Settings.Timer.NotifyBeforeScheduledStart" xml:space="preserve">
     <value>Send a system notification before scheduled tasks</value>
   </data>
@@ -4366,50 +4670,14 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.Timer.ScheduledWakeUp" xml:space="preserve">
     <value>Wake the computer and start MAA before scheduled tasks</value>
   </data>
-  <data name="Settings.Timer.ScheduledWakeUpTip" xml:space="preserve">
-    <value>Registers a Windows Task Scheduler task that wakes the computer and starts MAA 5 minutes before each enabled timer; the in-app timer then takes over.&#10;Startup auto-run options are skipped when launched this way.&#10;The scheduled task remains after MAA exits and is removed when this switch is turned off.&#10;Waking from sleep depends on the device firmware; some devices only support waking from sleep.</value>
+  <data name="Settings.Timer.ScheduledWakeUp.SyncFailed" xml:space="preserve">
+    <value>Failed to sync the scheduled wake-up task: {0}</value>
   </data>
   <data name="Settings.Timer.ScheduledWakeUp.Unsupported" xml:space="preserve">
     <value>Scheduled wake-up is unavailable on this platform (Windows Task Scheduler is required).</value>
   </data>
-  <data name="Settings.Timer.ScheduledWakeUp.SyncFailed" xml:space="preserve">
-    <value>Failed to sync the scheduled wake-up task: {0}</value>
-  </data>
-  <data name="Settings.Timer.Warning.NotificationMinutesClamped" xml:space="preserve">
-    <value>The scheduled-start notification lead time was clamped from {0} to {1} minutes.</value>
-  </data>
-  <data name="Settings.Timer.Warning.NotificationMinutesParseFallback" xml:space="preserve">
-    <value>Failed to parse the scheduled-start notification lead time; using {0} minutes.</value>
-  </data>
-  <data name="Timer.Schedule.ForceCountdown.Title" xml:space="preserve">
-    <value>Scheduled Start</value>
-  </data>
-  <data name="Timer.Schedule.ForceCountdown.Message" xml:space="preserve">
-    <value>The scheduled start will be forced when the countdown ends: any running task is stopped and restarted.</value>
-  </data>
-  <data name="Timer.Schedule.ForceCountdown.Confirm" xml:space="preserve">
-    <value>Start Now</value>
-  </data>
-  <data name="Timer.Schedule.ForceCountdown.Cancel" xml:space="preserve">
-    <value>Cancel</value>
-  </data>
-  <data name="Timer.Schedule.ProfileMismatchWarning" xml:space="preserve">
-    <value>Scheduled start skipped: the current configuration does not match the timer configuration.</value>
-  </data>
-  <data name="Timer.Schedule.Notification.Content" xml:space="preserve">
-    <value>Scheduled task {0} starts at {1} (in {2} minutes). Check your game login status.</value>
-  </data>
-  <data name="Timer.Schedule.Notification.Title" xml:space="preserve">
-    <value>Scheduled task starting soon</value>
-  </data>
-  <data name="Timer.Schedule.CloseDownFailed" xml:space="preserve">
-    <value>Failed to close the game.</value>
-  </data>
-  <data name="Settings.Timer.ForceScheduledStart" xml:space="preserve">
-    <value>Force scheduled start</value>
-  </data>
-  <data name="Settings.Timer.Normalize" xml:space="preserve">
-    <value>Normalize timer settings</value>
+  <data name="Settings.Timer.ScheduledWakeUpTip" xml:space="preserve">
+    <value>Registers a Windows Task Scheduler task that wakes the computer and starts MAA 5 minutes before each enabled timer; the in-app timer then takes over.&#10;Startup auto-run options are skipped when launched this way.&#10;The scheduled task remains after MAA exits and is removed when this switch is turned off.&#10;Waking from sleep depends on the device firmware; some devices only support waking from sleep.</value>
   </data>
   <data name="Settings.Timer.ShowWindowBeforeForceScheduledStart" xml:space="preserve">
     <value>Show main window before starting</value>
@@ -4450,11 +4718,44 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.Timer.Warning.MinuteParseFallback" xml:space="preserve">
     <value>Timer {0} minute could not be parsed and fell back to {1}.</value>
   </data>
+  <data name="Settings.Timer.Warning.NotificationMinutesClamped" xml:space="preserve">
+    <value>The scheduled-start notification lead time was clamped from {0} to {1} minutes.</value>
+  </data>
+  <data name="Settings.Timer.Warning.NotificationMinutesParseFallback" xml:space="preserve">
+    <value>Failed to parse the scheduled-start notification lead time; using {0} minutes.</value>
+  </data>
   <data name="Settings.Timer.Warning.ProfileFallback" xml:space="preserve">
     <value>Selected profile "{1}" for timer {0} was not found and fell back to "{2}".</value>
   </data>
-  <data name="Settings.StartPerformance.Warning.EmulatorWaitSecondsClamped" xml:space="preserve">
-    <value>Emulator wait seconds were clamped from {0} to {1}.</value>
+  <data name="Settings.VersionUpdate.Activity.CheckingResource" xml:space="preserve">
+    <value>Checking for resource updates...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.CheckingSoftware" xml:space="preserve">
+    <value>Checking for software updates...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingGlobalSource" xml:space="preserve">
+    <value>Downloading from GlobalSource...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingMirrorChyan" xml:space="preserve">
+    <value>Downloading from MirrorChyan...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourcePreparing" xml:space="preserve">
+    <value>Indexing in progress</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdated" xml:space="preserve">
+    <value>Game resources updated.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdating" xml:space="preserve">
+    <value>Game resources are being updated.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.ResourceUpdatingMirrorChyan" xml:space="preserve">
+    <value>Updating resource {0} from MirrorChyan...</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloaded" xml:space="preserve">
+    <value>Software update package downloaded.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloading" xml:space="preserve">
+    <value>Downloading software update package...</value>
   </data>
   <data name="Settings.VersionUpdate.AutoDownload" xml:space="preserve">
     <value>Automatically download update packages</value>
@@ -4464,18 +4765,6 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   </data>
   <data name="Settings.VersionUpdate.Changelog" xml:space="preserve">
     <value>Changelog</value>
-  </data>
-  <data name="Settings.VersionUpdate.ImportPackage" xml:space="preserve">
-    <value>Import update package</value>
-  </data>
-  <data name="Settings.VersionUpdate.ImportPackage.Missing" xml:space="preserve">
-    <value>The selected update package does not exist. Choose it again.</value>
-  </data>
-  <data name="Settings.VersionUpdate.ImportPackage.SameVersion" xml:space="preserve">
-    <value>Same-version full package registered; it will repair the installation on the next launch.</value>
-  </data>
-  <data name="Settings.VersionUpdate.ImportPackage.Success" xml:space="preserve">
-    <value>Update package registered; it will be installed on the next launch.</value>
   </data>
   <data name="Settings.VersionUpdate.Channel" xml:space="preserve">
     <value>Update channel</value>
@@ -4495,11 +4784,35 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.VersionUpdate.ForceGithub" xml:space="preserve">
     <value>Force GitHub source</value>
   </data>
+  <data name="Settings.VersionUpdate.ImportPackage" xml:space="preserve">
+    <value>Import update package</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Missing" xml:space="preserve">
+    <value>The selected update package does not exist. Choose it again.</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.SameVersion" xml:space="preserve">
+    <value>Same-version full package registered; it will repair the installation on the next launch.</value>
+  </data>
+  <data name="Settings.VersionUpdate.ImportPackage.Success" xml:space="preserve">
+    <value>Update package registered; it will be installed on the next launch.</value>
+  </data>
   <data name="Settings.VersionUpdate.MirrorCdk" xml:space="preserve">
     <value>미러짱 CDK</value>
   </data>
   <data name="Settings.VersionUpdate.MirrorSite" xml:space="preserve">
     <value>미러짱</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Cancel" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Confirm" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Message" xml:space="preserve">
+    <value>Nightly updates are enabled. Thank you for helping test MAA.</value>
+  </data>
+  <data name="Settings.VersionUpdate.NightlyWarning.Title" xml:space="preserve">
+    <value>Nightly updates</value>
   </data>
   <data name="Settings.VersionUpdate.PanelBuildTime" xml:space="preserve">
     <value>Build time</value>
@@ -4534,8 +4847,47 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.VersionUpdate.ResourceUpdate" xml:space="preserve">
     <value>Resource update</value>
   </data>
+  <data name="Settings.VersionUpdate.RestartDialog.Cancel" xml:space="preserve">
+    <value>Later</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartDialog.Confirm" xml:space="preserve">
+    <value>Restart Now</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartDialog.Message" xml:space="preserve">
+    <value>The software update package has finished downloading. Restart MAA now to apply the update?</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartDialog.Title" xml:space="preserve">
+    <value>Update Package Ready</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartLaunched" xml:space="preserve">
+    <value>Restart has started to apply the software update.</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartManualClose" xml:space="preserve">
+    <value>A new instance has started. Close the current instance to continue applying the update.</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartPending" xml:space="preserve">
+    <value>The update package is ready. Restart MAA later to apply it.</value>
+  </data>
+  <data name="Settings.VersionUpdate.RestartPendingWhileRunning" xml:space="preserve">
+    <value>The update package is ready. Current tasks are still running, so restart MAA when idle to apply it.</value>
+  </data>
   <data name="Settings.VersionUpdate.ScheduledCheck" xml:space="preserve">
     <value>Check for updates on schedule</value>
+  </data>
+  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Cancel" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Confirm" xml:space="preserve">
+    <value>OK</value>
+  </data>
+  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Message" xml:space="preserve">
+    <value>Software update is available. Go to Settings &gt; Version Update to check, download, and apply updates.</value>
+  </data>
+  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Status" xml:space="preserve">
+    <value>Software update is available.</value>
+  </data>
+  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Title" xml:space="preserve">
+    <value>Software Update</value>
   </data>
   <data name="Settings.VersionUpdate.SoftwareUpdate" xml:space="preserve">
     <value>Software update</value>
@@ -4545,36 +4897,6 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   </data>
   <data name="Settings.VersionUpdate.StartupCheck" xml:space="preserve">
     <value>Check for updates at startup</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.CheckingSoftware" xml:space="preserve">
-    <value>Checking for software updates...</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.CheckingResource" xml:space="preserve">
-    <value>Checking for resource updates...</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingGlobalSource" xml:space="preserve">
-    <value>Downloading from GlobalSource...</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.ResourceDownloadingMirrorChyan" xml:space="preserve">
-    <value>Downloading from MirrorChyan...</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.ResourcePreparing" xml:space="preserve">
-    <value>Indexing in progress</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.ResourceUpdated" xml:space="preserve">
-    <value>Game resources updated.</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.ResourceUpdating" xml:space="preserve">
-    <value>Game resources are being updated.</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.ResourceUpdatingMirrorChyan" xml:space="preserve">
-    <value>Updating resource {0} from MirrorChyan...</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloaded" xml:space="preserve">
-    <value>Software update package downloaded.</value>
-  </data>
-  <data name="Settings.VersionUpdate.Activity.SoftwarePackageDownloading" xml:space="preserve">
-    <value>Downloading software update package...</value>
   </data>
   <data name="Settings.VersionUpdate.Status.CheckFailed" xml:space="preserve">
     <value>Update check failed.</value>
@@ -4591,15 +4913,6 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.VersionUpdate.Status.FirstBootShown" xml:space="preserve">
     <value>Update notes displayed.</value>
   </data>
-  <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
-    <value>Update failed.</value>
-  </data>
-  <data name="Settings.VersionUpdate.Status.PackageUnavailable" xml:space="preserve">
-    <value>Update failed.</value>
-  </data>
-  <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
-    <value>In-app automatic updates are not yet supported on Windows. Please update manually from the releases page.</value>
-  </data>
   <data name="Settings.VersionUpdate.Status.LinuxPortableZipManualInstallRequired" xml:space="preserve">
     <value>The Linux portable package has been downloaded. Extract it to a new directory and launch the AppImage there.</value>
   </data>
@@ -4611,6 +4924,9 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   </data>
   <data name="Settings.VersionUpdate.Status.MirrorCdkRemainingDays" xml:space="preserve">
     <value>MirrorChyan CDK has {0:F1} day(s) left (until {1:yyyy-MM-dd HH:mm}).</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.MirrorChyanCdkRequired" xml:space="preserve">
+    <value>Please go to Settings &gt; Version Update to configure a MirrorChyan CDK or switch the update source.</value>
   </data>
   <data name="Settings.VersionUpdate.Status.OpenChangelogFailed" xml:space="preserve">
     <value>Failed to open changelog.</value>
@@ -4630,6 +4946,12 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.VersionUpdate.Status.OpenResourceRepositorySucceeded" xml:space="preserve">
     <value>Resource repository opened.</value>
   </data>
+  <data name="Settings.VersionUpdate.Status.PackageDownloadFailed" xml:space="preserve">
+    <value>Update failed.</value>
+  </data>
+  <data name="Settings.VersionUpdate.Status.PackageUnavailable" xml:space="preserve">
+    <value>Update failed.</value>
+  </data>
   <data name="Settings.VersionUpdate.Status.PersistFailed" xml:space="preserve">
     <value>Update result was refreshed, but failed to save into configuration.</value>
   </data>
@@ -4638,78 +4960,6 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   </data>
   <data name="Settings.VersionUpdate.Status.ResourceUpdateFailed" xml:space="preserve">
     <value>Resource update failed.</value>
-  </data>
-  <data name="Settings.VersionUpdate.Status.MirrorChyanCdkRequired" xml:space="preserve">
-    <value>Please go to Settings &gt; Version Update to configure a MirrorChyan CDK or switch the update source.</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.Checking" xml:space="preserve">
-    <value>Checking resource updates. source={0}, client={1}</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.CheckFailedHttp" xml:space="preserve">
-    <value>Resource update check failed with HTTP {0}.</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.CheckFailed" xml:space="preserve">
-    <value>Resource update check failed.</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.CheckFailedWithMessage" xml:space="preserve">
-    <value>Resource update check failed: {0}</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.AlreadyLatest" xml:space="preserve">
-    <value>Resources are already up to date.</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.Available" xml:space="preserve">
-    <value>Resource update available: {0}.</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.AvailableRequiresCdk" xml:space="preserve">
-    <value>Resource update available: {0}. MirrorChyan CDK required for direct download.</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.Checking" xml:space="preserve">
-    <value>Checking software updates. channel={0}, current={1}</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.PreparingPackage" xml:space="preserve">
-    <value>Preparing software update package download.</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.PreparingNamedPackage" xml:space="preserve">
-    <value>Preparing software update package: {0}</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.PackageReady" xml:space="preserve">
-    <value>Software update package is ready to apply after restart.</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.NamedPackageReady" xml:space="preserve">
-    <value>Software update package {0} is ready to apply after restart.</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.PackagePrepareFailed" xml:space="preserve">
-    <value>Software update package preparation failed.</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.PackagePrepareFailedWithMessage" xml:space="preserve">
-    <value>Software update package preparation failed: {0}</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.Available" xml:space="preserve">
-    <value>Version update available: {0}</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.AlreadyLatest" xml:space="preserve">
-    <value>Software is already up to date on {0}.</value>
-  </data>
-  <data name="VersionUpdate.Log.Software.CheckFailedWithMessage" xml:space="preserve">
-    <value>Software update check failed: {0}</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.GithubStart" xml:space="preserve">
-    <value>Starting resource update from Github.</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.GithubCompleted" xml:space="preserve">
-    <value>Resource update completed from Github.</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.GithubFailedWithMessage" xml:space="preserve">
-    <value>Resource update from Github failed: {0}</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.MirrorChyanStart" xml:space="preserve">
-    <value>Starting resource update from MirrorChyan.</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.MirrorChyanCompleted" xml:space="preserve">
-    <value>Resource update completed from MirrorChyan.</value>
-  </data>
-  <data name="VersionUpdate.Log.Resource.MirrorChyanFailedWithMessage" xml:space="preserve">
-    <value>Resource update from MirrorChyan failed: {0}</value>
   </data>
   <data name="Settings.VersionUpdate.Status.SaveChannelFailed" xml:space="preserve">
     <value>Failed to save update channel settings.</value>
@@ -4723,12 +4973,8 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.VersionUpdate.Status.SaveProxySucceeded" xml:space="preserve">
     <value>Update proxy settings saved.</value>
   </data>
-  <data name="MultiInstanceUnderSamePath" xml:space="preserve">
-    <value>Only one instance can be launched under the same path!
-If you want to run multiple MAA at the same time, please copy the whole MAA and start under different path with the same adb and different connect address.</value>
-  </data>
-  <data name="Startup.LinuxPortablePackageMissing" xml:space="preserve">
-    <value>The Linux portable package is incomplete. Please extract the full package, then launch MAAUnified.AppImage from that directory.</value>
+  <data name="Settings.VersionUpdate.Status.WindowsManualUpdateRequired" xml:space="preserve">
+    <value>In-app automatic updates are not yet supported on Windows. Please update manually from the releases page.</value>
   </data>
   <data name="SkillDaemon" xml:space="preserve">
     <value>Start Auto</value>
@@ -4918,11 +5164,17 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="StartsWithScript" xml:space="preserve">
     <value>Starts with Script</value>
   </data>
+  <data name="Startup.LinuxPortablePackageMissing" xml:space="preserve">
+    <value>The Linux portable package is incomplete. Please extract the full package, then launch MAAUnified.AppImage from that directory.</value>
+  </data>
   <data name="StoneUsed" xml:space="preserve">
     <value>Originite Prime used</value>
   </data>
   <data name="StoneUsedTimes" xml:space="preserve">
     <value>Stone: {0}  </value>
+  </data>
+  <data name="StopTimeout" xml:space="preserve">
+    <value>Stop timed out: Core did not respond to the stop request in time</value>
   </data>
   <data name="Stopped" xml:space="preserve">
     <value>Has stopped</value>
@@ -4935,6 +5187,21 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="SwitchSpeed" xml:space="preserve">
     <value>Switch Speed</value>
+  </data>
+  <data name="SwitchTheme.EmptyHint" xml:space="preserve">
+    <value>No theme name entered; this task is skipped at run time.</value>
+  </data>
+  <data name="SwitchTheme.Placeholder" xml:space="preserve">
+    <value>Theme name</value>
+  </data>
+  <data name="SwitchTheme.Themes" xml:space="preserve">
+    <value>Candidate themes</value>
+  </data>
+  <data name="SwitchTheme.ThemesTip" xml:space="preserve">
+    <value>Enter theme names as shown in the in-game theme list. Multiple entries pick one at random each run; a single entry always switches to it.</value>
+  </data>
+  <data name="SwitchTheme.Title" xml:space="preserve">
+    <value>Switch Theme</value>
   </data>
   <data name="TacticalAssaultOperative" xml:space="preserve">
     <value>Tactical Assault Squad</value>
@@ -4952,14 +5219,14 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
     <value>All task(s) completed with errors!
 (in {0})</value>
   </data>
-  <data name="TaskErrorSummaryTitle" xml:space="preserve">
-    <value>Errors occurred in this run:</value>
+  <data name="TaskError" xml:space="preserve">
+    <value>Task error: </value>
   </data>
   <data name="TaskErrorSummaryItem" xml:space="preserve">
     <value>{0}</value>
   </data>
-  <data name="TaskError" xml:space="preserve">
-    <value>Task error: </value>
+  <data name="TaskErrorSummaryTitle" xml:space="preserve">
+    <value>Errors occurred in this run:</value>
   </data>
   <data name="TaskQueue.DailyStageHintDefault" xml:space="preserve">
     <value>Daily stage hints will be shown after resources are loaded.</value>
@@ -4970,6 +5237,18 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="TaskQueue.Error.EditBlockedWhileRunning" xml:space="preserve">
     <value>Task queue editing is blocked while running.</value>
   </data>
+  <data name="TaskQueue.Error.MoveOutOfRange" xml:space="preserve">
+    <value>Task move index is out of range.</value>
+  </data>
+  <data name="TaskQueue.Error.ParamsMissing" xml:space="preserve">
+    <value>Task params cannot be null.</value>
+  </data>
+  <data name="TaskQueue.Error.ProfileMissing" xml:space="preserve">
+    <value>Current profile `{0}` not found.</value>
+  </data>
+  <data name="TaskQueue.Error.ProfileMissingShort" xml:space="preserve">
+    <value>Current profile is missing.</value>
+  </data>
   <data name="TaskQueue.Error.SelectTaskToMove" xml:space="preserve">
     <value>Select a task to move first.</value>
   </data>
@@ -4978,6 +5257,129 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="TaskQueue.Error.SelectTaskToRename" xml:space="preserve">
     <value>Select a task to rename first.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.AccountSwitch" xml:space="preserve">
+    <value>Another session operation is active. Stop or wait for it before switching accounts.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.RunOnce" xml:space="preserve">
+    <value>Another session operation is active. Stop or wait for it before running a single task.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Other.Start" xml:space="preserve">
+    <value>Another session operation is active. Stop or wait for it before starting tasks.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.AccountSwitch" xml:space="preserve">
+    <value>A scheduled task is active. Wait for it to finish before switching accounts.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.RunOnce" xml:space="preserve">
+    <value>A scheduled task is active. Wait for it to finish before running a single task.</value>
+  </data>
+  <data name="TaskQueue.Error.SessionActivity.Timer.Start" xml:space="preserve">
+    <value>A scheduled task is active. Wait for it to finish before starting tasks.</value>
+  </data>
+  <data name="TaskQueue.Error.TaskIndexOutOfRange" xml:space="preserve">
+    <value>Task index {0} is out of range.</value>
+  </data>
+  <data name="TaskQueue.Error.TaskNameMissing" xml:space="preserve">
+    <value>Task name cannot be empty.</value>
+  </data>
+  <data name="TaskQueue.Error.TaskNameMissingShort" xml:space="preserve">
+    <value>Task name cannot be empty.</value>
+  </data>
+  <data name="TaskQueue.Error.TaskTypeMismatch" xml:space="preserve">
+    <value>Selected task is not a `{0}` task.</value>
+  </data>
+  <data name="TaskQueue.Error.TaskTypeMissing" xml:space="preserve">
+    <value>Task type cannot be empty.</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Confirm" xml:space="preserve">
+    <value>I have read and agree to the user agreement</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Confirmed" xml:space="preserve">
+    <value>User agreement confirmed</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Link" xml:space="preserve">
+    <value>User agreement</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Prefix" xml:space="preserve">
+    <value>Read the MAA user agreement before continuing</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.RequiredForDemo" xml:space="preserve">
+    <value>Go back to the user guide step and confirm the user agreement before completing the task demo.</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Tip" xml:space="preserve">
+    <value>The user agreement is not confirmed yet. You can continue browsing, but the task demo must be completed after confirming it.</value>
+  </data>
+  <data name="TaskQueue.Guide.Agreement.Title" xml:space="preserve">
+    <value>User agreement</value>
+  </data>
+  <data name="TaskQueue.Guide.ConfigureTasks" xml:space="preserve">
+    <value>Configure tasks</value>
+  </data>
+  <data name="TaskQueue.Guide.Connection.Description" xml:space="preserve">
+    <value>Set the ADB path or a connection preset, then test whether the connection works.</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddFight" xml:space="preserve">
+    <value>Add a Fight task</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddStartUp" xml:space="preserve">
+    <value>Add a StartUp task</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.AddSwitchTheme" xml:space="preserve">
+    <value>Add a Switch Theme task</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.EnableWeekly" xml:space="preserve">
+    <value>Enable the weekly plan</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Next" xml:space="preserve">
+    <value>Next: {0}</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Note" xml:space="preserve">
+    <value>The demo only changes simulated tasks in this guide; your real task queue is untouched.</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Progress" xml:space="preserve">
+    <value>{0} / {1} completed</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.RenameFight" xml:space="preserve">
+    <value>Rename the Fight task</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.ReorderFight" xml:space="preserve">
+    <value>Reorder tasks</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.SelectStage" xml:space="preserve">
+    <value>Select an Annihilation stage</value>
+  </data>
+  <data name="TaskQueue.Guide.Demo.Title" xml:space="preserve">
+    <value>Task setup demo</value>
+  </data>
+  <data name="TaskQueue.Guide.Game.Description" xml:space="preserve">
+    <value>Configure the client type, game startup, and account-switching behavior.</value>
+  </data>
+  <data name="TaskQueue.Guide.OpenSettings" xml:space="preserve">
+    <value>Open settings</value>
+  </data>
+  <data name="TaskQueue.Guide.Performance.Description" xml:space="preserve">
+    <value>Select the performance, capture, and input options supported by your device.</value>
+  </data>
+  <data name="TaskQueue.Guide.Resume" xml:space="preserve">
+    <value>Return to settings guide</value>
+  </data>
+  <data name="TaskQueue.Guide.Skip" xml:space="preserve">
+    <value>Skip guide</value>
+  </data>
+  <data name="TaskQueue.Guide.Tasks.Description" xml:space="preserve">
+    <value>Choose the tasks MAA should run and adjust the settings for each task.</value>
+  </data>
+  <data name="TaskQueue.Guide.Title" xml:space="preserve">
+    <value>Settings Guide</value>
+  </data>
+  <data name="TaskQueue.Guide.Ui.Description" xml:space="preserve">
+    <value>Choose the interface language, theme, background, and scaling options that suit you.</value>
+  </data>
+  <data name="TaskQueue.Guide.Update.Description" xml:space="preserve">
+    <value>Set update channels, resource updates, and startup check behavior.</value>
+  </data>
+  <data name="TaskQueue.Guide.User.Description" xml:space="preserve">
+    <value>Review documentation, issue reporting, and help links before starting a task.</value>
   </data>
   <data name="TaskQueue.Log.AllCompleted" xml:space="preserve">
     <value>All tasks completed</value>
@@ -5012,47 +5414,8 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="TaskQueue.Module.Custom" xml:space="preserve">
     <value>Custom</value>
   </data>
-  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
-    <value>Update user data</value>
-  </data>
-  <data name="TaskQueue.Module.SingleStep" xml:space="preserve">
-    <value>Single Step</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Body" xml:space="preserve">
-    <value>SingleStep is a Core single-step copilot entry. Imported marker tasks need runtime step parameters before they can run.</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Type" xml:space="preserve">
-    <value>Type</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Subtype" xml:space="preserve">
-    <value>Subtype</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Subtype.Start" xml:space="preserve">
-    <value>Start</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Subtype.Stage" xml:space="preserve">
-    <value>Stage</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Subtype.Action" xml:space="preserve">
-    <value>Action</value>
-  </data>
-  <data name="TaskQueue.SingleStep.Details" xml:space="preserve">
-    <value>details JSON</value>
-  </data>
-  <data name="TaskQueue.SingleStep.DetailsPlaceholder" xml:space="preserve">
-    <value>{"stage_name":"..."}</value>
-  </data>
-  <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
-    <value>Update trigger interval</value>
-  </data>
-  <data name="TaskQueue.UserDataUpdate.Trigger.EveryTime" xml:space="preserve">
-    <value>Every time</value>
-  </data>
-  <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
-    <value>Daily</value>
-  </data>
-  <data name="TaskQueue.UserDataUpdate.Trigger.Weekly" xml:space="preserve">
-    <value>Weekly</value>
+  <data name="TaskQueue.Module.DepotMaintain" xml:space="preserve">
+    <value>Depot Maintenance</value>
   </data>
   <data name="TaskQueue.Module.Fight" xml:space="preserve">
     <value>Combat</value>
@@ -5062,6 +5425,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="TaskQueue.Module.Mall" xml:space="preserve">
     <value>Mall</value>
+  </data>
+  <data name="TaskQueue.Module.OperProgress" xml:space="preserve">
+    <value>Operator Progression</value>
   </data>
   <data name="TaskQueue.Module.PostAction" xml:space="preserve">
     <value>Post Action</value>
@@ -5075,11 +5441,20 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="TaskQueue.Module.Roguelike" xml:space="preserve">
     <value>Roguelike</value>
   </data>
+  <data name="TaskQueue.Module.SingleStep" xml:space="preserve">
+    <value>Single Step</value>
+  </data>
   <data name="TaskQueue.Module.StartUp" xml:space="preserve">
     <value>Start Up</value>
   </data>
+  <data name="TaskQueue.Module.SwitchTheme" xml:space="preserve">
+    <value>Switch Theme</value>
+  </data>
   <data name="TaskQueue.Module.TaskQueue" xml:space="preserve">
     <value>Task Queue</value>
+  </data>
+  <data name="TaskQueue.Module.UserDataUpdate" xml:space="preserve">
+    <value>Update user data</value>
   </data>
   <data name="TaskQueue.OverlayDisconnected" xml:space="preserve">
     <value>Overlay disconnected</value>
@@ -5111,11 +5486,11 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="TaskQueue.Root.Delete" xml:space="preserve">
     <value>Delete</value>
   </data>
-  <data name="TaskQueue.Root.DeleteConfirmTitle" xml:space="preserve">
-    <value>Confirm Delete</value>
-  </data>
   <data name="TaskQueue.Root.DeleteConfirmMessage" xml:space="preserve">
     <value>Are you sure you want to delete task "{0}"?</value>
+  </data>
+  <data name="TaskQueue.Root.DeleteConfirmTitle" xml:space="preserve">
+    <value>Confirm Delete</value>
   </data>
   <data name="TaskQueue.Root.GeneralSettings" xml:space="preserve">
     <value>General</value>
@@ -5252,6 +5627,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="TaskQueue.Root.Waiting" xml:space="preserve">
     <value>Waiting...</value>
   </data>
+  <data name="TaskQueue.RunDurationLimit.Reached" xml:space="preserve">
+    <value>Run duration limit ({0} min) reached, stopping tasks</value>
+  </data>
   <data name="TaskQueue.RunOwnerBlockedDialog.ConfirmButton" xml:space="preserve">
     <value>Cancel</value>
   </data>
@@ -5285,23 +5663,131 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="TaskQueue.SelectionHint" xml:space="preserve">
     <value>Select a task from the left list to edit its settings.</value>
   </data>
+  <data name="TaskQueue.SingleStep.Body" xml:space="preserve">
+    <value>SingleStep is a Core single-step copilot entry. Imported marker tasks need runtime step parameters before they can run.</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Details" xml:space="preserve">
+    <value>details JSON</value>
+  </data>
+  <data name="TaskQueue.SingleStep.DetailsPlaceholder" xml:space="preserve">
+    <value>{"stage_name":"..."}</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype" xml:space="preserve">
+    <value>Subtype</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Action" xml:space="preserve">
+    <value>Action</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Stage" xml:space="preserve">
+    <value>Stage</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Subtype.Start" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="TaskQueue.SingleStep.Type" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="TaskQueue.Stall.Warning" xml:space="preserve">
+    <value>Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running; if so, you can ignore this warning. If the task is unresponsive, manual intervention may be required.</value>
+  </data>
   <data name="TaskQueue.Status.Error" xml:space="preserve">
     <value>Error</value>
   </data>
   <data name="TaskQueue.Status.Idle" xml:space="preserve">
     <value>Idle</value>
   </data>
+  <data name="TaskQueue.Status.LoadedTasks" xml:space="preserve">
+    <value>Loaded {0} task(s).</value>
+  </data>
   <data name="TaskQueue.Status.Observed" xml:space="preserve">
     <value>Observed</value>
   </data>
+  <data name="TaskQueue.Status.ParamsFlushed" xml:space="preserve">
+    <value>Task params flushed.</value>
+  </data>
+  <data name="TaskQueue.Status.ParamsLoaded" xml:space="preserve">
+    <value>Loaded params for `{0}`.</value>
+  </data>
+  <data name="TaskQueue.Status.ParamsUpdated" xml:space="preserve">
+    <value>Updated params for `{0}`.</value>
+  </data>
+  <data name="TaskQueue.Status.ParamsUpdatedPersisted" xml:space="preserve">
+    <value>Updated params for `{0}` and persisted.</value>
+  </data>
+  <data name="TaskQueue.Status.PrecheckDowngradeNotRequired" xml:space="preserve">
+    <value>TaskQueue precheck downgrade not required.</value>
+  </data>
+  <data name="TaskQueue.Status.PrecheckDowngradesApplied" xml:space="preserve">
+    <value>TaskQueue precheck applied {0} downgrade(s).</value>
+  </data>
+  <data name="TaskQueue.Status.PrecheckPassed" xml:space="preserve">
+    <value>TaskQueue precheck passed.</value>
+  </data>
+  <data name="TaskQueue.Status.PrecheckWarnings" xml:space="preserve">
+    <value>TaskQueue precheck returned {0} warning(s).</value>
+  </data>
   <data name="TaskQueue.Status.Running" xml:space="preserve">
     <value>Running</value>
+  </data>
+  <data name="TaskQueue.Status.Saved" xml:space="preserve">
+    <value>Task queue saved.</value>
   </data>
   <data name="TaskQueue.Status.Skipped" xml:space="preserve">
     <value>Skipped</value>
   </data>
   <data name="TaskQueue.Status.Success" xml:space="preserve">
     <value>Completed</value>
+  </data>
+  <data name="TaskQueue.Status.TaskAdded" xml:space="preserve">
+    <value>Added task `{0}`.</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.False" xml:space="preserve">
+    <value>Task `{0}` disabled.</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.Once" xml:space="preserve">
+    <value>Run once</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.SkipOnce" xml:space="preserve">
+    <value>Skip once</value>
+  </data>
+  <data name="TaskQueue.Status.TaskEnabled.True" xml:space="preserve">
+    <value>Task `{0}` enabled.</value>
+  </data>
+  <data name="TaskQueue.Status.TaskMoved" xml:space="preserve">
+    <value>Moved task `{0}` to position {1}.</value>
+  </data>
+  <data name="TaskQueue.Status.TaskOrderUnchanged" xml:space="preserve">
+    <value>Task order unchanged.</value>
+  </data>
+  <data name="TaskQueue.Status.TaskRemoved" xml:space="preserve">
+    <value>Removed task `{0}`.</value>
+  </data>
+  <data name="TaskQueue.Status.TaskRenamed" xml:space="preserve">
+    <value>Task renamed to `{0}`.</value>
+  </data>
+  <data name="TaskQueue.Status.TasksEnabledBatch.False" xml:space="preserve">
+    <value>Disabled {0} task(s).</value>
+  </data>
+  <data name="TaskQueue.Status.TasksEnabledBatch.True" xml:space="preserve">
+    <value>Enabled {0} task(s).</value>
+  </data>
+  <data name="TaskQueue.Status.TasksEnabledInverted" xml:space="preserve">
+    <value>Inverted enabled state for {0} task(s).</value>
+  </data>
+  <data name="TaskQueue.Status.ValidationPassed" xml:space="preserve">
+    <value>Task `{0}` passed validation.</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
+    <value>Daily</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.EveryTime" xml:space="preserve">
+    <value>Every time</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.Trigger.Weekly" xml:space="preserve">
+    <value>Weekly</value>
+  </data>
+  <data name="TaskQueue.UserDataUpdate.TriggerInterval" xml:space="preserve">
+    <value>Update trigger interval</value>
   </data>
   <data name="TaskQueue.Validation.BlockingCount" xml:space="preserve">
     <value>{0} blocking issue(s).</value>
@@ -5315,6 +5801,12 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="TaskQueue.Validation.WarningCount" xml:space="preserve">
     <value>{0} warning issue(s).</value>
   </data>
+  <data name="TaskQueue.Warning.MallCreditFightDowngraded" xml:space="preserve">
+    <value>Disabled Mall credit fight for `{0}` because an enabled `{1}` task uses the current/last stage selector.</value>
+  </data>
+  <data name="TaskStallWarning" xml:space="preserve">
+    <value>Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running.</value>
+  </data>
   <data name="TaskStallWarning" xml:space="preserve">
     <value>Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running.</value>
   </data>
@@ -5324,11 +5816,38 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="ThisFacility" xml:space="preserve">
     <value>Current Facility: </value>
   </data>
+  <data name="Timer.Schedule.CloseDownFailed" xml:space="preserve">
+    <value>Failed to close the game.</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Confirm" xml:space="preserve">
+    <value>Start Now</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Message" xml:space="preserve">
+    <value>The scheduled start will be forced when the countdown ends: any running task is stopped and restarted.</value>
+  </data>
+  <data name="Timer.Schedule.ForceCountdown.Title" xml:space="preserve">
+    <value>Scheduled Start</value>
+  </data>
+  <data name="Timer.Schedule.Notification.Content" xml:space="preserve">
+    <value>Scheduled task {0} starts at {1} (in {2} minutes). Check your game login status.</value>
+  </data>
+  <data name="Timer.Schedule.Notification.Title" xml:space="preserve">
+    <value>Scheduled task starting soon</value>
+  </data>
+  <data name="Timer.Schedule.ProfileMismatchWarning" xml:space="preserve">
+    <value>Scheduled start skipped: the current configuration does not match the timer configuration.</value>
+  </data>
   <data name="Toolbox.Action.LinkStart" xml:space="preserve">
     <value>Link Start!</value>
   </data>
   <data name="Toolbox.Action.PeepStart" xml:space="preserve">
     <value>Peep!</value>
+  </data>
+  <data name="Toolbox.Action.PeepStarting" xml:space="preserve">
+    <value>Starting...</value>
   </data>
   <data name="Toolbox.Action.PeepStop" xml:space="preserve">
     <value>Stop!</value>
@@ -5336,20 +5855,17 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.Action.PeepStopStrong" xml:space="preserve">
     <value>Stop!!!!!</value>
   </data>
-  <data name="Toolbox.Action.PeepStarting" xml:space="preserve">
-    <value>Starting...</value>
-  </data>
   <data name="Toolbox.Action.PeepStopping" xml:space="preserve">
     <value>Stopping...</value>
-  </data>
-  <data name="Toolbox.Action.StartRecognition" xml:space="preserve">
-    <value>Start recognition</value>
   </data>
   <data name="Toolbox.Action.Recognizing" xml:space="preserve">
     <value>Recognizing...</value>
   </data>
   <data name="Toolbox.Action.Running" xml:space="preserve">
     <value>Running...</value>
+  </data>
+  <data name="Toolbox.Action.StartRecognition" xml:space="preserve">
+    <value>Start recognition</value>
   </data>
   <data name="Toolbox.Action.Stop" xml:space="preserve">
     <value>Stop</value>
@@ -5378,6 +5894,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.Advanced.ExternalNotification.DefaultTitle" xml:space="preserve">
     <value>MAA Test</value>
   </data>
+  <data name="Toolbox.Advanced.ExternalNotification.Error.QueryFailed" xml:space="preserve">
+    <value>Failed to query external notification providers.</value>
+  </data>
   <data name="Toolbox.Advanced.ExternalNotification.MessageBody" xml:space="preserve">
     <value>Message</value>
   </data>
@@ -5398,6 +5917,12 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.Advanced.ExternalNotification.SendTest" xml:space="preserve">
     <value>Send test</value>
+  </data>
+  <data name="Toolbox.Advanced.ExternalNotification.Status.LoadedProviders" xml:space="preserve">
+    <value>Loaded {0} external notification provider(s).</value>
+  </data>
+  <data name="Toolbox.Advanced.ExternalNotification.Status.NoProviders" xml:space="preserve">
+    <value>No external notification provider available.</value>
   </data>
   <data name="Toolbox.Advanced.ExternalNotification.Title" xml:space="preserve">
     <value>External Notification Providers</value>
@@ -5447,6 +5972,24 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.Advanced.StageManager.ClientType" xml:space="preserve">
     <value>Client</value>
   </data>
+  <data name="Toolbox.Advanced.StageManager.Error.FileNotFound" xml:space="preserve">
+    <value>File not found: {0}</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.InvalidStageCode" xml:space="preserve">
+    <value>Invalid stage code: {0}</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.NoLocalResources" xml:space="preserve">
+    <value>No local stage resources found for `{0}` under `{1}`.</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.NoWebResources" xml:space="preserve">
+    <value>No web stage resources found for `{0}` under `{1}`.</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.ReadResources" xml:space="preserve">
+    <value>Failed to read stage resources from `{0}`: {1}</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Error.ServiceUnavailable" xml:space="preserve">
+    <value>Stage manager service is not initialized.</value>
+  </data>
   <data name="Toolbox.Advanced.StageManager.LastSelectedStage" xml:space="preserve">
     <value>Last stage</value>
   </data>
@@ -5467,6 +6010,24 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.Advanced.StageManager.StageCodes.Watermark" xml:space="preserve">
     <value>One per line or comma-separated, for example: 1-7, CE-5</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Status.ConfigLoaded" xml:space="preserve">
+    <value>Loaded stage manager config.</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Status.ConfigSaved" xml:space="preserve">
+    <value>Stage manager config saved.</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Status.LocalResourcesLoaded" xml:space="preserve">
+    <value>Loaded local stage resources for `{0}`.</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Status.StateLoaded" xml:space="preserve">
+    <value>Loaded stage manager state.</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Status.Validated" xml:space="preserve">
+    <value>Validated {0} stage code(s).</value>
+  </data>
+  <data name="Toolbox.Advanced.StageManager.Status.WebResourcesLoaded" xml:space="preserve">
+    <value>Loaded web stage resources for `{0}`.</value>
   </data>
   <data name="Toolbox.Advanced.StageManager.Title" xml:space="preserve">
     <value>Stage Manager</value>
@@ -5564,6 +6125,27 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.Advanced.WebApi.Warning" xml:space="preserve">
     <value>This Advanced page keeps compatibility with legacy WebApi clients. Enable it only when you explicitly need external access, and configure an access token whenever possible.</value>
   </data>
+  <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
+    <value>Got it</value>
+  </data>
+  <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
+    <value>current task</value>
+  </data>
+  <data name="Toolbox.BusyDialog.DetailsButton" xml:space="preserve">
+    <value>Error details</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
+    <value>{0} is still running. Stop it before starting another toolbox task.</value>
+  </data>
+  <data name="Toolbox.BusyDialog.StopButton" xml:space="preserve">
+    <value>Stop current task</value>
+  </data>
+  <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
+    <value>Toolbox is busy</value>
+  </data>
   <data name="Toolbox.Depot.ExportArkPlanner" xml:space="preserve">
     <value>Export to Penguin Stats planner</value>
   </data>
@@ -5575,6 +6157,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.Depot.NeverSynced" xml:space="preserve">
     <value>Not synced yet</value>
+  </data>
+  <data name="Toolbox.Depot.Title" xml:space="preserve">
+    <value>Depot</value>
   </data>
   <data name="Toolbox.Error.BusyWithTool" xml:space="preserve">
     <value>`{0}` is running. Stop it first before peep.</value>
@@ -5606,6 +6191,12 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.Error.RecruitFailed" xml:space="preserve">
     <value>Recruit recognition failed. Check current screen and connection status.</value>
   </data>
+  <data name="Toolbox.Error.SessionActivity.OtherActive" xml:space="preserve">
+    <value>Another session operation is active. Toolbox cannot start until it is stopped or finishes.</value>
+  </data>
+  <data name="Toolbox.Error.SessionActivity.TimerActive" xml:space="preserve">
+    <value>A scheduled task is active. Toolbox cannot start until it finishes.</value>
+  </data>
   <data name="Toolbox.Error.ToolExecutionCancelled" xml:space="preserve">
     <value>Tool execution cancelled.</value>
   </data>
@@ -5632,42 +6223,6 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.Error.YituliuTokenWriteOnly" xml:space="preserve">
     <value>the token only has write permission.</value>
-  </data>
-  <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
-    <value>Got it</value>
-  </data>
-  <data name="Toolbox.BusyDialog.ConfirmButton" xml:space="preserve">
-    <value>Cancel</value>
-  </data>
-  <data name="Toolbox.BusyDialog.CurrentTask" xml:space="preserve">
-    <value>current task</value>
-  </data>
-  <data name="Toolbox.BusyDialog.DetailsButton" xml:space="preserve">
-    <value>Error details</value>
-  </data>
-  <data name="Toolbox.BusyDialog.Message" xml:space="preserve">
-    <value>{0} is still running. Stop it before starting another toolbox task.</value>
-  </data>
-  <data name="Toolbox.BusyDialog.StopButton" xml:space="preserve">
-    <value>Stop current task</value>
-  </data>
-  <data name="Toolbox.BusyDialog.Title" xml:space="preserve">
-    <value>Toolbox is busy</value>
-  </data>
-  <data name="Toolbox.RetryableDialog.DetailsButton" xml:space="preserve">
-    <value>Error details</value>
-  </data>
-  <data name="Toolbox.RetryableDialog.LaterButton" xml:space="preserve">
-    <value>Try later</value>
-  </data>
-  <data name="Toolbox.RetryableDialog.Message" xml:space="preserve">
-    <value>That was impressively fast, and yes, I saw it coming. The toolbox is still getting ready, so try again in a moment.</value>
-  </data>
-  <data name="Toolbox.RetryableDialog.RetryButton" xml:space="preserve">
-    <value>Retry</value>
-  </data>
-  <data name="Toolbox.RetryableDialog.Title" xml:space="preserve">
-    <value>Toolbox is not ready yet</value>
   </data>
   <data name="Toolbox.ExecutionReview.HistoryLabel" xml:space="preserve">
     <value>History</value>
@@ -5741,11 +6296,11 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.MiniGame.EventPriority" xml:space="preserve">
     <value>Preferred event chain</value>
   </data>
-  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Title" xml:space="preserve">
-    <value>Interactive Exhibition: Unrecorded Wonder Found</value>
-  </data>
   <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Content" xml:space="preserve">
     <value>MAA has stopped exploring. Return to the game and complete the battle manually.</value>
+  </data>
+  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Title" xml:space="preserve">
+    <value>Interactive Exhibition: Unrecorded Wonder Found</value>
   </data>
   <data name="Toolbox.MiniGame.Name" xml:space="preserve">
     <value>Mini-game</value>
@@ -5812,6 +6367,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.OperBox.Subtitle.Owned" xml:space="preserve">
     <value>{0}★ / Elite {1} / Level {2} / Potential {3}</value>
+  </data>
+  <data name="Toolbox.OperBox.Title" xml:space="preserve">
+    <value>Operator</value>
   </data>
   <data name="Toolbox.Peep.TargetFps" xml:space="preserve">
     <value>Target FPS</value>
@@ -5936,6 +6494,21 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.Recruit.TagsDetectedWithList" xml:space="preserve">
     <value>Tags detected: {0}</value>
   </data>
+  <data name="Toolbox.RetryableDialog.DetailsButton" xml:space="preserve">
+    <value>Error details</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.LaterButton" xml:space="preserve">
+    <value>Try later</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Message" xml:space="preserve">
+    <value>That was impressively fast, and yes, I saw it coming. The toolbox is still getting ready, so try again in a moment.</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.RetryButton" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="Toolbox.RetryableDialog.Title" xml:space="preserve">
+    <value>Toolbox is not ready yet</value>
+  </data>
   <data name="Toolbox.Section.ExecutionReview" xml:space="preserve">
     <value>Execution Review</value>
   </data>
@@ -6035,6 +6608,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.Tip.RecruitRecognition" xml:space="preserve">
     <value>Tip: this is independent from the main-page auto recruit feature. Open the in-game recruit tags page before using.</value>
   </data>
+  <data name="Toolbox.Title" xml:space="preserve">
+    <value>Toolbox</value>
+  </data>
   <data name="Toolbox.ToolName.Depot" xml:space="preserve">
     <value>Depot Recognition</value>
   </data>
@@ -6090,8 +6666,14 @@ Pressing Confirm means you understand and accept the possible risks.</value>
   <data name="TotalDrop" xml:space="preserve">
     <value>Total Drops: </value>
   </data>
+  <data name="Trade" xml:space="preserve">
+    <value>Trading Post</value>
+  </data>
   <data name="Trader" xml:space="preserve">
     <value>Node: Rogue Trader</value>
+  </data>
+  <data name="Training" xml:space="preserve">
+    <value>Training Room</value>
   </data>
   <data name="TrainingCompleted" xml:space="preserve">
     <value>Training completed</value>
@@ -6114,6 +6696,9 @@ Pressing Confirm means you understand and accept the possible risks.</value>
   <data name="UnitTime" xml:space="preserve">
     <value>times</value>
   </data>
+  <data name="UnknownTaskInChain" xml:space="preserve">
+    <value>The task chain references an undefined task ({0}). The resource may be damaged or mismatched with the application version. Tasks have been stopped.</value>
+  </data>
   <data name="UnsupportedLevel" xml:space="preserve">
     <value>Unsupported stage, please check the stage name or update resources and try again!</value>
   </data>
@@ -6123,661 +6708,79 @@ Pressing Confirm means you understand and accept the possible risks.</value>
   <data name="UseSkill" xml:space="preserve">
     <value>Use Skill</value>
   </data>
+  <data name="VersionUpdate.Log.Resource.AlreadyLatest" xml:space="preserve">
+    <value>Resources are already up to date.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.Available" xml:space="preserve">
+    <value>Resource update available: {0}.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.AvailableRequiresCdk" xml:space="preserve">
+    <value>Resource update available: {0}. MirrorChyan CDK required for direct download.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailed" xml:space="preserve">
+    <value>Resource update check failed.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailedHttp" xml:space="preserve">
+    <value>Resource update check failed with HTTP {0}.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.CheckFailedWithMessage" xml:space="preserve">
+    <value>Resource update check failed: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.Checking" xml:space="preserve">
+    <value>Checking resource updates. source={0}, client={1}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubCompleted" xml:space="preserve">
+    <value>Resource update completed from Github.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubFailedWithMessage" xml:space="preserve">
+    <value>Resource update from Github failed: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.GithubStart" xml:space="preserve">
+    <value>Starting resource update from Github.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanCompleted" xml:space="preserve">
+    <value>Resource update completed from MirrorChyan.</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanFailedWithMessage" xml:space="preserve">
+    <value>Resource update from MirrorChyan failed: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Resource.MirrorChyanStart" xml:space="preserve">
+    <value>Starting resource update from MirrorChyan.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.AlreadyLatest" xml:space="preserve">
+    <value>Software is already up to date on {0}.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.Available" xml:space="preserve">
+    <value>Version update available: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.CheckFailedWithMessage" xml:space="preserve">
+    <value>Software update check failed: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.Checking" xml:space="preserve">
+    <value>Checking software updates. channel={0}, current={1}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.NamedPackageReady" xml:space="preserve">
+    <value>Software update package {0} is ready to apply after restart.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackagePrepareFailed" xml:space="preserve">
+    <value>Software update package preparation failed.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackagePrepareFailedWithMessage" xml:space="preserve">
+    <value>Software update package preparation failed: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PackageReady" xml:space="preserve">
+    <value>Software update package is ready to apply after restart.</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PreparingNamedPackage" xml:space="preserve">
+    <value>Preparing software update package: {0}</value>
+  </data>
+  <data name="VersionUpdate.Log.Software.PreparingPackage" xml:space="preserve">
+    <value>Preparing software update package download.</value>
+  </data>
   <data name="Visiting" xml:space="preserve">
     <value>Visit Friends</value>
   </data>
   <data name="Waiting" xml:space="preserve">
     <value>Waiting for the mission completion…</value>
-  </data>
-  <data name="Achievement.NewBadgeText" xml:space="preserve">
-    <value>NEW</value>
-  </data>
-  <data name="Main.SchemaMigration.Dialog.Cancel" xml:space="preserve">
-    <value>Close</value>
-  </data>
-  <data name="Main.SchemaMigration.Dialog.Confirm" xml:space="preserve">
-    <value>I Understand</value>
-  </data>
-  <data name="Main.SchemaMigration.Dialog.Prompt" xml:space="preserve">
-    <value>The configuration schema is older than the latest version.
-Current version: v{0}
-Latest version: v{1}
-
-{2}
-Suggested action: {3}
-A backup named avalonia.json.schema-v{0}.bak.&lt;timestamp&gt; will be created before writing the latest schema.</value>
-  </data>
-  <data name="Main.SchemaMigration.Dialog.Title" xml:space="preserve">
-    <value>Configuration Schema Migration Notice</value>
-  </data>
-  <data name="PostAction.Dialog.ConfirmNow" xml:space="preserve">
-    <value>Run Now</value>
-  </data>
-  <data name="PostAction.Dialog.Message.Hibernate" xml:space="preserve">
-    <value>MAA will hibernate this computer in {0} seconds unless you cancel.</value>
-  </data>
-  <data name="PostAction.Dialog.Message.LockScreen" xml:space="preserve">
-    <value>MAA will lock the screen in {0} seconds unless you cancel.</value>
-  </data>
-  <data name="PostAction.Dialog.Message.Shutdown" xml:space="preserve">
-    <value>MAA will shut down this computer in {0} seconds unless you cancel.</value>
-  </data>
-  <data name="PostAction.Dialog.Message.Sleep" xml:space="preserve">
-    <value>MAA will put this computer to sleep in {0} seconds unless you cancel.</value>
-  </data>
-  <data name="PostAction.Dialog.Title.Hibernate" xml:space="preserve">
-    <value>Confirm Hibernate</value>
-  </data>
-  <data name="PostAction.Dialog.Title.LockScreen" xml:space="preserve">
-    <value>Confirm Lock Screen</value>
-  </data>
-  <data name="PostAction.Dialog.Title.Shutdown" xml:space="preserve">
-    <value>Confirm Shutdown</value>
-  </data>
-  <data name="PostAction.Dialog.Title.Sleep" xml:space="preserve">
-    <value>Confirm Sleep</value>
-  </data>
-  <data name="Settings.Start.RestartDialog.Cancel" xml:space="preserve">
-    <value>Later</value>
-  </data>
-  <data name="Settings.Start.RestartDialog.Confirm" xml:space="preserve">
-    <value>Restart Now</value>
-  </data>
-  <data name="Settings.Start.RestartDialog.Message" xml:space="preserve">
-    <value>Startup settings were saved. Restart MAA now to apply these changes?</value>
-  </data>
-  <data name="Settings.Start.RestartDialog.Title" xml:space="preserve">
-    <value>Restart MAA</value>
-  </data>
-  <data name="Settings.Start.RestartLaunched" xml:space="preserve">
-    <value>Restart has started.</value>
-  </data>
-  <data name="Settings.Start.RestartManualClose" xml:space="preserve">
-    <value>A new instance has started. Close the current instance to finish restarting.</value>
-  </data>
-  <data name="Settings.Start.RestartPending" xml:space="preserve">
-    <value>Startup settings were saved. Restart MAA later to apply these changes.</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartDialog.Cancel" xml:space="preserve">
-    <value>Later</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartDialog.Confirm" xml:space="preserve">
-    <value>Restart Now</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartDialog.Message" xml:space="preserve">
-    <value>The software update package has finished downloading. Restart MAA now to apply the update?</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartDialog.Title" xml:space="preserve">
-    <value>Update Package Ready</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartLaunched" xml:space="preserve">
-    <value>Restart has started to apply the software update.</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartManualClose" xml:space="preserve">
-    <value>A new instance has started. Close the current instance to continue applying the update.</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartPending" xml:space="preserve">
-    <value>The update package is ready. Restart MAA later to apply it.</value>
-  </data>
-  <data name="Settings.VersionUpdate.RestartPendingWhileRunning" xml:space="preserve">
-    <value>The update package is ready. Current tasks are still running, so restart MAA when idle to apply it.</value>
-  </data>
-  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Cancel" xml:space="preserve">
-    <value>Close</value>
-  </data>
-  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Confirm" xml:space="preserve">
-    <value>OK</value>
-  </data>
-  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Message" xml:space="preserve">
-    <value>Software update is available. Go to Settings &gt; Version Update to check, download, and apply updates.</value>
-  </data>
-  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Status" xml:space="preserve">
-    <value>Software update is available.</value>
-  </data>
-  <data name="Settings.VersionUpdate.SoftwarePlaceholder.Title" xml:space="preserve">
-    <value>Software Update</value>
-  </data>
-  <data name="TaskQueue.Status.ParamsLoaded" xml:space="preserve">
-    <value>Loaded params for `{0}`.</value>
-  </data>
-  <data name="TaskQueue.Status.PrecheckPassed" xml:space="preserve">
-    <value>TaskQueue precheck passed.</value>
-  </data>
-  <data name="TaskQueue.Status.PrecheckWarnings" xml:space="preserve">
-    <value>TaskQueue precheck returned {0} warning(s).</value>
-  </data>
-  <data name="TaskQueue.Status.PrecheckDowngradeNotRequired" xml:space="preserve">
-    <value>TaskQueue precheck downgrade not required.</value>
-  </data>
-  <data name="TaskQueue.Status.PrecheckDowngradesApplied" xml:space="preserve">
-    <value>TaskQueue precheck applied {0} downgrade(s).</value>
-  </data>
-  <data name="TaskQueue.Status.LoadedTasks" xml:space="preserve">
-    <value>Loaded {0} task(s).</value>
-  </data>
-  <data name="TaskQueue.Status.TaskAdded" xml:space="preserve">
-    <value>Added task `{0}`.</value>
-  </data>
-  <data name="TaskQueue.Status.TaskRenamed" xml:space="preserve">
-    <value>Task renamed to `{0}`.</value>
-  </data>
-  <data name="TaskQueue.Status.TaskRemoved" xml:space="preserve">
-    <value>Removed task `{0}`.</value>
-  </data>
-  <data name="TaskQueue.Status.TaskOrderUnchanged" xml:space="preserve">
-    <value>Task order unchanged.</value>
-  </data>
-  <data name="TaskQueue.Status.TaskMoved" xml:space="preserve">
-    <value>Moved task `{0}` to position {1}.</value>
-  </data>
-  <data name="TaskQueue.Status.TaskEnabled.True" xml:space="preserve">
-    <value>Task `{0}` enabled.</value>
-  </data>
-  <data name="TaskQueue.Status.TaskEnabled.False" xml:space="preserve">
-    <value>Task `{0}` disabled.</value>
-  </data>
-  <data name="TaskQueue.Status.TasksEnabledBatch.True" xml:space="preserve">
-    <value>Enabled {0} task(s).</value>
-  </data>
-  <data name="TaskQueue.Status.TasksEnabledBatch.False" xml:space="preserve">
-    <value>Disabled {0} task(s).</value>
-  </data>
-  <data name="TaskQueue.Status.TasksEnabledInverted" xml:space="preserve">
-    <value>Inverted enabled state for {0} task(s).</value>
-  </data>
-  <data name="TaskQueue.Status.ParamsUpdated" xml:space="preserve">
-    <value>Updated params for `{0}`.</value>
-  </data>
-  <data name="TaskQueue.Status.ParamsUpdatedPersisted" xml:space="preserve">
-    <value>Updated params for `{0}` and persisted.</value>
-  </data>
-  <data name="TaskQueue.Status.ValidationPassed" xml:space="preserve">
-    <value>Task `{0}` passed validation.</value>
-  </data>
-  <data name="TaskQueue.Status.Saved" xml:space="preserve">
-    <value>Task queue saved.</value>
-  </data>
-  <data name="TaskQueue.Status.ParamsFlushed" xml:space="preserve">
-    <value>Task params flushed.</value>
-  </data>
-  <data name="TaskQueue.Error.TaskTypeMissing" xml:space="preserve">
-    <value>Task type cannot be empty.</value>
-  </data>
-  <data name="TaskQueue.Error.TaskNameMissing" xml:space="preserve">
-    <value>Task name cannot be empty.</value>
-  </data>
-  <data name="TaskQueue.Error.TaskIndexOutOfRange" xml:space="preserve">
-    <value>Task index {0} is out of range.</value>
-  </data>
-  <data name="TaskQueue.Error.MoveOutOfRange" xml:space="preserve">
-    <value>Task move index is out of range.</value>
-  </data>
-  <data name="TaskQueue.Error.ParamsMissing" xml:space="preserve">
-    <value>Task params cannot be null.</value>
-  </data>
-  <data name="TaskQueue.Error.ProfileMissing" xml:space="preserve">
-    <value>Current profile `{0}` not found.</value>
-  </data>
-  <data name="TaskQueue.Error.ProfileMissingShort" xml:space="preserve">
-    <value>Current profile is missing.</value>
-  </data>
-  <data name="TaskQueue.Error.TaskNameMissingShort" xml:space="preserve">
-    <value>Task name cannot be empty.</value>
-  </data>
-  <data name="TaskQueue.Error.TaskTypeMismatch" xml:space="preserve">
-    <value>Selected task is not a `{0}` task.</value>
-  </data>
-  <data name="TaskQueue.Warning.MallCreditFightDowngraded" xml:space="preserve">
-    <value>Disabled Mall credit fight for `{0}` because an enabled `{1}` task uses the current/last stage selector.</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Status.StateLoaded" xml:space="preserve">
-    <value>Loaded stage manager state.</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Status.LocalResourcesLoaded" xml:space="preserve">
-    <value>Loaded local stage resources for `{0}`.</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Status.WebResourcesLoaded" xml:space="preserve">
-    <value>Loaded web stage resources for `{0}`.</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Status.ConfigLoaded" xml:space="preserve">
-    <value>Loaded stage manager config.</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Status.ConfigSaved" xml:space="preserve">
-    <value>Stage manager config saved.</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Status.Validated" xml:space="preserve">
-    <value>Validated {0} stage code(s).</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.ServiceUnavailable" xml:space="preserve">
-    <value>Stage manager service is not initialized.</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.InvalidStageCode" xml:space="preserve">
-    <value>Invalid stage code: {0}</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.NoWebResources" xml:space="preserve">
-    <value>No web stage resources found for `{0}` under `{1}`.</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.NoLocalResources" xml:space="preserve">
-    <value>No local stage resources found for `{0}` under `{1}`.</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.ReadResources" xml:space="preserve">
-    <value>Failed to read stage resources from `{0}`: {1}</value>
-  </data>
-  <data name="Toolbox.Advanced.StageManager.Error.FileNotFound" xml:space="preserve">
-    <value>File not found: {0}</value>
-  </data>
-  <data name="Toolbox.Advanced.ExternalNotification.Status.NoProviders" xml:space="preserve">
-    <value>No external notification provider available.</value>
-  </data>
-  <data name="Toolbox.Advanced.ExternalNotification.Status.LoadedProviders" xml:space="preserve">
-    <value>Loaded {0} external notification provider(s).</value>
-  </data>
-  <data name="Toolbox.Advanced.ExternalNotification.Error.QueryFailed" xml:space="preserve">
-    <value>Failed to query external notification providers.</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.Title" xml:space="preserve">
-    <value>Risky connection settings</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.Message" xml:space="preserve">
-    <value>{0} + adbLite={1} can trigger the macOS RawByNc/POSIX connection issue, which may cause connection failures or hangs. We recommend setting adbLite to {2}.</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.ApplyRecommended" xml:space="preserve">
-    <value>Apply Fix</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.ForceRun" xml:space="preserve">
-    <value>Force Run</value>
-  </data>
-  <data name="MacRawByNcRisk.Dialog.DefaultTouchMode" xml:space="preserve">
-    <value>default touch mode</value>
-  </data>
-  <data name="Settings.VersionUpdate.NightlyWarning.Title" xml:space="preserve">
-    <value>Nightly updates</value>
-  </data>
-  <data name="Settings.VersionUpdate.NightlyWarning.Message" xml:space="preserve">
-    <value>Nightly updates are enabled. Thank you for helping test MAA.</value>
-  </data>
-  <data name="Settings.VersionUpdate.NightlyWarning.Confirm" xml:space="preserve">
-    <value>OK</value>
-  </data>
-  <data name="Settings.VersionUpdate.NightlyWarning.Cancel" xml:space="preserve">
-    <value>Close</value>
-  </data>
-  <data name="Copilot.Status.Starting" xml:space="preserve">
-    <value>Starting...</value>
-  </data>
-  <data name="Copilot.Status.ReorderSuccess" xml:space="preserve">
-    <value>Reordered the copilot list.</value>
-  </data>
-  <data name="Copilot.Status.UpdateListItemSuccess" xml:space="preserve">
-    <value>Copilot item updated.</value>
-  </data>
-  <data name="Copilot.Error.SortStateOutOfSync" xml:space="preserve">
-    <value>The copilot list order changed. Try again.</value>
-  </data>
-  <data name="Copilot.Error.TaskListPersistFail" xml:space="preserve">
-    <value>The copilot list could not be saved.</value>
-  </data>
-  <data name="Copilot.Status.LoadSetPartialFailed" xml:space="preserve">
-    <value>Failed to load the following copilot items: {0}</value>
-  </data>
-  <data name="Settings.SensitiveStorage.Unavailable" xml:space="preserve">
-    <value>Sensitive storage is unavailable. Sensitive settings and operations are disabled until storage is restored.</value>
-  </data>
-  <data name="Settings.SensitiveStorage.Retry" xml:space="preserve">
-    <value>Retry secure storage</value>
-  </data>
-  <data name="Settings.SensitiveStorage.DiscardUnreadable" xml:space="preserve">
-    <value>Discard unreadable value and re-enter</value>
-  </data>
-  <data name="Settings.SensitiveStorage.Status.PlaintextWarning" xml:space="preserve">
-    <value>Sensitive storage: {0}. Plaintext mode remains active; copying the configuration directory can expose sensitive settings.</value>
-  </data>
-  <data name="Settings.SensitiveStorage.Status.Unavailable" xml:space="preserve">
-    <value>Sensitive storage: {0}. Unavailable ({1}); sensitive operations are disabled.</value>
-  </data>
-  <data name="Settings.SensitiveStorage.Status.CorruptUnreadable" xml:space="preserve">
-    <value>A legacy encrypted sensitive value cannot be decrypted. The original config is preserved until you confirm discarding it and re-enter the value.</value>
-  </data>
-  <data name="Settings.SensitiveStorage.Status.Available" xml:space="preserve">
-    <value>Sensitive storage: {0}.</value>
-  </data>
-  <data name="Settings.Game.YoStarResolutionGuide.Available" xml:space="preserve">
-    <value>YoStar EN resolution guide is available.</value>
-  </data>
-  <data name="Settings.Game.YoStarResolutionGuide.Open" xml:space="preserve">
-    <value>Open YoStar EN Resolution Guide</value>
-  </data>
-  <data name="Settings.Game.OverseasClientHint" xml:space="preserve">
-    <value>Using an overseas client? See adaptation help.</value>
-  </data>
-  <data name="Settings.Game.OverseasAdaptationGuide.Open" xml:space="preserve">
-    <value>Open Overseas Adaptation Guide</value>
-  </data>
-  <data name="TaskQueue.Status.TaskEnabled.Once" xml:space="preserve">
-    <value>Run once</value>
-  </data>
-  <data name="TaskQueue.Status.TaskEnabled.SkipOnce" xml:space="preserve">
-    <value>Skip once</value>
-  </data>
-  <data name="TaskQueue.Guide.Title" xml:space="preserve">
-    <value>Settings Guide</value>
-  </data>
-  <data name="TaskQueue.Guide.Ui.Description" xml:space="preserve">
-    <value>Choose the interface language, theme, background, and scaling options that suit you.</value>
-  </data>
-  <data name="TaskQueue.Guide.Game.Description" xml:space="preserve">
-    <value>Configure the client type, game startup, and account-switching behavior.</value>
-  </data>
-  <data name="TaskQueue.Guide.Connection.Description" xml:space="preserve">
-    <value>Set the ADB path or a connection preset, then test whether the connection works.</value>
-  </data>
-  <data name="TaskQueue.Guide.Tasks.Description" xml:space="preserve">
-    <value>Choose the tasks MAA should run and adjust the settings for each task.</value>
-  </data>
-  <data name="TaskQueue.Guide.Performance.Description" xml:space="preserve">
-    <value>Select the performance, capture, and input options supported by your device.</value>
-  </data>
-  <data name="TaskQueue.Guide.Update.Description" xml:space="preserve">
-    <value>Set update channels, resource updates, and startup check behavior.</value>
-  </data>
-  <data name="TaskQueue.Guide.User.Description" xml:space="preserve">
-    <value>Review documentation, issue reporting, and help links before starting a task.</value>
-  </data>
-  <data name="Settings.SensitiveStorage.PlaintextConsent.Title" xml:space="preserve">
-    <value>Sensitive storage warning</value>
-  </data>
-  <data name="Settings.SensitiveStorage.PlaintextConsent.Message" xml:space="preserve">
-    <value>System-protected storage is unavailable. Plaintext mode stores sensitive settings, including credentials, unencrypted in a separate local file. Copying or syncing the configuration directory can expose those secrets.</value>
-  </data>
-  <data name="Settings.SensitiveStorage.PlaintextConsent.Cancel" xml:space="preserve">
-    <value>Cancel</value>
-  </data>
-  <data name="Settings.SensitiveStorage.PlaintextConsent.UsePlaintext" xml:space="preserve">
-    <value>Use plaintext</value>
-  </data>
-  <data name="Copilot.Title" xml:space="preserve">
-    <value>Copilot</value>
-  </data>
-  <data name="Toolbox.Title" xml:space="preserve">
-    <value>Toolbox</value>
-  </data>
-  <data name="Toolbox.OperBox.Title" xml:space="preserve">
-    <value>Operator</value>
-  </data>
-  <data name="Toolbox.Depot.Title" xml:space="preserve">
-    <value>Depot</value>
-  </data>
-  <data name="Main.Close.SaveFailed" xml:space="preserve">
-    <value>Failed to save {0}.</value>
-  </data>
-  <data name="Common.Configuration" xml:space="preserve">
-    <value>Configuration</value>
-  </data>
-  <data name="Common.List.PairFormat" xml:space="preserve">
-    <value>{0} and {1}</value>
-  </data>
-  <data name="Common.List.Separator" xml:space="preserve">
-    <value>, </value>
-  </data>
-  <data name="Common.List.FinalSeparator" xml:space="preserve">
-    <value> and </value>
-  </data>
-  <data name="TaskQueue.Guide.OpenSettings" xml:space="preserve">
-    <value>Open settings</value>
-  </data>
-  <data name="TaskQueue.Guide.ConfigureTasks" xml:space="preserve">
-    <value>Configure tasks</value>
-  </data>
-  <data name="TaskQueue.Guide.Resume" xml:space="preserve">
-    <value>Return to settings guide</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.Title" xml:space="preserve">
-    <value>User agreement</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.Prefix" xml:space="preserve">
-    <value>Read the MAA user agreement before continuing</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.Link" xml:space="preserve">
-    <value>User agreement</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.Confirm" xml:space="preserve">
-    <value>I have read and agree to the user agreement</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.Confirmed" xml:space="preserve">
-    <value>User agreement confirmed</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.Tip" xml:space="preserve">
-    <value>The user agreement is not confirmed yet. You can continue browsing, but the task demo must be completed after confirming it.</value>
-  </data>
-  <data name="TaskQueue.Guide.Agreement.RequiredForDemo" xml:space="preserve">
-    <value>Go back to the user guide step and confirm the user agreement before completing the task demo.</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.Title" xml:space="preserve">
-    <value>Task setup demo</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.Note" xml:space="preserve">
-    <value>The demo only changes simulated tasks in this guide; your real task queue is untouched.</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.Progress" xml:space="preserve">
-    <value>{0} / {1} completed</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.Next" xml:space="preserve">
-    <value>Next: {0}</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.AddStartUp" xml:space="preserve">
-    <value>Add a StartUp task</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.AddFight" xml:space="preserve">
-    <value>Add a Fight task</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.RenameFight" xml:space="preserve">
-    <value>Rename the Fight task</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.SelectStage" xml:space="preserve">
-    <value>Select an Annihilation stage</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.ReorderFight" xml:space="preserve">
-    <value>Reorder tasks</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.EnableWeekly" xml:space="preserve">
-    <value>Enable the weekly plan</value>
-  </data>
-  <data name="TaskQueue.Guide.Demo.AddSwitchTheme" xml:space="preserve">
-    <value>Add a Switch Theme task</value>
-  </data>
-  <data name="TaskQueue.Guide.Skip" xml:space="preserve">
-    <value>Skip guide</value>
-  </data>
-  <data name="Settings.ConfigurationManager.Dialog.ImportUnreadableValueLine" xml:space="preserve">
-    <value>Failed to import {1} in {0}. The {1} configuration could not be read. Please edit it manually.</value>
-  </data>
-  <data name="Settings.ConfigurationManager.Dialog.GlobalConfiguration" xml:space="preserve">
-    <value>Global</value>
-  </data>
-  <data name="Settings.Connect.Hint.MacBundledAdbNotFound" xml:space="preserve">
-    <value>Bundled ADB was not found: {0}</value>
-  </data>
-  <data name="ConnectionFailure.Generic.Message" xml:space="preserve">
-    <value>Connection failed. Check connection settings -&gt; try restarting the emulator and ADB -&gt; reboot the computer.</value>
-  </data>
-  <data name="ConnectionFailure.Callback.MessageFormat" xml:space="preserve">
-    <value>Connection callback: {0}</value>
-  </data>
-  <data name="ConnectionFailure.Generic.Suggestion" xml:space="preserve">
-    <value>Check connection settings, try restarting the emulator and ADB, then reboot if it still fails.</value>
-  </data>
-  <data name="ConnectionFailure.Timeout.Message" xml:space="preserve">
-    <value>Connecting to the emulator timed out.</value>
-  </data>
-  <data name="ConnectionFailure.Timeout.Suggestion" xml:space="preserve">
-    <value>Make sure the emulator is running, the address and port are correct, and ADB is available.</value>
-  </data>
-  <data name="ConnectionFailure.TouchMode.Message" xml:space="preserve">
-    <value>The current touch mode is not available.</value>
-  </data>
-  <data name="ConnectionFailure.TouchMode.Suggestion" xml:space="preserve">
-    <value>Switch to another touch mode in connection settings, then try again.</value>
-  </data>
-  <data name="ConnectionFailure.AddressPort.Message" xml:space="preserve">
-    <value>Could not connect to this address or port.</value>
-  </data>
-  <data name="ConnectionFailure.AddressPort.Suggestion" xml:space="preserve">
-    <value>Make sure the emulator is running and the address and port are correct; common ADB ports include 5555, while some emulators use ports such as 5554.</value>
-  </data>
-  <data name="ConnectionFailure.AdbDevice.Message" xml:space="preserve">
-    <value>ADB is not connected to an available device.</value>
-  </data>
-  <data name="ConnectionFailure.AdbDevice.Suggestion" xml:space="preserve">
-    <value>Check adb devices and make sure the target is in the device state. If it shows unauthorized, authorize it in the emulator; if it shows offline/no devices, restart the emulator or ADB and try again.</value>
-  </data>
-  <data name="ConnectionFailure.CoreUnavailable.Message" xml:space="preserve">
-    <value>The connection core is not ready or has been disposed.</value>
-  </data>
-  <data name="ConnectionFailure.CoreUnavailable.Suggestion" xml:space="preserve">
-    <value>Try again after a moment; restart the app if it keeps happening.</value>
-  </data>
-  <data name="ConnectionFailure.CoreFailure.MessageFormat" xml:space="preserve">
-    <value>The connection core reported a failure: {0}</value>
-  </data>
-  <data name="ConnectionFailure.CoreFailure.Suggestion" xml:space="preserve">
-    <value>Check the emulator, ADB path, and connection config; core callback details are preserved below.</value>
-  </data>
-  <data name="ConnectionFailure.AdbTarget.Message" xml:space="preserve">
-    <value>ADB did not connect to the target device.</value>
-  </data>
-  <data name="ConnectionFailure.AdbTarget.Suggestion" xml:space="preserve">
-    <value>Check that the address and port are correct; common ADB port is 5555. Make sure the emulator is running, ADB is enabled, and the device is on the same network.</value>
-  </data>
-  <data name="ConnectionFailure.AdbStart.Message" xml:space="preserve">
-    <value>ADB failed to start.</value>
-  </data>
-  <data name="ConnectionFailure.AdbStart.Suggestion" xml:space="preserve">
-    <value>Check that the ADB path points to the adb executable, not a dmg, zip, folder, or installer package.</value>
-  </data>
-  <data name="ConnectionFailure.InvalidConfiguration.Message" xml:space="preserve">
-    <value>The connection configuration is invalid.</value>
-  </data>
-  <data name="ConnectionFailure.InvalidConfiguration.Suggestion" xml:space="preserve">
-    <value>Check the address format, port, connection type, and ADB path, then try again.</value>
-  </data>
-  <data name="ConnectionFailure.ConnectionFailed.Message" xml:space="preserve">
-    <value>Failed to connect to the emulator.</value>
-  </data>
-  <data name="ConnectionFailure.ConnectionFailed.Suggestion" xml:space="preserve">
-    <value>Open error details to inspect the core error output, then check the emulator and ADB connection.</value>
-  </data>
-  <data name="ConnectionFailure.FixSettings.Suggestion" xml:space="preserve">
-    <value>Fix the connection settings first, then try again.</value>
-  </data>
-  <data name="ConnectionFailure.AdbCommand.Message" xml:space="preserve">
-    <value>ADB command failed.</value>
-  </data>
-  <data name="ConnectionFailure.AdbCommand.Suggestion" xml:space="preserve">
-    <value>Open error details to inspect ADB output; make sure ADB is executable, or restart the emulator and ADB.</value>
-  </data>
-  <data name="Settings.ConfigurationManager.Status.SwitchBlockedWhileRunning" xml:space="preserve">
-    <value>The profile cannot be switched while a task is running or stopping. Wait for it to finish and try again.</value>
-  </data>
-  <data name="Settings.Connect.Hint.MuMuPathNotFound" xml:space="preserve">
-    <value>MuMu emulator path does not exist: {0}</value>
-  </data>
-  <data name="Settings.Connect.Hint.MuMuExternalRendererMissing" xml:space="preserve">
-    <value>MuMu emulator path is missing external_renderer_ipc.dll: {0}</value>
-  </data>
-  <data name="Settings.Connect.Hint.LdPlayerPathNotFound" xml:space="preserve">
-    <value>LDPlayer emulator path does not exist: {0}</value>
-  </data>
-  <data name="Settings.Connect.Hint.LdPlayerOpenGlMissing" xml:space="preserve">
-    <value>LDPlayer emulator path is missing ldopengl64.dll: {0}</value>
-  </data>
-  <data name="Settings.Connect.Status.MuMuPathAutoDetected" xml:space="preserve">
-    <value>MuMu emulator path auto-detected: {0}</value>
-  </data>
-  <data name="Settings.Connect.Status.LdPlayerPathAutoDetected" xml:space="preserve">
-    <value>LDPlayer emulator path auto-detected: {0}</value>
-  </data>
-  <data name="TaskQueue.Error.SessionActivity.Timer.Start" xml:space="preserve">
-    <value>A scheduled task is active. Wait for it to finish before starting tasks.</value>
-  </data>
-  <data name="TaskQueue.Error.SessionActivity.Other.Start" xml:space="preserve">
-    <value>Another session operation is active. Stop or wait for it before starting tasks.</value>
-  </data>
-  <data name="TaskQueue.Error.SessionActivity.Timer.RunOnce" xml:space="preserve">
-    <value>A scheduled task is active. Wait for it to finish before running a single task.</value>
-  </data>
-  <data name="TaskQueue.Error.SessionActivity.Other.RunOnce" xml:space="preserve">
-    <value>Another session operation is active. Stop or wait for it before running a single task.</value>
-  </data>
-  <data name="TaskQueue.Error.SessionActivity.Timer.AccountSwitch" xml:space="preserve">
-    <value>A scheduled task is active. Wait for it to finish before switching accounts.</value>
-  </data>
-  <data name="TaskQueue.Error.SessionActivity.Other.AccountSwitch" xml:space="preserve">
-    <value>Another session operation is active. Stop or wait for it before switching accounts.</value>
-  </data>
-  <data name="Copilot.Error.SessionActivity.TimerActive" xml:space="preserve">
-    <value>A scheduled task is active. Copilot cannot start until it finishes.</value>
-  </data>
-  <data name="Copilot.Error.SessionActivity.OtherActive" xml:space="preserve">
-    <value>Another session operation is active. Copilot cannot start until it is stopped or finishes.</value>
-  </data>
-  <data name="Toolbox.Error.SessionActivity.TimerActive" xml:space="preserve">
-    <value>A scheduled task is active. Toolbox cannot start until it finishes.</value>
-  </data>
-  <data name="Toolbox.Error.SessionActivity.OtherActive" xml:space="preserve">
-    <value>Another session operation is active. Toolbox cannot start until it is stopped or finishes.</value>
-  </data>
-  <data name="StopTimeout" xml:space="preserve">
-    <value>Stop timed out: Core did not respond to the stop request in time</value>
-  </data>
-  <data name="RestartRecommendation" xml:space="preserve">
-    <value>It is recommended to restart MAA to restore normal state</value>
-  </data>
-  <data name="OutOfMemoryError" xml:space="preserve">
-    <value>The {0} task stopped due to insufficient memory. Close some programs or restart MAA and try again</value>
-  </data>
-  <data name="GpuDeviceRemovedRestartRequired" xml:space="preserve">
-    <value>The {0} task stopped because the GPU inference device became unavailable, possibly after a graphics driver update or GPU reset. {key=RestartRecommendation}</value>
-  </data>
-  <data name="ResolutionChanged" xml:space="preserve">
-    <value>Emulator resolution has changed, connection closed. Please restart the task to apply the new resolution</value>
-  </data>
-  <data name="ResolutionNotSupportedCurrentResolution" xml:space="preserve">
-    <value>Current resolution: {0}x{1}</value>
-  </data>
-  <data name="TaskQueue.Stall.Warning" xml:space="preserve">
-    <value>Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running; if so, you can ignore this warning. If the task is unresponsive, manual intervention may be required.</value>
-  </data>
-  <data name="TaskQueue.RunDurationLimit.Reached" xml:space="preserve">
-    <value>Run duration limit ({0} min) reached, stopping tasks</value>
-  </data>
-  <data name="Settings.Game.EnableStallTimeout" xml:space="preserve">
-    <value>Detect stalled log updates</value>
-  </data>
-  <data name="Settings.Game.StallTimeoutMinutes" xml:space="preserve">
-    <value>Log output stall timeout (min)</value>
-  </data>
-  <data name="Settings.Game.EnableRunDurationLimit" xml:space="preserve">
-    <value>Limit run duration</value>
-  </data>
-  <data name="Settings.Game.EnableRunDurationLimit.Tip" xml:space="preserve">
-    <value>Checked: every run. Indeterminate: this run only. Stops the run when the limit is reached.</value>
-  </data>
-  <data name="Settings.Game.RunDurationLimitMinutes" xml:space="preserve">
-    <value>Run duration limit (min)</value>
-  </data>
-  <data name="Settings.Game.RunDurationLimitExecutePostActions" xml:space="preserve">
-    <value>Run completion actions after stopping</value>
-  </data>
-  <data name="ResourceBrokenTaskBlocked" xml:space="preserve">
-    <value>The resources are damaged, so tasks cannot be started. {key=ResourceBrokenRepairGuidance}</value>
-  </data>
-  <data name="ResourceBrokenRepairGuidance" xml:space="preserve">
-    <value>Go to Settings > Version update to check for a resource update (or download the full package again) and restart MAA. The block is lifted once the resources reload successfully.</value>
-  </data>
-  <data name="UnknownTaskInChain" xml:space="preserve">
-    <value>The task chain references an undefined task ({0}). The resource may be damaged or mismatched with the application version. Tasks have been stopped.</value>
-  </data>
-  <data name="CoreLoadingTip" xml:space="preserve">
-    <value>The MAA core is still loading. Please try again shortly.</value>
   </data>
 </root>
