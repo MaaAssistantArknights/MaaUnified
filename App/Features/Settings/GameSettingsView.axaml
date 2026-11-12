@@ -114,29 +114,6 @@
                   IsVisible="{Binding ShowBlockSleepWithScreenOnOption}" />
       </Grid>
 
-      <Grid Classes="settings-page-two-column"
-            ColumnDefinitions="Auto,24,Auto">
-        <CheckBox Classes="app-checkbox"
-                  Content="{Binding RootTexts[Settings.Game.EnablePenguin]}"
-                  IsChecked="{Binding EnablePenguin}" />
-        <CheckBox Grid.Column="2"
-                  Classes="app-checkbox"
-                  Content="{Binding RootTexts[Settings.Game.EnableYituliu]}"
-                  IsChecked="{Binding EnableYituliu}" />
-      </Grid>
-
-      <Grid Classes="settings-page-labeled-row"
-            controls:SettingsLabelWidthCoordinator.GroupKey="Game.Main"
-            ColumnDefinitions="Auto,*"
-            IsVisible="{Binding ShowPenguinIdField}">
-        <controls:SettingsLabel Text="{Binding RootTexts[Settings.Game.PenguinId]}" />
-        <controls:AppTextInput Grid.Column="1"
-                 Classes="settings-input"
-                 Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
-                 HorizontalAlignment="Left"
-                 Text="{Binding PenguinId, UpdateSourceTrigger=LostFocus}" />
-      </Grid>
-
       <CheckBox Classes="app-checkbox"
                 Content="{Binding RootTexts[Settings.Game.EnableStallTimeout]}"
                 IsChecked="{Binding EnableStallTimeout}" />

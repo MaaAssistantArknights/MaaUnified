@@ -3,6 +3,7 @@ using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Security;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.ThirdParty;
 using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
@@ -73,6 +74,12 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
     public IStageManagerFeatureService StageManagerFeatureService { get; init; } = new StageManagerFeatureServiceImpl();
 
     public IWebApiFeatureService WebApiFeatureService { get; init; } = new WebApiFeatureServiceImpl();
+
+    /// <summary>
+    /// Gets or sets the yituliu OpenAPI client used by the operator-box recognition path. Tests
+    /// replace it with a fake transport; production uses the injectable HttpClient default.
+    /// </summary>
+    public IYituliuOpenApiService YituliuOpenApiService { get; set; } = new YituliuOpenApiService();
 
     public required IDialogFeatureService DialogFeatureService { get; init; }
 

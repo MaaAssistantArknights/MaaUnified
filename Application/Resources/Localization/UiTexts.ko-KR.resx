@@ -1840,6 +1840,9 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="Settings.Action.SaveStartPerformance" xml:space="preserve">
     <value>시작/성능 저장</value>
   </data>
+  <data name="Settings.Action.SaveThirdParty" xml:space="preserve">
+    <value>서드파티 서비스 설정 저장</value>
+  </data>
   <data name="Settings.Action.SaveTimer" xml:space="preserve">
     <value>예약 설정 저장</value>
   </data>
@@ -2719,6 +2722,9 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   <data name="Settings.Section.Start" xml:space="preserve">
     <value>시작 설정</value>
   </data>
+  <data name="Settings.Section.ThirdParty" xml:space="preserve">
+    <value>서드파티 서비스</value>
+  </data>
   <data name="Settings.Section.Timer" xml:space="preserve">
     <value>예약 실행</value>
   </data>
@@ -2856,6 +2862,27 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   </data>
   <data name="Settings.State.Saving" xml:space="preserve">
     <value>저장 중...</value>
+  </data>
+  <data name="Settings.ThirdParty.OpenApiTip" xml:space="preserve">
+    <value>일도류 사이트에서 계정을 연동하고 오퍼레이터 육성 데이터를 먼저 가져와야 합니다. 인식은 데이터를 읽기만 하며 계정을 변경하지 않습니다.</value>
+  </data>
+  <data name="Settings.ThirdParty.OpenApiTitle" xml:space="preserve">
+    <value>일도류 OpenAPI</value>
+  </data>
+  <data name="Settings.ThirdParty.OpenApiToken" xml:space="preserve">
+    <value>OpenAPI 토큰</value>
+  </data>
+  <data name="Settings.ThirdParty.OperBoxUseYituliuApi" xml:space="preserve">
+    <value>오퍼레이터 인식 데이터 소스를 일도류 OpenAPI로 변경</value>
+  </data>
+  <data name="Settings.ThirdParty.PenguinId" xml:space="preserve">
+    <value>펭귄 물류 ID</value>
+  </data>
+  <data name="Settings.ThirdParty.ReportToPenguin" xml:space="preserve">
+    <value>펭귄 물류 업로드</value>
+  </data>
+  <data name="Settings.ThirdParty.ReportToYituliu" xml:space="preserve">
+    <value>일도류 업로드</value>
   </data>
   <data name="Settings.Timer.CustomConfig" xml:space="preserve">
     <value>커스텀 구성 옵션</value>
@@ -3724,6 +3751,24 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   <data name="Toolbox.Error.ToolboxBusy" xml:space="preserve">
     <value>Toolbox 에 이미 실행 중인 작업이 있습니다. 먼저 중지하세요.</value>
   </data>
+  <data name="Toolbox.Error.YituliuFetchFailed" xml:space="preserve">
+    <value>일도류에서 오퍼레이터 데이터를 가져오지 못했습니다: {0}</value>
+  </data>
+  <data name="Toolbox.Error.YituliuNetworkError" xml:space="preserve">
+    <value>요청에 실패했습니다. 네트워크 연결을 확인하세요.</value>
+  </data>
+  <data name="Toolbox.Error.YituliuNoData" xml:space="preserve">
+    <value>일도류가 오퍼레이터 데이터를 반환하지 않았습니다. 로컬 오퍼레이터 인식 데이터를 유지합니다.</value>
+  </data>
+  <data name="Toolbox.Error.YituliuTokenEmpty" xml:space="preserve">
+    <value>일도류 오퍼레이터 인식은 ｢설정 - 서드파티 서비스｣에서 OpenAPI 토큰을 입력해야 합니다.</value>
+  </data>
+  <data name="Toolbox.Error.YituliuTokenInvalid" xml:space="preserve">
+    <value>토큰이 유효하지 않거나 만료되었습니다.</value>
+  </data>
+  <data name="Toolbox.Error.YituliuTokenWriteOnly" xml:space="preserve">
+    <value>토큰에 쓰기 권한만 있습니다.</value>
+  </data>
   <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
     <value>알겠습니다</value>
   </data>
@@ -3838,6 +3883,45 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   <data name="Toolbox.OperBox.CopyToClipboard" xml:space="preserve">
     <value>클립보드로 복사</value>
   </data>
+  <data name="Toolbox.OperBox.Export.Csv" xml:space="preserve">
+    <value>CSV 내보내기</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Elite" xml:space="preserve">
+    <value>정예화 단계</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Id" xml:space="preserve">
+    <value>오퍼레이터 ID</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Level" xml:space="preserve">
+    <value>레벨</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Name" xml:space="preserve">
+    <value>오퍼레이터</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Own" xml:space="preserve">
+    <value>보유</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Potential" xml:space="preserve">
+    <value>잠재능력</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Rarity" xml:space="preserve">
+    <value>레어도</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Json" xml:space="preserve">
+    <value>JSON 내보내기</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Markdown" xml:space="preserve">
+    <value>Markdown 내보내기</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.No" xml:space="preserve">
+    <value>아니요</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.ToFile" xml:space="preserve">
+    <value>파일로 내보내기</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Yes" xml:space="preserve">
+    <value>예</value>
+  </data>
   <data name="Toolbox.OperBox.Header.NotOwned" xml:space="preserve">
     <value>미보유 ({0})</value>
   </data>
@@ -3900,6 +3984,18 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   </data>
   <data name="Toolbox.Status.CurrentToolStopped" xml:space="preserve">
     <value>현재 도구를 중지했습니다.</value>
+  </data>
+  <data name="Toolbox.Status.DepotRecognitionEmptyResult" xml:space="preserve">
+    <value>아이템을 인식하지 못해 이전 창고 데이터를 유지했습니다</value>
+  </data>
+  <data name="Toolbox.Status.ExportedToFile" xml:space="preserve">
+    <value>파일로 내보냈습니다</value>
+  </data>
+  <data name="Toolbox.Status.ExportedToFileWithName" xml:space="preserve">
+    <value>{0}(으)로 내보냈습니다</value>
+  </data>
+  <data name="Toolbox.Status.FetchingFromYituliu" xml:space="preserve">
+    <value>일도류에서 오퍼레이터 데이터를 가져오는 중...</value>
   </data>
   <data name="Toolbox.Status.ManuallyStopped" xml:space="preserve">
     <value>수동으로 중지했습니다.</value>

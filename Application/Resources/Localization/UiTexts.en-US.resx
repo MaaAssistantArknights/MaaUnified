@@ -2850,6 +2850,9 @@ With save file: farm points through crafting (advanced).
   <data name="Settings.Action.SaveStartPerformance" xml:space="preserve">
     <value>Save Start/Performance</value>
   </data>
+  <data name="Settings.Action.SaveThirdParty" xml:space="preserve">
+    <value>Save Third-party Services</value>
+  </data>
   <data name="Settings.Action.SaveTimer" xml:space="preserve">
     <value>Save Timer</value>
   </data>
@@ -4038,6 +4041,9 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.Section.Start" xml:space="preserve">
     <value>Startup</value>
   </data>
+  <data name="Settings.Section.ThirdParty" xml:space="preserve">
+    <value>Third-party Services</value>
+  </data>
   <data name="Settings.Section.Timer" xml:space="preserve">
     <value>Schedule</value>
   </data>
@@ -4181,6 +4187,27 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   </data>
   <data name="Settings.State.Saving" xml:space="preserve">
     <value>Saving...</value>
+  </data>
+  <data name="Settings.ThirdParty.OpenApiTip" xml:space="preserve">
+    <value>Bind your account and import operator progression on the Yituliu site first; recognition only reads data and never modifies the account.</value>
+  </data>
+  <data name="Settings.ThirdParty.OpenApiTitle" xml:space="preserve">
+    <value>Yituliu OpenAPI</value>
+  </data>
+  <data name="Settings.ThirdParty.OpenApiToken" xml:space="preserve">
+    <value>OpenAPI Token</value>
+  </data>
+  <data name="Settings.ThirdParty.OperBoxUseYituliuApi" xml:space="preserve">
+    <value>Read operator recognition data from the yituliu OpenAPI</value>
+  </data>
+  <data name="Settings.ThirdParty.PenguinId" xml:space="preserve">
+    <value>Penguin Stats ID</value>
+  </data>
+  <data name="Settings.ThirdParty.ReportToPenguin" xml:space="preserve">
+    <value>Report to Penguin Stats</value>
+  </data>
+  <data name="Settings.ThirdParty.ReportToYituliu" xml:space="preserve">
+    <value>Report to Yituliu</value>
   </data>
   <data name="Settings.Timer.CustomConfig" xml:space="preserve">
     <value>Use custom configuration</value>
@@ -5391,6 +5418,24 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.Error.ToolboxBusy" xml:space="preserve">
     <value>Toolbox already has a running task. Stop it first.</value>
   </data>
+  <data name="Toolbox.Error.YituliuFetchFailed" xml:space="preserve">
+    <value>Failed to fetch operator data from the yituliu OpenAPI: {0}</value>
+  </data>
+  <data name="Toolbox.Error.YituliuNetworkError" xml:space="preserve">
+    <value>the request failed, check the network connection.</value>
+  </data>
+  <data name="Toolbox.Error.YituliuNoData" xml:space="preserve">
+    <value>The yituliu OpenAPI returned no operator data. Local operator-box data has been kept.</value>
+  </data>
+  <data name="Toolbox.Error.YituliuTokenEmpty" xml:space="preserve">
+    <value>The yituliu operator source needs an OpenAPI token in Settings - Third-party services.</value>
+  </data>
+  <data name="Toolbox.Error.YituliuTokenInvalid" xml:space="preserve">
+    <value>the token is invalid or expired.</value>
+  </data>
+  <data name="Toolbox.Error.YituliuTokenWriteOnly" xml:space="preserve">
+    <value>the token only has write permission.</value>
+  </data>
   <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
     <value>Got it</value>
   </data>
@@ -5505,6 +5550,45 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="Toolbox.OperBox.CopyToClipboard" xml:space="preserve">
     <value>Copy to clipboard</value>
   </data>
+  <data name="Toolbox.OperBox.Export.Csv" xml:space="preserve">
+    <value>Export CSV</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Elite" xml:space="preserve">
+    <value>Elite</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Id" xml:space="preserve">
+    <value>Operator ID</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Level" xml:space="preserve">
+    <value>Level</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Name" xml:space="preserve">
+    <value>Operator</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Own" xml:space="preserve">
+    <value>Owned</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Potential" xml:space="preserve">
+    <value>Potential</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Rarity" xml:space="preserve">
+    <value>Rarity</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Json" xml:space="preserve">
+    <value>Export JSON</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Markdown" xml:space="preserve">
+    <value>Export Markdown</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.No" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.ToFile" xml:space="preserve">
+    <value>Export to file</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Yes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
   <data name="Toolbox.OperBox.Header.NotOwned" xml:space="preserve">
     <value>Not owned ({0})</value>
   </data>
@@ -5567,6 +5651,18 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.Status.CurrentToolStopped" xml:space="preserve">
     <value>Current tool stopped.</value>
+  </data>
+  <data name="Toolbox.Status.DepotRecognitionEmptyResult" xml:space="preserve">
+    <value>No items were recognized. The previous depot data has been kept.</value>
+  </data>
+  <data name="Toolbox.Status.ExportedToFile" xml:space="preserve">
+    <value>Exported to file</value>
+  </data>
+  <data name="Toolbox.Status.ExportedToFileWithName" xml:space="preserve">
+    <value>Exported to {0}</value>
+  </data>
+  <data name="Toolbox.Status.FetchingFromYituliu" xml:space="preserve">
+    <value>Fetching operator data from the yituliu OpenAPI...</value>
   </data>
   <data name="Toolbox.Status.ManuallyStopped" xml:space="preserve">
     <value>Manually stopped.</value>

@@ -6,6 +6,7 @@ using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Features;
+using MAAUnified.Application.Services.ThirdParty;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
 
@@ -42,7 +43,8 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
     public static async Task<ToolboxTestFixture> CreateAsync(
         IReadOnlyDictionary<string, string>? globalSeeds = null,
         IReadOnlyDictionary<string, JsonNode?>? profileSeeds = null,
-        INotificationProviderFeatureService? notificationProviderFeatureService = null)
+        INotificationProviderFeatureService? notificationProviderFeatureService = null,
+        IYituliuOpenApiService? yituliuOpenApiService = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "maa-unified-toolbox-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "config"));
@@ -121,6 +123,11 @@ internal sealed class ToolboxTestFixture : IAsyncDisposable
             DialogFeatureService = new DialogFeatureService(diagnostics),
             PostActionFeatureService = new PostActionFeatureService(config, diagnostics, platform.PostActionExecutorService),
         };
+
+        if (yituliuOpenApiService is not null)
+        {
+            runtime.YituliuOpenApiService = yituliuOpenApiService;
+        }
 
         var connectionState = new ConnectionGameSharedStateViewModel
         {

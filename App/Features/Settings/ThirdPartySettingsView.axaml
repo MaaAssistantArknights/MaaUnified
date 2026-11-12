@@ -1,0 +1,63 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             Classes="settings-page"
+             x:Class="MAAUnified.App.Features.Settings.ThirdPartySettingsView">
+  <Grid Margin="4"
+        RowDefinitions="Auto,*">
+    <TextBlock Classes="settings-page-title"
+               Text="{Binding RootTexts[Settings.Section.ThirdParty]}" />
+
+    <controls:AdaptiveSpacingStackPanel Grid.Row="1"
+                Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"
+                Classes="settings-page-flow">
+      <Grid Classes="settings-page-two-column"
+            ColumnDefinitions="Auto,24,Auto">
+        <CheckBox Classes="app-checkbox"
+                  Content="{Binding RootTexts[Settings.ThirdParty.ReportToPenguin]}"
+                  IsChecked="{Binding EnablePenguin}" />
+        <CheckBox Grid.Column="2"
+                  Classes="app-checkbox"
+                  Content="{Binding RootTexts[Settings.ThirdParty.ReportToYituliu]}"
+                  IsChecked="{Binding EnableYituliu}" />
+      </Grid>
+
+      <Grid Classes="settings-page-labeled-row"
+            controls:SettingsLabelWidthCoordinator.GroupKey="ThirdParty.Main"
+            ColumnDefinitions="Auto,*"
+            IsVisible="{Binding ShowPenguinIdField}">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.ThirdParty.PenguinId]}" />
+        <controls:AppTextInput Grid.Column="1"
+                 Classes="settings-input"
+                 Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                 HorizontalAlignment="Left"
+                 Text="{Binding PenguinId, UpdateSourceTrigger=LostFocus}" />
+      </Grid>
+
+      <Border Classes="settings-page-meta-block">
+        <controls:AdaptiveSpacingStackPanel Classes="settings-page-compact-flow">
+          <TextBlock Classes="app-body"
+                     Text="{Binding RootTexts[Settings.ThirdParty.OpenApiTitle]}"
+                     TextWrapping="Wrap" />
+          <TextBlock Classes="app-caption subtle long-wrap"
+                     Text="{Binding RootTexts[Settings.ThirdParty.OpenApiTip]}" />
+        </controls:AdaptiveSpacingStackPanel>
+      </Border>
+
+      <Grid Classes="settings-page-labeled-row"
+            controls:SettingsLabelWidthCoordinator.GroupKey="ThirdParty.Main"
+            ColumnDefinitions="Auto,*">
+        <controls:SettingsLabel Text="{Binding RootTexts[Settings.ThirdParty.OpenApiToken]}" />
+        <controls:AppTextInput Grid.Column="1"
+                 Classes="settings-input"
+                 Width="{DynamicResource MAA.Size.Settings.FieldInputWidth}"
+                 HorizontalAlignment="Left"
+                 Text="{Binding YituliuOpenApiToken, UpdateSourceTrigger=LostFocus}" />
+      </Grid>
+
+      <CheckBox Classes="app-checkbox"
+                Content="{Binding RootTexts[Settings.ThirdParty.OperBoxUseYituliuApi]}"
+                IsChecked="{Binding OperBoxUseYituliuApi}" />
+    </controls:AdaptiveSpacingStackPanel>
+  </Grid>
+</UserControl>

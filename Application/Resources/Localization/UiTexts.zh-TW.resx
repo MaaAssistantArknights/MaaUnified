@@ -1731,6 +1731,9 @@
   <data name="Settings.Action.SaveStartPerformance" xml:space="preserve">
     <value>儲存啟動/效能</value>
   </data>
+  <data name="Settings.Action.SaveThirdParty" xml:space="preserve">
+    <value>儲存第三方服務設定</value>
+  </data>
   <data name="Settings.Action.SaveTimer" xml:space="preserve">
     <value>儲存排程設定</value>
   </data>
@@ -2610,6 +2613,9 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="Settings.Section.Start" xml:space="preserve">
     <value>啟動設定</value>
   </data>
+  <data name="Settings.Section.ThirdParty" xml:space="preserve">
+    <value>第三方服務</value>
+  </data>
   <data name="Settings.Section.Timer" xml:space="preserve">
     <value>排程執行</value>
   </data>
@@ -2747,6 +2753,27 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   </data>
   <data name="Settings.State.Saving" xml:space="preserve">
     <value>儲存中...</value>
+  </data>
+  <data name="Settings.ThirdParty.OpenApiTip" xml:space="preserve">
+    <value>需先在一圖流網站綁定帳號並匯入幹員練度資料；辨識只讀取資料，不會修改帳號。</value>
+  </data>
+  <data name="Settings.ThirdParty.OpenApiTitle" xml:space="preserve">
+    <value>一圖流 OpenAPI</value>
+  </data>
+  <data name="Settings.ThirdParty.OpenApiToken" xml:space="preserve">
+    <value>OpenAPI Token</value>
+  </data>
+  <data name="Settings.ThirdParty.OperBoxUseYituliuApi" xml:space="preserve">
+    <value>幹員辨識資料來源改為一圖流 OpenAPI</value>
+  </data>
+  <data name="Settings.ThirdParty.PenguinId" xml:space="preserve">
+    <value>企鵝物流 ID</value>
+  </data>
+  <data name="Settings.ThirdParty.ReportToPenguin" xml:space="preserve">
+    <value>上傳企鵝物流</value>
+  </data>
+  <data name="Settings.ThirdParty.ReportToYituliu" xml:space="preserve">
+    <value>上傳一圖流</value>
   </data>
   <data name="Settings.Timer.CustomConfig" xml:space="preserve">
     <value>自定義配置選擇</value>
@@ -3615,6 +3642,24 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="Toolbox.Error.ToolboxBusy" xml:space="preserve">
     <value>Toolbox 目前已有任務執行中，請先停止。</value>
   </data>
+  <data name="Toolbox.Error.YituliuFetchFailed" xml:space="preserve">
+    <value>一圖流幹員資料取得失敗：{0}</value>
+  </data>
+  <data name="Toolbox.Error.YituliuNetworkError" xml:space="preserve">
+    <value>請求失敗，請檢查網路連線。</value>
+  </data>
+  <data name="Toolbox.Error.YituliuNoData" xml:space="preserve">
+    <value>一圖流未回傳幹員資料，已保留本機幹員辨識資料。</value>
+  </data>
+  <data name="Toolbox.Error.YituliuTokenEmpty" xml:space="preserve">
+    <value>一圖流幹員辨識需要先在 ｢設定 - 第三方服務｣ 中填寫 OpenAPI Token。</value>
+  </data>
+  <data name="Toolbox.Error.YituliuTokenInvalid" xml:space="preserve">
+    <value>Token 無效或已過期。</value>
+  </data>
+  <data name="Toolbox.Error.YituliuTokenWriteOnly" xml:space="preserve">
+    <value>Token 僅具備寫入權限。</value>
+  </data>
   <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
     <value>知道了</value>
   </data>
@@ -3729,6 +3774,45 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="Toolbox.OperBox.CopyToClipboard" xml:space="preserve">
     <value>複製到剪貼簿</value>
   </data>
+  <data name="Toolbox.OperBox.Export.Csv" xml:space="preserve">
+    <value>匯出 CSV</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Elite" xml:space="preserve">
+    <value>精英化等級</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Id" xml:space="preserve">
+    <value>幹員 ID</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Level" xml:space="preserve">
+    <value>等級</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Name" xml:space="preserve">
+    <value>幹員</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Own" xml:space="preserve">
+    <value>是否擁有</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Potential" xml:space="preserve">
+    <value>潛能</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Rarity" xml:space="preserve">
+    <value>星級</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Json" xml:space="preserve">
+    <value>匯出 JSON</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Markdown" xml:space="preserve">
+    <value>匯出 Markdown</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.No" xml:space="preserve">
+    <value>否</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.ToFile" xml:space="preserve">
+    <value>匯出至檔案</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Yes" xml:space="preserve">
+    <value>是</value>
+  </data>
   <data name="Toolbox.OperBox.Header.NotOwned" xml:space="preserve">
     <value>未持有 ({0})</value>
   </data>
@@ -3791,6 +3875,18 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   </data>
   <data name="Toolbox.Status.CurrentToolStopped" xml:space="preserve">
     <value>已停止目前工具。</value>
+  </data>
+  <data name="Toolbox.Status.DepotRecognitionEmptyResult" xml:space="preserve">
+    <value>未辨識到物品，已保留上次倉庫資料</value>
+  </data>
+  <data name="Toolbox.Status.ExportedToFile" xml:space="preserve">
+    <value>已匯出至檔案</value>
+  </data>
+  <data name="Toolbox.Status.ExportedToFileWithName" xml:space="preserve">
+    <value>已匯出至 {0}</value>
+  </data>
+  <data name="Toolbox.Status.FetchingFromYituliu" xml:space="preserve">
+    <value>正在從一圖流取得幹員資料...</value>
   </data>
   <data name="Toolbox.Status.ManuallyStopped" xml:space="preserve">
     <value>已手動停止。</value>

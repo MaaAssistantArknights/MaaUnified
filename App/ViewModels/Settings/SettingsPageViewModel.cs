@@ -18,6 +18,7 @@ using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Security;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.ThirdParty;
 using MAAUnified.Compat.Constants;
 using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
@@ -137,6 +138,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         "GUI",
         "Background",
         "ExternalNotification",
+        "ThirdParty",
         "HotKey",
         "Achievement",
         "VersionUpdate",
@@ -393,6 +395,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private string _penguinId = string.Empty;
     private bool _stallTimeoutEnabled = true;
     private int _stallTimeoutMinutes = DefaultStallTimeoutMinutes;
+    private string _yituliuOpenApiToken = string.Empty;
+    private bool _operBoxUseYituliuApi;
     private int _reminderIntervalMinutes = DefaultReminderIntervalMinutes;
     private bool _enableRunDurationLimit;
     private int _runDurationLimitMinutes = DefaultRunDurationLimitMinutes;
@@ -2893,6 +2897,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 await SaveConnectionGameSettingsAsync(cancellationToken);
                 break;
             case "settings.save-start-performance":
+            case "settings.save-third-party":
                 await SaveStartPerformanceSettingsAsync(cancellationToken);
                 break;
             case "settings.save-timer":
@@ -3637,6 +3642,31 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         }
     }
 
+    public string YituliuOpenApiToken
+    {
+        get => _yituliuOpenApiToken;
+        set
+        {
+            var normalized = value?.Trim() ?? string.Empty;
+            if (SetProperty(ref _yituliuOpenApiToken, normalized))
+            {
+                MarkStartPerformanceDirty();
+            }
+        }
+    }
+
+    public bool OperBoxUseYituliuApi
+    {
+        get => _operBoxUseYituliuApi;
+        set
+        {
+            if (SetProperty(ref _operBoxUseYituliuApi, value))
+            {
+                MarkStartPerformanceDirty();
+            }
+        }
+    }
+
     public bool EnableStallTimeout
     {
         get => _stallTimeoutEnabled;
@@ -3943,6 +3973,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             case "Start":
             case "Performance":
                 CurrentSectionActions.Add(new SettingsSectionActionItem("settings.save-start-performance", RootTexts["Settings.Action.SaveStartPerformance"], IsPrimary: true));
+                break;
+            case "ThirdParty":
+                CurrentSectionActions.Add(new SettingsSectionActionItem("settings.save-third-party", RootTexts["Settings.Action.SaveThirdParty"], IsPrimary: true));
                 break;
             case "Timer":
                 CurrentSectionActions.Add(new SettingsSectionActionItem("settings.save-timer", RootTexts["Settings.Action.SaveTimer"], IsPrimary: true));
@@ -8780,6 +8813,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             "Connect" => [SettingsDataBucketConnectionGame],
             "RemoteControl" => [SettingsDataBucketRemoteControl],
             "ExternalNotification" => [SettingsDataBucketExternalNotification],
+            "ThirdParty" => [SettingsDataBucketStartPerformance],
             "Achievement" => [SettingsDataBucketAchievement],
             "VersionUpdate" => [SettingsDataBucketConnectionGame, SettingsDataBucketVersionUpdate],
             _ => [],
@@ -10941,7 +10975,9 @@ public sealed record StartPerformanceSettingsSnapshot(
     int ReminderIntervalMinutes,
     bool EnableRunDurationLimit,
     int RunDurationLimitMinutes,
-    bool RunDurationLimitExecutePostActions)
+    bool RunDurationLimitExecutePostActions,
+    string YituliuOpenApiToken,
+    bool OperBoxUseYituliuApi)
 {
     public IReadOnlyDictionary<string, string> ToGlobalSettingUpdates()
     {
@@ -10976,6 +11012,8 @@ public sealed record StartPerformanceSettingsSnapshot(
             [ConfigurationKeys.EnableRunDurationLimit] = EnableRunDurationLimit.ToString(),
             [ConfigurationKeys.RunDurationLimitMinutes] = RunDurationLimitMinutes.ToString(),
             [ConfigurationKeys.RunDurationLimitExecutePostActions] = RunDurationLimitExecutePostActions.ToString(),
+            [ThirdPartySettingKeys.YituliuOpenApiToken] = YituliuOpenApiToken,
+            [ThirdPartySettingKeys.OperBoxUseYituliuApi] = OperBoxUseYituliuApi.ToString(),
         };
 
         // GPU settings are profile-scoped to match WPF GpuOption (ConfigurationHelper.SetValue)

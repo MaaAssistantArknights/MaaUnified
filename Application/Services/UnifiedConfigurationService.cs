@@ -71,6 +71,12 @@ public sealed class UnifiedConfigurationService
 
     public UiLogService LogService { get; }
 
+    /// <summary>
+    /// Gets the directory that contains the configuration (and the shared data directory used by
+    /// WPF-compatible files such as data/OperBoxData.json).
+    /// </summary>
+    public string BaseDirectory => _baseDirectory;
+
     public UnifiedConfig CurrentConfig { get; private set; } = new();
 
     public IReadOnlyList<ConfigValidationIssue> CurrentValidationIssues => _currentValidationIssues;

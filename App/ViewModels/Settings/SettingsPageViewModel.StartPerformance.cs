@@ -13,6 +13,7 @@ using MAAUnified.Application.Configuration;
 using MAAUnified.Application.Models;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.ThirdParty;
 using MAAUnified.Compat.Constants;
 using MAAUnified.CoreBridge;
 using MAAUnified.Platform;
@@ -501,7 +502,9 @@ public sealed partial class SettingsPageViewModel
             ReminderIntervalMinutes: Math.Clamp(ReminderIntervalMinutes, 1, MaxTimeoutMinutes),
             EnableRunDurationLimit: EnableRunDurationLimit,
             RunDurationLimitMinutes: Math.Clamp(RunDurationLimitMinutes, 1, MaxTimeoutMinutes),
-            RunDurationLimitExecutePostActions: RunDurationLimitExecutePostActions);
+            RunDurationLimitExecutePostActions: RunDurationLimitExecutePostActions,
+            YituliuOpenApiToken: (YituliuOpenApiToken ?? string.Empty).Trim(),
+            OperBoxUseYituliuApi: OperBoxUseYituliuApi);
     }
 
     private UiOperationResult ValidateStartPerformanceSnapshot(StartPerformanceSettingsSnapshot snapshot)
@@ -615,7 +618,15 @@ public sealed partial class SettingsPageViewModel
             RunDurationLimitExecutePostActions: ReadProfileBoolFlexible(
                 config,
                 ConfigurationKeys.RunDurationLimitExecutePostActions,
-                true));
+                true),
+            YituliuOpenApiToken: ReadProfileString(
+                config,
+                ThirdPartySettingKeys.YituliuOpenApiToken,
+                string.Empty).Trim(),
+            OperBoxUseYituliuApi: ReadProfileBoolFlexible(
+                config,
+                ThirdPartySettingKeys.OperBoxUseYituliuApi,
+                false));
     }
 
     private static bool HasExplicitStartPerformanceConfigValues(
@@ -809,6 +820,8 @@ public sealed partial class SettingsPageViewModel
             EnableRunDurationLimit = snapshot.EnableRunDurationLimit;
             RunDurationLimitMinutes = snapshot.RunDurationLimitMinutes;
             RunDurationLimitExecutePostActions = snapshot.RunDurationLimitExecutePostActions;
+            YituliuOpenApiToken = snapshot.YituliuOpenApiToken;
+            OperBoxUseYituliuApi = snapshot.OperBoxUseYituliuApi;
         }
         finally
         {

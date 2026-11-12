@@ -1839,6 +1839,9 @@
   <data name="Settings.Action.SaveStartPerformance" xml:space="preserve">
     <value>起動/パフォーマンスを保存</value>
   </data>
+  <data name="Settings.Action.SaveThirdParty" xml:space="preserve">
+    <value>サードパーティサービス設定を保存</value>
+  </data>
   <data name="Settings.Action.SaveTimer" xml:space="preserve">
     <value>スケジュール設定を保存</value>
   </data>
@@ -2718,6 +2721,9 @@ DEBUGディレクトリに保存される画像には数量制限があり、超
   <data name="Settings.Section.Start" xml:space="preserve">
     <value>起動設定</value>
   </data>
+  <data name="Settings.Section.ThirdParty" xml:space="preserve">
+    <value>サードパーティサービス</value>
+  </data>
   <data name="Settings.Section.Timer" xml:space="preserve">
     <value>スケジュール</value>
   </data>
@@ -2855,6 +2861,27 @@ DEBUGディレクトリに保存される画像には数量制限があり、超
   </data>
   <data name="Settings.State.Saving" xml:space="preserve">
     <value>保存中...</value>
+  </data>
+  <data name="Settings.ThirdParty.OpenApiTip" xml:space="preserve">
+    <value>先に一図流でアカウントを連携し、オペレーターの練度データをインポートしてください。識別はデータを読み取るだけで、アカウントを変更しません。</value>
+  </data>
+  <data name="Settings.ThirdParty.OpenApiTitle" xml:space="preserve">
+    <value>一図流 OpenAPI</value>
+  </data>
+  <data name="Settings.ThirdParty.OpenApiToken" xml:space="preserve">
+    <value>OpenAPI トークン</value>
+  </data>
+  <data name="Settings.ThirdParty.OperBoxUseYituliuApi" xml:space="preserve">
+    <value>オペレーター識別のデータソースを一図流 OpenAPI に変更</value>
+  </data>
+  <data name="Settings.ThirdParty.PenguinId" xml:space="preserve">
+    <value>ペンギン急便 ID</value>
+  </data>
+  <data name="Settings.ThirdParty.ReportToPenguin" xml:space="preserve">
+    <value>ペンギン急便へアップロード</value>
+  </data>
+  <data name="Settings.ThirdParty.ReportToYituliu" xml:space="preserve">
+    <value>一図流へアップロード</value>
   </data>
   <data name="Settings.Timer.CustomConfig" xml:space="preserve">
     <value>カスタム構成オプション</value>
@@ -3723,6 +3750,24 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="Toolbox.Error.ToolboxBusy" xml:space="preserve">
     <value>Toolbox で既にタスクが実行中です。先に停止してください。</value>
   </data>
+  <data name="Toolbox.Error.YituliuFetchFailed" xml:space="preserve">
+    <value>一図流からオペレーターデータを取得できませんでした：{0}</value>
+  </data>
+  <data name="Toolbox.Error.YituliuNetworkError" xml:space="preserve">
+    <value>リクエストに失敗しました。ネットワーク接続を確認してください。</value>
+  </data>
+  <data name="Toolbox.Error.YituliuNoData" xml:space="preserve">
+    <value>一図流がオペレーターデータを返しませんでした。ローカルのオペレーター識別データを保持します。</value>
+  </data>
+  <data name="Toolbox.Error.YituliuTokenEmpty" xml:space="preserve">
+    <value>一図流のオペレーター識別には ｢設定 - サードパーティサービス｣ で OpenAPI トークンを入力してください。</value>
+  </data>
+  <data name="Toolbox.Error.YituliuTokenInvalid" xml:space="preserve">
+    <value>トークンが無効か期限切れです。</value>
+  </data>
+  <data name="Toolbox.Error.YituliuTokenWriteOnly" xml:space="preserve">
+    <value>トークンに書き込み権限しかありません。</value>
+  </data>
   <data name="Toolbox.BusyDialog.CloseButton" xml:space="preserve">
     <value>了解</value>
   </data>
@@ -3837,6 +3882,45 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="Toolbox.OperBox.CopyToClipboard" xml:space="preserve">
     <value>クリップボードにコピー</value>
   </data>
+  <data name="Toolbox.OperBox.Export.Csv" xml:space="preserve">
+    <value>CSV 出力</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Elite" xml:space="preserve">
+    <value>昇進段階</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Id" xml:space="preserve">
+    <value>オペレーター ID</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Level" xml:space="preserve">
+    <value>レベル</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Name" xml:space="preserve">
+    <value>オペレーター</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Own" xml:space="preserve">
+    <value>所持</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Potential" xml:space="preserve">
+    <value>潜在能力</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Header.Rarity" xml:space="preserve">
+    <value>レアリティ</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Json" xml:space="preserve">
+    <value>JSON 出力</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Markdown" xml:space="preserve">
+    <value>Markdown 出力</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.No" xml:space="preserve">
+    <value>いいえ</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.ToFile" xml:space="preserve">
+    <value>ファイルに出力</value>
+  </data>
+  <data name="Toolbox.OperBox.Export.Yes" xml:space="preserve">
+    <value>はい</value>
+  </data>
   <data name="Toolbox.OperBox.Header.NotOwned" xml:space="preserve">
     <value>未所持 ({0})</value>
   </data>
@@ -3899,6 +3983,18 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="Toolbox.Status.CurrentToolStopped" xml:space="preserve">
     <value>現在のツールを停止しました。</value>
+  </data>
+  <data name="Toolbox.Status.DepotRecognitionEmptyResult" xml:space="preserve">
+    <value>アイテムを認識できなかったため、前回の倉庫データを保持しました</value>
+  </data>
+  <data name="Toolbox.Status.ExportedToFile" xml:space="preserve">
+    <value>ファイルに出力しました</value>
+  </data>
+  <data name="Toolbox.Status.ExportedToFileWithName" xml:space="preserve">
+    <value>{0} に出力しました</value>
+  </data>
+  <data name="Toolbox.Status.FetchingFromYituliu" xml:space="preserve">
+    <value>一図流からオペレーターデータを取得しています...</value>
   </data>
   <data name="Toolbox.Status.ManuallyStopped" xml:space="preserve">
     <value>手動で停止しました。</value>

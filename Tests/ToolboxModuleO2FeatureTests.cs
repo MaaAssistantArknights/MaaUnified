@@ -441,7 +441,7 @@ public sealed class ToolboxModuleO2FeatureTests
     }
 
     [Fact]
-    public async Task StartDepotAsync_ShouldClearPreviousResultsBeforeRecognition()
+    public async Task StartDepotAsync_ShouldKeepPreviousResultsUntilNewResultArrives()
     {
         var globalSeeds = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -453,17 +453,15 @@ public sealed class ToolboxModuleO2FeatureTests
         await vm.InitializeAsync();
         Assert.Single(vm.DepotResult);
 
-        var changed = new List<string?>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
-
         await vm.StartDepotAsync();
 
-        Assert.Empty(vm.DepotResult);
-        Assert.False(vm.HasDepotResult);
-        Assert.DoesNotContain("2001", vm.ArkPlannerResult, StringComparison.Ordinal);
-        Assert.DoesNotContain("2001", vm.LoliconResult, StringComparison.Ordinal);
-        Assert.Contains(nameof(ToolboxPageViewModel.ArkPlannerResult), changed);
-        Assert.Contains(nameof(ToolboxPageViewModel.LoliconResult), changed);
+        // WPF parity (0302381585): starting a recognition must not wipe the cached inventory.
+        // The list is only replaced after a non-empty result arrives, so export payloads keep
+        // showing the last known depot while the run is in progress.
+        Assert.Single(vm.DepotResult);
+        Assert.True(vm.HasDepotResult);
+        Assert.Contains("2001", vm.ArkPlannerResult, StringComparison.Ordinal);
+        Assert.Contains("2001", vm.LoliconResult, StringComparison.Ordinal);
         Assert.Equal(ToolboxExecutionState.Executing, vm.ExecutionState);
         Assert.Equal("Depot", Assert.Single(fixture.Bridge.AppendedTasks).Type);
     }

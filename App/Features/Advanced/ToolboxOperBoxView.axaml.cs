@@ -1,7 +1,10 @@
+using System.IO;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using MAAUnified.App.Controls;
 using MAAUnified.App.ViewModels.Toolbox;
@@ -99,8 +102,55 @@ public partial class ToolboxOperBoxView : UserControl
             return;
         }
 
-        await CopyTextAsync(VM.OperBoxExportText);
-        VM.NotifyOperBoxExportCopied();
+        var content = VM.OperBoxExportText;
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return;
+        }
+
+        if (!VM.IsOperBoxExportFileFormat)
+        {
+            await CopyTextAsync(content);
+            VM.NotifyOperBoxExportCopied();
+            return;
+        }
+
+        // WPF parity (131f2d248d, ExportOperBoxToFile): the file formats go through a save
+        // dialog and are written as UTF-8 with BOM so spreadsheet tools detect the encoding.
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel?.StorageProvider is null)
+        {
+            return;
+        }
+
+        var suggestedName = VM.OperBoxExportSuggestedFileName;
+        var extension = Path.GetExtension(suggestedName);
+        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            SuggestedFileName = suggestedName,
+            DefaultExtension = extension.TrimStart('.'),
+            FileTypeChoices =
+            [
+                new FilePickerFileType(extension.TrimStart('.').ToUpperInvariant())
+                {
+                    Patterns = ["*" + extension],
+                },
+            ],
+            ShowOverwritePrompt = true,
+        });
+        if (file is null)
+        {
+            return;
+        }
+
+        await using (var stream = await file.OpenWriteAsync())
+        await using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true)))
+        {
+            await writer.WriteAsync(content);
+            await writer.FlushAsync();
+        }
+
+        VM.NotifyOperBoxExportSaved(file.Name);
     }
 
     private async Task CopyTextAsync(string text)

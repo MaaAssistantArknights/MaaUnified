@@ -113,6 +113,7 @@ public sealed partial class CopilotPageViewModel
     private string _displayFilename = string.Empty;
     private bool _useFormation;
     private int _formationIndex = 1;
+    private string _operBoxDataPath = string.Empty;
     private int _supportUnitUsage = 1;
     private bool _ignoreRequirements;
     private bool _addUserAdditional;
@@ -350,6 +351,17 @@ public sealed partial class CopilotPageViewModel
                 OnPropertyChanged(nameof(SelectedFormationOption));
             }
         }
+    }
+
+    /// <summary>
+    /// Gets or sets the operator-box data file handed to Core as <c>operbox_data_path</c>
+    /// (WPF 86e58bda95, AsstCopilotTask.OperBoxDataPath). Empty keeps automatic formation data
+    /// disabled; the assist settings/UI are tracked separately.
+    /// </summary>
+    public string OperBoxDataPath
+    {
+        get => _operBoxDataPath;
+        set => SetProperty(ref _operBoxDataPath, value?.Trim() ?? string.Empty);
     }
 
     public bool UseSupportUnitUsage
@@ -3064,6 +3076,16 @@ public sealed partial class CopilotPageViewModel
         return parsedItems;
     }
 
+    // WPF parity (86e58bda95, AsstCopilotTask.Serialize): the operator-box data file is only
+    // forwarded when a path is configured; Core treats an empty path as "disabled".
+    private void AppendOperBoxDataPath(JsonObject payload)
+    {
+        if (!string.IsNullOrWhiteSpace(_operBoxDataPath))
+        {
+            payload["operbox_data_path"] = _operBoxDataPath;
+        }
+    }
+
     private JsonArray BuildUserAdditionalPayload()
     {
         var result = new JsonArray();
@@ -3650,6 +3672,8 @@ public sealed partial class CopilotPageViewModel
             payload["formation_index"] = FormationIndex;
         }
 
+        AppendOperBoxDataPath(payload);
+
         var userAdditional = BuildUserAdditionalPayload();
         if (userAdditional.Count > 0)
         {
@@ -3723,6 +3747,8 @@ public sealed partial class CopilotPageViewModel
         {
             payload["formation_index"] = FormationIndex;
         }
+
+        AppendOperBoxDataPath(payload);
 
         var userAdditional = BuildUserAdditionalPayload();
         if (userAdditional.Count > 0)

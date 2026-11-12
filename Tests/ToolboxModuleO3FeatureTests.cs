@@ -409,7 +409,13 @@ public sealed class ToolboxModuleO3FeatureTests
     [Fact]
     public async Task ApplyRuntimeCallback_StageDrops_ShouldUpdateDepotAndPersistLegacyResult()
     {
-        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        // WPF parity (0302381585): drop increments require an inventory baseline; seed a zero
+        // count entry so the incremental update path is exercised instead of being skipped.
+        await using var fixture = await ToolboxTestFixture.CreateAsync(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [LegacyConfigurationKeys.DepotResult] = "{\"done\":true,\"data\":\"{\\\"2001\\\":0}\"}",
+            });
         var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
         await vm.InitializeAsync();
 
@@ -443,7 +449,12 @@ public sealed class ToolboxModuleO3FeatureTests
     [Fact]
     public async Task ApplyRuntimeCallback_StageDrops_ShouldRemainCompatibleWithFightTaskHints()
     {
-        await using var fixture = await ToolboxTestFixture.CreateAsync();
+        // WPF parity (0302381585): increments need a baseline before they are applied.
+        await using var fixture = await ToolboxTestFixture.CreateAsync(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [LegacyConfigurationKeys.DepotResult] = "{\"done\":true,\"data\":\"{\\\"3231\\\":0}\"}",
+            });
         var vm = new ToolboxPageViewModel(fixture.Runtime, fixture.ConnectionState);
         await vm.InitializeAsync();
 
@@ -533,7 +544,9 @@ public sealed class ToolboxModuleO3FeatureTests
         Assert.Contains("IsEnabled=\"{Binding CanStartRecruitRecognition}\"", recruitXaml, StringComparison.Ordinal);
 
         Assert.DoesNotContain("ExecutionReviewResultLabelText", operBoxXaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding OperBoxCopyToClipboardText}\"", operBoxXaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding OperBoxExportActionText}\"", operBoxXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding OperBoxExportFormatOptions}\"", operBoxXaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedItem=\"{Binding SelectedOperBoxExportFormatOption, Mode=TwoWay}\"", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("Content=\"{Binding OperBoxStartRecognitionText}\"", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding CanStartOperBoxRecognition}\"", operBoxXaml, StringComparison.Ordinal);
         Assert.Contains("Source=\"{Binding EliteIconImage}\"", operBoxXaml, StringComparison.Ordinal);

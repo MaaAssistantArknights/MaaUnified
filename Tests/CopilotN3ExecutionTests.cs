@@ -798,6 +798,66 @@ public sealed class CopilotN3ExecutionTests
     }
 
     [Fact]
+    public async Task StartAsync_SingleFile_ShouldForwardOperBoxDataPathWhenConfigured()
+    {
+        // WPF 对齐（86e58bda95 AsstCopilotTask.OperBoxDataPath）：配置了干员识别数据文件时
+        // 下发 operbox_data_path，供 Core 做辅助编队。
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = fixture.ViewModel;
+        vm.OperBoxDataPath = "  /data/OperBoxData.json  ";
+
+        await vm.LoadCurrentFromClipboardAsync("""{"stage_name":"1-7","opers":[]}""");
+        await vm.StartAsync();
+
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var payload = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.Equal("/data/OperBoxData.json", payload["operbox_data_path"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task StartAsync_ListTask_ShouldForwardOperBoxDataPathWhenConfigured()
+    {
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = fixture.ViewModel;
+        vm.UseCopilotList = true;
+        vm.OperBoxDataPath = "/data/OperBoxData.json";
+
+        var filePath = fixture.CreateCopilotFile();
+        await vm.LoadCurrentFromFileAsync(filePath);
+        await vm.AddCurrentToListAsync(isRaid: false);
+        await vm.StartAsync();
+
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var payload = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.Equal("/data/OperBoxData.json", payload["operbox_data_path"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task StartAsync_WithoutOperBoxDataPath_ShouldOmitParameter()
+    {
+        // Core 将空路径视为禁用（CopilotTask.cpp:80），因此未配置时不下发该字段。
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = fixture.ViewModel;
+        await vm.LoadCurrentFromClipboardAsync("""{"stage_name":"1-7","opers":[]}""");
+        await vm.StartAsync();
+
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var payload = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
+        Assert.False(payload.ContainsKey("operbox_data_path"));
+    }
+
     public async Task StartAsync_WhenUseCopilotListContainsLegacyItemWithoutTabIndex_ShouldNotReject_WpfParity()
     {
         // WPF dev-v2 d6601334f2：列表校验不再依赖 tab_index；旧条目（tab_index 缺失）按作业内容判定类型

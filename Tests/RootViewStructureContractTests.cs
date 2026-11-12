@@ -372,7 +372,7 @@ public sealed class RootViewStructureContractTests
         var sectionHostCount = System.Text.RegularExpressions.Regex.Matches(
             text,
             "<Border\\s+x:Name=\"Section[A-Za-z]+\"").Count;
-        Assert.Equal(15, sectionHostCount);
+        Assert.Equal(16, sectionHostCount);
 
         Assert.DoesNotContain("settingsViews:ConfigurationManagerView", text, StringComparison.Ordinal);
         Assert.DoesNotContain("settingsViews:AboutSettingsView", text, StringComparison.Ordinal);

@@ -364,10 +364,21 @@
           ColumnDefinitions="Auto,16,*"
           HorizontalAlignment="Center">
       <StackPanel Classes="toolbox-operbox-section toolbox-operbox-actions">
+        <controls:AppSelect Width="196"
+                            Classes="toolbox-operbox-export-format"
+                            IsEnabled="{Binding CanExportOperBox}"
+                            ItemsSource="{Binding OperBoxExportFormatOptions}"
+                            SelectedItem="{Binding SelectedOperBoxExportFormatOption, Mode=TwoWay}">
+          <controls:AppSelect.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </controls:AppSelect.ItemTemplate>
+        </controls:AppSelect>
         <Button Classes="app-button app-secondary toolbox-operbox-action"
                 IsEnabled="{Binding CanExportOperBox}"
                 Click="OnOperBoxExportClick">
-          <TextBlock Text="{Binding OperBoxCopyToClipboardText}"
+          <TextBlock Text="{Binding OperBoxExportActionText}"
                      TextAlignment="Center"
                      TextWrapping="Wrap" />
         </Button>

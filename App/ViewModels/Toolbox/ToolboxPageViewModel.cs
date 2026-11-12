@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Avalonia;
@@ -21,6 +22,7 @@ using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Services;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.ThirdParty;
 using MAAUnified.CoreBridge;
 using LegacyConfigurationKeys = MAAUnified.Compat.Constants.ConfigurationKeys;
 
@@ -36,6 +38,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private const string ToolboxLegacyResultScope = "Toolbox.LegacyResult";
     private const string ToolboxGachaDisclaimerDialogScope = "Toolbox.Gacha.Disclaimer";
     private const string ToolboxBusyDialogScope = "Toolbox.Busy";
+    // WPF parity (131f2d248d): the operator-box export format lives in the same global
+    // ConfigurationKeys.OperBoxSelectedExportValue slot the WPF UI writes (0..3), so an
+    // existing gui.json keeps selecting the same export action here.
+    private const string OperBoxExportFormatKey = "OperBox.SelectedExportValue";
     private const string MiniGameSecretFrontTaskName = "MiniGame@SecretFront";
     private const string RecruitTaskChain = "Recruit";
     private const string DepotTaskChain = "Depot";
@@ -85,15 +91,16 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         "E",
     };
 
+    // WPF parity (1dda1ec985, ToolboxViewModel._excludedItemIds): only furniture, carbon and
+    // EXP are excluded from the drop-increment path. Base materials — 源石/合成玉/龙门币/赤金/
+    // 采购凭证 — must accumulate here too, otherwise recognition shows them but drops never
+    // update their counts. Recognition output itself is not filtered, matching WPF DepotParse.
     private static readonly HashSet<string> ExcludedDepotItemIds =
     [
         "3401",
         "3112",
         "3113",
         "3114",
-        "4001",
-        "4003",
-        "4006",
         "5001",
     ];
 
@@ -120,6 +127,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         nameof(DepotStartRecognitionText),
         nameof(RecruitPotentialTip),
         nameof(OperBoxCopyToClipboardText),
+        nameof(OperBoxExportActionText),
         nameof(OperBoxTipText),
         nameof(OperBoxNotHaveHeader),
         nameof(OperBoxHaveHeader),
@@ -173,6 +181,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private readonly Dictionary<string, ToolboxOwnedOperatorState> _operBoxOwnedById = new(StringComparer.Ordinal);
     private bool _operBoxListsMaterialized;
     private bool _hasOperBoxRecognitionData;
+    private string _operBoxDataSource = "local";
     private bool _loadingBridgeSettings;
     private ToolboxToolKind? _activeTool;
     private IDisposable? _toolActivityLease;
@@ -237,6 +246,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private string _miniGameSecretFrontEvent = string.Empty;
     private string _miniGameTip = string.Empty;
     private readonly List<ToolboxNamedOption> _miniGameSecretFrontEventOptions = [];
+    private readonly List<ToolboxNamedOption> _operBoxExportFormatOptions = [];
+    private int _operBoxExportFormatValue;
 
     public ToolboxPageViewModel(
         MAAUnifiedRuntime runtime,
@@ -287,6 +298,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         DepotGroups = new BatchedObservableCollection<DepotItemGroupViewModel>();
         MiniGameTaskList = new ObservableCollection<ToolboxMiniGameEntry>();
         RebuildMiniGameSecretFrontEventOptions();
+        RebuildOperBoxExportFormatOptions();
         MiniGameSecretFrontEndingOptions =
         [
             "A",
@@ -368,6 +380,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     public string DepotStartRecognitionText => ResolveRecognitionActionText(ToolboxToolKind.Depot);
 
     public string OperBoxCopyToClipboardText => T("Toolbox.OperBox.CopyToClipboard", "Copy to clipboard");
+
+    public string OperBoxExportActionText => IsOperBoxExportFileFormat
+        ? T("Toolbox.OperBox.Export.ToFile", "Export to file")
+        : OperBoxCopyToClipboardText;
 
     public string DepotExportArkPlannerText => T("Toolbox.Depot.ExportArkPlanner", "Export to Penguin Stats planner");
 
@@ -1163,7 +1179,67 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             : T("Toolbox.Action.Running", "Running...")
         : T("Toolbox.Action.LinkStart", "Link Start!");
 
+    // WPF parity (131f2d248d, ToolboxViewModel.OperBoxExportOptionList): clipboard, JSON file,
+    // Markdown file and CSV file; values mirror the persisted WPF ints.
+    public IReadOnlyList<ToolboxNamedOption> OperBoxExportFormatOptions => _operBoxExportFormatOptions;
+
+    public ToolboxNamedOption? SelectedOperBoxExportFormatOption
+    {
+        get => _operBoxExportFormatOptions.FirstOrDefault(
+                   option => string.Equals(
+                       option.Value,
+                       _operBoxExportFormatValue.ToString(CultureInfo.InvariantCulture),
+                       StringComparison.Ordinal))
+               ?? _operBoxExportFormatOptions.FirstOrDefault();
+        set
+        {
+            if (value is null
+                || !int.TryParse(value.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                || parsed == _operBoxExportFormatValue)
+            {
+                return;
+            }
+
+            _operBoxExportFormatValue = Math.Clamp(parsed, 0, 3);
+            OnPropertyChanged(nameof(SelectedOperBoxExportFormatOption));
+            OnPropertyChanged(nameof(IsOperBoxExportFileFormat));
+            OnPropertyChanged(nameof(OperBoxExportSuggestedFileName));
+            OnPropertyChanged(nameof(OperBoxExportActionText));
+            OnPropertyChanged(nameof(OperBoxExportText));
+            PersistBridgeSettingsIfNotLoading(ToolboxToolKind.OperBox);
+        }
+    }
+
+    public int OperBoxExportFormatValue => _operBoxExportFormatValue;
+
+    /// <summary>
+    /// Gets a value indicating whether the selected export format writes a file instead of the
+    /// clipboard (WPF: JSON/Markdown/CSV open a save dialog, clipboard copies JSON).
+    /// </summary>
+    public bool IsOperBoxExportFileFormat => _operBoxExportFormatValue != 0;
+
+    public string OperBoxExportSuggestedFileName => _operBoxExportFormatValue switch
+    {
+        2 => "Arknights_OperBox_Export.md",
+        3 => "Arknights_OperBox_Export.csv",
+        _ => "Arknights_OperBox_Export.json",
+    };
+
+    /// <summary>
+    /// Gets the text exported through the current format. The clipboard action copies this
+    /// value; file actions write it as UTF-8 with BOM like WPF ExportOperBoxToFile.
+    /// </summary>
     public string OperBoxExportText => BuildOperBoxExportText();
+
+    public void NotifyOperBoxExportSaved(string? fileName)
+    {
+        OperBoxInfo = string.IsNullOrWhiteSpace(fileName)
+            ? T("Toolbox.Status.ExportedToFile", "Exported to file")
+            : string.Format(
+                CultureInfo.InvariantCulture,
+                T("Toolbox.Status.ExportedToFileWithName", "Exported to {0}"),
+                fileName);
+    }
 
     public string ArkPlannerResult => BuildArkPlannerExportText();
 
@@ -1345,6 +1421,15 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     public async Task StartOperBoxAsync(CancellationToken cancellationToken = default)
     {
+        // WPF parity (247db567f3, ToolboxViewModel.StartOperBox): when the third-party section
+        // enables the yituliu OpenAPI the toolbox reads progression data over HTTP instead of
+        // connecting to the emulator and running core recognition.
+        if (IsOperBoxYituliuApiEnabled())
+        {
+            await StartOperBoxFromYituliuAsync(cancellationToken);
+            return;
+        }
+
         var request = new ToolboxDispatchRequest(
             ToolboxToolKind.OperBox,
             ParameterSummary: BuildCurrentParameterText(ToolboxToolKind.OperBox));
@@ -1354,6 +1439,262 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             PrepareOperBoxForStart,
             cancellationToken,
             transitionBeforeConnect: true);
+    }
+
+    private bool IsOperBoxYituliuApiEnabled()
+        => ReadProfileBoolSetting(ThirdPartySettingKeys.OperBoxUseYituliuApi, false);
+
+    private string ReadOperBoxYituliuToken()
+        => ReadProfileStringSetting(ThirdPartySettingKeys.YituliuOpenApiToken, string.Empty).Trim();
+
+    private async Task StartOperBoxFromYituliuAsync(CancellationToken cancellationToken)
+    {
+        var token = ReadOperBoxYituliuToken();
+        if (string.IsNullOrEmpty(token))
+        {
+            // WPF 247db567f3: an enabled switch without a token must stop instead of silently
+            // falling back to local recognition (the user explicitly chose the API source).
+            OperBoxInfo = T(
+                "Toolbox.Error.YituliuTokenEmpty",
+                "Enable of the yituliu operator source requires an OpenAPI token in Settings - Third-party services.");
+            Runtime.LogService.Warn("Toolbox operator recognition is set to the yituliu OpenAPI but no token is configured.");
+            return;
+        }
+
+        if (IsToolboxBusy)
+        {
+            await ApplyToolboxBusyAsync(
+                ToolboxToolKind.OperBox,
+                UiOperationResult.Fail(
+                    UiErrorCode.ToolboxExecutionFailed,
+                    T("Toolbox.Error.ToolboxBusy", "Toolbox already has a running task. Stop it first.")),
+                cancellationToken);
+            return;
+        }
+
+        IDisposable? sessionActivityLease = null;
+        if (_connectionState is not null)
+        {
+            sessionActivityLease = _connectionState.TryBeginSessionOperation(
+                "Toolbox.OperBox.Yituliu",
+                requireIdle: true);
+            if (sessionActivityLease is null)
+            {
+                await ApplyFailureAsync(
+                    ToolboxToolKind.OperBox,
+                    UiOperationResult.Fail(
+                        UiErrorCode.OperationAlreadyRunning,
+                        BuildSessionActivityBlockedMessage()),
+                    "session-activity",
+                    cancellationToken);
+                return;
+            }
+
+            if (Interlocked.CompareExchange(ref _toolActivityLease, sessionActivityLease, null) is not null)
+            {
+                sessionActivityLease.Dispose();
+                await ApplyFailureAsync(
+                    ToolboxToolKind.OperBox,
+                    UiOperationResult.Fail(
+                        UiErrorCode.OperationAlreadyRunning,
+                        BuildSessionActivityBlockedMessage()),
+                    "session-activity",
+                    cancellationToken);
+                return;
+            }
+        }
+
+        if (!Runtime.SessionService.TryBeginRun(
+                ToolboxRunOwner,
+                GetToolDisplayName(ToolboxToolKind.OperBox),
+                out var currentOwner))
+        {
+            ReleaseToolActivity();
+            await ApplyToolboxBusyAsync(
+                ToolboxToolKind.OperBox,
+                UiOperationResult.Fail(
+                    UiErrorCode.ToolboxExecutionFailed,
+                    string.Format(
+                        CultureInfo.InvariantCulture,
+                        T("Toolbox.Error.OwnerRunning", "`{0}` is already running."),
+                        currentOwner)),
+                cancellationToken);
+            return;
+        }
+
+        var parameterSummary = BuildCurrentParameterText(ToolboxToolKind.OperBox);
+        await PersistBridgeSettingsForToolAsync(ToolboxToolKind.OperBox, cancellationToken);
+        TransitionToExecuting(ToolboxToolKind.OperBox, parameterSummary);
+        OperBoxInfo = T(
+            "Toolbox.Status.FetchingFromYituliu",
+            "Fetching operator data from the yituliu OpenAPI...");
+
+        YituliuOperatorInfoResult result;
+        try
+        {
+            result = await Runtime.YituliuOpenApiService.GetOperatorInfoAsync(token, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            CompleteActiveToolRun(
+                ToolboxToolKind.OperBox,
+                success: false,
+                T("Toolbox.Error.ToolExecutionCancelled", "Tool execution cancelled."),
+                UiErrorCode.ToolboxExecutionCancelled);
+            return;
+        }
+        catch (Exception ex)
+        {
+            result = YituliuOperatorInfoResult.Failure(YituliuTokenValidationResult.NetworkError, ex.Message);
+        }
+
+        if (result.Result != YituliuTokenValidationResult.Valid)
+        {
+            var message = string.Format(
+                CultureInfo.InvariantCulture,
+                T("Toolbox.Error.YituliuFetchFailed", "Failed to fetch operator data from the yituliu OpenAPI: {0}"),
+                ResolveYituliuFailureText(result.Result));
+            OperBoxInfo = message;
+            Runtime.LogService.Warn($"Toolbox yituliu operator fetch failed: {result.Result}; {result.Message}");
+            CompleteActiveToolRun(
+                ToolboxToolKind.OperBox,
+                success: false,
+                message,
+                UiErrorCode.ToolboxExecutionFailed);
+            return;
+        }
+
+        if (result.Operators.Count == 0)
+        {
+            // WPF 247db567f3: an empty list means the account has no imported progression (or all
+            // entries were skipped). Keep the local operator-box data and sync time untouched.
+            var message = T(
+                "Toolbox.Error.YituliuNoData",
+                "The yituliu OpenAPI returned no operator data. Local operator-box data has been kept.");
+            OperBoxInfo = message;
+            Runtime.LogService.Warn("Toolbox yituliu operator fetch returned no operators; keeping local operator-box data.");
+            CompleteActiveToolRun(
+                ToolboxToolKind.OperBox,
+                success: false,
+                message,
+                UiErrorCode.ToolboxExecutionFailed);
+            return;
+        }
+
+        // Only a successful, non-empty fetch replaces the local data.
+        PrepareOperBoxForStart();
+        ApplyOperBoxRecognition(ConvertYituliuOperatorsToDetails(result.Operators));
+        CompleteActiveToolRun(
+            ToolboxToolKind.OperBox,
+            success: true,
+            T("Toolbox.Status.RecognitionCompleted", "Recognition completed."));
+    }
+
+    private string ResolveYituliuFailureText(YituliuTokenValidationResult result)
+    {
+        return result switch
+        {
+            YituliuTokenValidationResult.WriteOnly => T(
+                "Toolbox.Error.YituliuTokenWriteOnly",
+                "the token only has write permission."),
+            YituliuTokenValidationResult.Invalid => T(
+                "Toolbox.Error.YituliuTokenInvalid",
+                "the token is invalid or expired."),
+            _ => T(
+                "Toolbox.Error.YituliuNetworkError",
+                "the request failed, check the network connection."),
+        };
+    }
+
+    private JsonObject ConvertYituliuOperatorsToDetails(IReadOnlyList<YituliuOperatorInfo> operators)
+    {
+        var operatorsById = ToolboxAssetCatalog.GetOperators();
+        var ownOpers = new JsonArray();
+        foreach (var oper in operators)
+        {
+            if (string.IsNullOrWhiteSpace(oper.Id))
+            {
+                continue;
+            }
+
+            var entry = new JsonObject
+            {
+                ["id"] = oper.Id,
+                ["own"] = true,
+                ["elite"] = oper.EvolvePhase,
+                ["level"] = oper.Level,
+                ["potential"] = oper.PotentialRank,
+                ["mainSkillLevel"] = oper.MainSkillLevel,
+            };
+            if (operatorsById.TryGetValue(oper.Id, out var asset))
+            {
+                entry["rarity"] = asset.Rarity;
+                entry["name"] = asset.Name;
+            }
+
+            if (oper.Skills.Count > 0)
+            {
+                entry["skills"] = new JsonArray(oper.Skills
+                    .Select(skill => (JsonNode)new JsonObject
+                    {
+                        ["id"] = skill.Id,
+                        ["level"] = skill.Level,
+                    })
+                    .ToArray());
+            }
+
+            if (oper.Equips.Count > 0)
+            {
+                entry["equips"] = new JsonArray(oper.Equips
+                    .Select(equip => (JsonNode)new JsonObject
+                    {
+                        ["id"] = equip.Id,
+                        ["type"] = equip.Type,
+                        ["level"] = equip.Level,
+                    })
+                    .ToArray());
+            }
+
+            ownOpers.Add(entry);
+        }
+
+        return new JsonObject
+        {
+            ["done"] = true,
+            ["source"] = "yituliu",
+            ["own_opers"] = ownOpers,
+        };
+    }
+
+    private bool ReadProfileBoolSetting(string key, bool fallback)
+    {
+        if (!Runtime.ConfigurationService.TryGetCurrentProfile(out var profile)
+            || !profile.Values.TryGetValue(key, out var node)
+            || node is null)
+        {
+            return fallback;
+        }
+
+        var normalized = NormalizeToken(node.ToString());
+        if (bool.TryParse(normalized, out var parsed))
+        {
+            return parsed;
+        }
+
+        return int.TryParse(normalized, out var number) ? number != 0 : fallback;
+    }
+
+    private string ReadProfileStringSetting(string key, string fallback)
+    {
+        if (!Runtime.ConfigurationService.TryGetCurrentProfile(out var profile)
+            || !profile.Values.TryGetValue(key, out var node)
+            || node is null)
+        {
+            return fallback;
+        }
+
+        var normalized = NormalizeToken(node.ToString());
+        return string.IsNullOrWhiteSpace(normalized) ? fallback : normalized;
     }
 
     public async Task StartDepotAsync(CancellationToken cancellationToken = default)
@@ -1878,6 +2219,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         OperBoxNotHaveGroups.Clear();
         _operBoxListsMaterialized = false;
         _hasOperBoxRecognitionData = false;
+        _operBoxDataSource = "local";
         OperBoxSelectedIndex = 1;
         LastOperBoxSyncTime = null;
         OnPropertyChanged(nameof(CanExportOperBox));
@@ -1885,13 +2227,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
     private void PrepareDepotForStart()
     {
+        // WPF parity (0302381585): starting a recognition no longer clears the cached inventory.
+        // The list is only replaced once a non-empty result arrives, so a failed run keeps
+        // showing the last known depot instead of an empty panel.
         DepotInfo = T("Toolbox.Status.Recognizing", "Recognizing...");
-        ClearDepotRecognitionResults();
-    }
-
-    private void ClearDepotRecognitionResults()
-    {
-        ReplaceCollectionItems(DepotResult, Array.Empty<DepotItemViewModel>());
     }
 
     private void PrepareGachaForStart()
@@ -2330,6 +2669,8 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     private void RefreshLocalizedCollections()
     {
         RebuildMiniGameSecretFrontEventOptions();
+        RebuildOperBoxExportFormatOptions();
+        OnPropertyChanged(nameof(OperBoxExportText));
         if (_operBoxListsMaterialized)
         {
             RebuildOperBoxLists();
@@ -2434,8 +2775,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
         if (string.Equals(taskChain, DepotTaskChain, StringComparison.OrdinalIgnoreCase))
         {
+            // Keep the previous sync time until a non-empty result arrives (WPF
+            // _pendingDepotSyncTimeResetTaskIds only resets on a successful parse), so an empty
+            // recognition run does not make the last sync look like it never happened.
             PrepareDepotForStart();
-            LastDepotSyncTime = null;
         }
     }
 
@@ -2673,6 +3016,14 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
         var operators = ToolboxAssetCatalog.GetOperators();
         var language = _currentLanguage;
+        // WPF 247db567f3: the payload source decides whether the yituliu-only fields are
+        // meaningful. Core recognition never sets it, so an absent source stays "local".
+        _operBoxDataSource = string.Equals(
+            ReadString(details, "source"),
+            "yituliu",
+            StringComparison.OrdinalIgnoreCase)
+            ? "yituliu"
+            : "local";
 
         foreach (var node in ownOpers)
         {
@@ -2692,6 +3043,9 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             var level = ReadInt(oper, "level");
             var potential = ReadInt(oper, "potential");
             var name = ReadString(oper, "name");
+            var mainSkillLevel = ReadInt(oper, "mainSkillLevel");
+            var skills = ParseOperBoxSkills(oper["skills"]);
+            var equips = ParseOperBoxEquips(oper["equips"]);
 
             if (operators.TryGetValue(id, out var asset))
             {
@@ -2704,7 +3058,16 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 _ = Runtime.AchievementTrackerService.Unlock("WarehouseKeeper");
             }
 
-            _operBoxOwnedById[id] = new ToolboxOwnedOperatorState(id, name, rarity, elite, level, potential);
+            _operBoxOwnedById[id] = new ToolboxOwnedOperatorState(
+                id,
+                name,
+                rarity,
+                elite,
+                level,
+                potential,
+                mainSkillLevel,
+                skills,
+                equips);
             _operBoxPotential[id] = potential;
         }
 
@@ -2805,9 +3168,70 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         OperBoxSelectedIndex = OperBoxNotHaveList.Count > 0 ? 0 : 1;
     }
 
+    private static IReadOnlyList<PersistedOperBoxSkill>? ParseOperBoxSkills(JsonNode? node)
+    {
+        if (node is not JsonArray array)
+        {
+            return null;
+        }
+
+        var skills = array
+            .OfType<JsonObject>()
+            .Select(skill => new PersistedOperBoxSkill(ReadString(skill, "id"), ReadInt(skill, "level")))
+            .Where(skill => !string.IsNullOrWhiteSpace(skill.Id))
+            .ToArray();
+        return skills.Length == 0 ? null : skills;
+    }
+
+    private static IReadOnlyList<PersistedOperBoxEquip>? ParseOperBoxEquips(JsonNode? node)
+    {
+        if (node is not JsonArray array)
+        {
+            return null;
+        }
+
+        var equips = array
+            .OfType<JsonObject>()
+            .Select(equip => new PersistedOperBoxEquip(
+                ReadString(equip, "id"),
+                ReadString(equip, "type"),
+                ReadInt(equip, "level")))
+            .Where(equip => !string.IsNullOrWhiteSpace(equip.Id))
+            .ToArray();
+        return equips.Length == 0 ? null : equips;
+    }
+
+    private static IReadOnlyList<PersistedOperBoxSkill>? FilterOperBoxSkills(IReadOnlyList<PersistedOperBoxSkill>? skills)
+    {
+        return skills is { Count: > 0 }
+            ? skills.Where(skill => !string.IsNullOrWhiteSpace(skill.Id)).ToArray()
+            : null;
+    }
+
+    private static IReadOnlyList<PersistedOperBoxEquip>? FilterOperBoxEquips(IReadOnlyList<PersistedOperBoxEquip>? equips)
+    {
+        return equips is { Count: > 0 }
+            ? equips.Where(equip => !string.IsNullOrWhiteSpace(equip.Id)).ToArray()
+            : null;
+    }
+
     private void ApplyDepotRecognition(JsonObject details, bool updateSyncTime)
     {
         var counts = ParseDepotCounts(details);
+        if (counts.Count == 0 && updateSyncTime)
+        {
+            // WPF parity (0302381585, ToolboxViewModel.DepotParse): an empty result from a real
+            // recognition run means the flow failed (for example the game was left on another
+            // screen). A successful recognition always contains base items, so keep the existing
+            // inventory and sync time untouched instead of persisting an empty cache that would
+            // later be treated as "0 in stock" by the fight task.
+            Runtime.LogService.Warn("Depot recognition returned no items; keeping the existing depot cache.");
+            DepotInfo = T(
+                "Toolbox.Status.DepotRecognitionEmptyResult",
+                "No items were recognized. The previous depot data has been kept.");
+            return;
+        }
+
         var itemNames = ToolboxAssetCatalog.GetItemNames(_currentLanguage);
         var itemAssets = ToolboxAssetCatalog.GetItemAssets(_currentLanguage);
         var items = new List<DepotItemViewModel>(counts.Count);
@@ -2895,9 +3319,20 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         return result;
     }
 
+    private bool HasDepotBaseline() => DepotResult.Any(item => item.Count >= 0);
+
     private void UpdateDepotFromDrops(JsonObject details)
     {
         if (details["stats"] is not JsonArray stats)
+        {
+            return;
+        }
+
+        // WPF parity (0302381585, ToolboxViewModel.UpdateDepotFromDrops): with no inventory
+        // baseline, incrementing drops produces a fabricated partial inventory (and creates
+        // entries for items that were never recognized). Stay empty so consumers keep treating
+        // the depot as "no data".
+        if (!HasDepotBaseline())
         {
             return;
         }
@@ -3917,6 +4352,9 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             case ToolboxToolKind.Gacha:
                 updates[LegacyConfigurationKeys.GachaShowDisclaimerNoMore] = GachaShowDisclaimerNoMore.ToString();
                 break;
+            case ToolboxToolKind.OperBox:
+                updates[OperBoxExportFormatKey] = _operBoxExportFormatValue.ToString(CultureInfo.InvariantCulture);
+                break;
             case ToolboxToolKind.VideoRecognition:
                 updates[LegacyConfigurationKeys.PeepTargetFps] = PeepTargetFps.ToString(CultureInfo.InvariantCulture);
                 break;
@@ -4030,35 +4468,105 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             cancellationToken);
     }
 
+    /// <summary>
+    /// Gets the WPF-compatible operator-box data file path (DataDir/OperBoxData.json), the same
+    /// file Core reads through the Copilot <c>operbox_data_path</c> parameter.
+    /// </summary>
+    public string OperBoxDataFilePath => Path.Combine(
+        Runtime.ConfigurationService.BaseDirectory,
+        "data",
+        "OperBoxData.json");
+
+    private void WriteOperBoxDataFile(string payloadJson)
+    {
+        try
+        {
+            var path = OperBoxDataFilePath;
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.WriteAllText(path, payloadJson, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        }
+        catch (Exception ex)
+        {
+            // The settings cache is still saved below; a read-only install must not fail the run.
+            Runtime.LogService.Warn($"Failed to write the operator-box data file: {ex.Message}");
+        }
+    }
+
     private async Task PersistOperBoxAsync(CancellationToken cancellationToken)
     {
-        var ownOpers = _operBoxOwnedById.Values
-            .OrderByDescending(item => item.Rarity)
-            .ThenBy(item => item.Id, StringComparer.Ordinal)
-            .Select(item => new PersistedOperBoxOperator(
-                item.Id,
-                item.Name,
-                item.Rarity,
-                item.Elite,
-                item.Level,
-                true,
-                item.Potential))
-            .ToArray();
+        var ownOpers = new JsonArray();
+        foreach (var item in _operBoxOwnedById.Values
+                     .OrderByDescending(item => item.Rarity)
+                     .ThenBy(item => item.Id, StringComparer.Ordinal))
+        {
+            // Lower-case keys follow WPF OperBoxData.OperData (247db567f3), so the payload stays
+            // readable by the WPF side and by the Copilot operator-box assist file format.
+            var entry = new JsonObject
+            {
+                ["id"] = item.Id,
+                ["name"] = item.Name,
+                ["rarity"] = item.Rarity,
+                ["elite"] = item.Elite,
+                ["level"] = item.Level,
+                ["own"] = true,
+                ["potential"] = item.Potential,
+            };
+            if (item.MainSkillLevel > 0)
+            {
+                entry["mainSkillLevel"] = item.MainSkillLevel;
+            }
+
+            if (item.Skills is { Count: > 0 } skills)
+            {
+                entry["skills"] = new JsonArray(skills
+                    .Select(skill => (JsonNode)new JsonObject
+                    {
+                        ["id"] = skill.Id,
+                        ["level"] = skill.Level,
+                    })
+                    .ToArray());
+            }
+
+            if (item.Equips is { Count: > 0 } equips)
+            {
+                entry["equips"] = new JsonArray(equips
+                    .Select(equip => (JsonNode)new JsonObject
+                    {
+                        ["id"] = equip.Id,
+                        ["type"] = equip.Type,
+                        ["level"] = equip.Level,
+                    })
+                    .ToArray());
+            }
+
+            ownOpers.Add(entry);
+        }
+
         var payload = new JsonObject
         {
             ["done"] = true,
-            ["own_opers"] = JsonSerializer.SerializeToNode(ownOpers),
+            ["source"] = _operBoxDataSource,
+            ["own_opers"] = ownOpers,
         };
         if (LastOperBoxSyncTime is not null)
         {
             payload["syncTime"] = LastOperBoxSyncTime.Value.ToString("O", CultureInfo.InvariantCulture);
         }
 
+        var payloadJson = payload.ToJsonString();
+        // WPF 247db567f3/86e58bda95 (SaveOperBoxDetails): the same payload is written to
+        // DataDir/OperBoxData.json so the Copilot operbox_data_path points at fresh data.
+        WriteOperBoxDataFile(payloadJson);
         _ = await RunTrackedConfigurationSaveAsync(
             $"{ToolboxLegacyResultScope}.OperBox",
             T("Toolbox.OperBox.Title", "干员识别"),
             $"{ToolboxLegacyResultScope}.OperBox.Save",
-            ct => Runtime.SettingsFeatureService.SaveGlobalSettingAsync(LegacyConfigurationKeys.OperBoxData, payload.ToJsonString(), ct),
+            ct => Runtime.SettingsFeatureService.SaveGlobalSettingAsync(LegacyConfigurationKeys.OperBoxData, payloadJson, ct),
             cancellationToken);
     }
 
@@ -4137,14 +4645,33 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 return;
             }
 
-            var items = JsonSerializer.Deserialize<List<PersistedOperBoxOperator>>(ownNode.ToJsonString(), PersistedPayloadJsonOptions);
+            var items = JsonSerializer.Deserialize<List<PersistedOperBoxOwnedOperator>>(ownNode.ToJsonString(), PersistedPayloadJsonOptions);
             if (items is not null && items.Count > 0)
             {
                 foreach (var item in items.Where(item => item is not null && item.Own))
                 {
-                    _operBoxOwnedById[item!.Id] = new ToolboxOwnedOperatorState(item.Id, item.Name, item.Rarity, item.Elite, item.Level, item.Potential);
+                    _operBoxOwnedById[item!.Id] = new ToolboxOwnedOperatorState(
+                        item.Id,
+                        item.Name,
+                        item.Rarity,
+                        item.Elite,
+                        item.Level,
+                        item.Potential,
+                        item.MainSkillLevel,
+                        FilterOperBoxSkills(item.Skills),
+                        FilterOperBoxEquips(item.Equips));
                     _operBoxPotential[item.Id] = item.Potential;
                 }
+            }
+
+            if (parsed is JsonObject sourceObject)
+            {
+                _operBoxDataSource = string.Equals(
+                    ReadString(sourceObject, "source"),
+                    "yituliu",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? "yituliu"
+                    : "local";
             }
 
             _hasOperBoxRecognitionData = parsed is JsonArray
@@ -4329,6 +4856,25 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(MiniGameSecretFrontEventOptions));
     }
 
+    private void RebuildOperBoxExportFormatOptions()
+    {
+        _operBoxExportFormatOptions.Clear();
+        _operBoxExportFormatOptions.Add(new ToolboxNamedOption(
+            T("Toolbox.OperBox.CopyToClipboard", "Copy to clipboard"),
+            "0"));
+        _operBoxExportFormatOptions.Add(new ToolboxNamedOption(
+            T("Toolbox.OperBox.Export.Json", "Export JSON"),
+            "1"));
+        _operBoxExportFormatOptions.Add(new ToolboxNamedOption(
+            T("Toolbox.OperBox.Export.Markdown", "Export Markdown"),
+            "2"));
+        _operBoxExportFormatOptions.Add(new ToolboxNamedOption(
+            T("Toolbox.OperBox.Export.Csv", "Export CSV"),
+            "3"));
+        OnPropertyChanged(nameof(OperBoxExportFormatOptions));
+        OnPropertyChanged(nameof(SelectedOperBoxExportFormatOption));
+    }
+
     private void LoadBridgeSettings()
     {
         _loadingBridgeSettings = true;
@@ -4347,6 +4893,11 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             GachaShowDisclaimerNoMore = ReadBoolSetting(LegacyConfigurationKeys.GachaShowDisclaimerNoMore, false);
             GachaShowDisclaimer = true;
             PeepTargetFps = ReadIntSetting(LegacyConfigurationKeys.PeepTargetFps, 20);
+            _operBoxExportFormatValue = Math.Clamp(ReadIntSetting(OperBoxExportFormatKey, 0), 0, 3);
+            OnPropertyChanged(nameof(OperBoxExportFormatValue));
+            OnPropertyChanged(nameof(SelectedOperBoxExportFormatOption));
+            OnPropertyChanged(nameof(IsOperBoxExportFileFormat));
+            OnPropertyChanged(nameof(OperBoxExportSuggestedFileName));
 
             MiniGameTaskName = ReadStringSetting(LegacyConfigurationKeys.MiniGameTaskName, "SS@Store@Begin");
             MiniGameSecretFrontEnding = ReadStringSetting(LegacyConfigurationKeys.MiniGameSecretFrontEnding, "A");
@@ -4688,7 +5239,87 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 owned.Potential));
         }
 
-        return JsonSerializer.Serialize(exportItems, new JsonSerializerOptions { WriteIndented = true });
+        return FormatOperBoxExport(exportItems);
+    }
+
+    private string FormatOperBoxExport(IReadOnlyList<PersistedOperBoxOperator> items)
+    {
+        return _operBoxExportFormatValue switch
+        {
+            2 => BuildOperBoxMarkdownExport(items),
+            3 => BuildOperBoxCsvExport(items),
+            _ => JsonSerializer.Serialize(items, new JsonSerializerOptions { WriteIndented = true }),
+        };
+    }
+
+    private string BuildOperBoxMarkdownExport(IReadOnlyList<PersistedOperBoxOperator> items)
+    {
+        var lines = new List<string>
+        {
+            $"| {T("Toolbox.OperBox.Export.Header.Name", "Operator")} "
+            + $"| {T("Toolbox.OperBox.Export.Header.Id", "Operator ID")} "
+            + $"| {T("Toolbox.OperBox.Export.Header.Rarity", "Rarity")} "
+            + $"| {T("Toolbox.OperBox.Export.Header.Elite", "Elite")} "
+            + $"| {T("Toolbox.OperBox.Export.Header.Level", "Level")} "
+            + $"| {T("Toolbox.OperBox.Export.Header.Own", "Owned")} "
+            + $"| {T("Toolbox.OperBox.Export.Header.Potential", "Potential")} |",
+            "| :-- | :-- | :-- | :-- | :-- | :-- | :-- |",
+        };
+
+        var yes = T("Toolbox.OperBox.Export.Yes", "Yes");
+        var no = T("Toolbox.OperBox.Export.No", "No");
+        lines.AddRange(items.Select(item =>
+            $"| {EscapeMarkdownCell(item.Name)} | {item.Id} | {item.Rarity} | {item.Elite} | {item.Level} "
+            + $"| {(item.Own ? yes : no)} | {item.Potential} |"));
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private string BuildOperBoxCsvExport(IReadOnlyList<PersistedOperBoxOperator> items)
+    {
+        var lines = new List<string>
+        {
+            string.Join(
+                ',',
+                T("Toolbox.OperBox.Export.Header.Name", "Operator"),
+                T("Toolbox.OperBox.Export.Header.Id", "Operator ID"),
+                T("Toolbox.OperBox.Export.Header.Rarity", "Rarity"),
+                T("Toolbox.OperBox.Export.Header.Elite", "Elite"),
+                T("Toolbox.OperBox.Export.Header.Level", "Level"),
+                T("Toolbox.OperBox.Export.Header.Own", "Owned"),
+                T("Toolbox.OperBox.Export.Header.Potential", "Potential")),
+        };
+
+        var yes = T("Toolbox.OperBox.Export.Yes", "Yes");
+        var no = T("Toolbox.OperBox.Export.No", "No");
+        lines.AddRange(items.Select(item =>
+            string.Join(
+                ',',
+                EscapeCsvCell(item.Name),
+                item.Id,
+                item.Rarity.ToString(CultureInfo.InvariantCulture),
+                item.Elite.ToString(CultureInfo.InvariantCulture),
+                item.Level.ToString(CultureInfo.InvariantCulture),
+                item.Own ? yes : no,
+                item.Potential.ToString(CultureInfo.InvariantCulture))));
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string EscapeMarkdownCell(string? value)
+    {
+        return (value ?? string.Empty)
+            .Replace("\r\n", " ", StringComparison.Ordinal)
+            .Replace('\n', ' ')
+            .Replace("|", "\\|", StringComparison.Ordinal);
+    }
+
+    // WPF parity (131f2d248d, BuildOperBoxCsvExportLines): quote only when the value would
+    // break the column layout, doubling embedded quotes.
+    private static string EscapeCsvCell(string? value)
+    {
+        var normalized = value ?? string.Empty;
+        return normalized.Contains(',') || normalized.Contains('"') || normalized.Contains('\n')
+            ? "\"" + normalized.Replace("\"", "\"\"", StringComparison.Ordinal) + "\""
+            : normalized;
     }
 
     private string BuildArkPlannerExportText()
@@ -5898,7 +6529,10 @@ internal sealed record ToolboxOwnedOperatorState(
     int Rarity,
     int Elite,
     int Level,
-    int Potential);
+    int Potential,
+    int MainSkillLevel = 0,
+    IReadOnlyList<PersistedOperBoxSkill>? Skills = null,
+    IReadOnlyList<PersistedOperBoxEquip>? Equips = null);
 
 internal sealed record PersistedOperBoxOperator(
     string Id,
@@ -5908,6 +6542,25 @@ internal sealed record PersistedOperBoxOperator(
     int Level,
     bool Own,
     int Potential);
+
+// Persisted operator-box entry. The last three fields only exist for data pulled from the
+// yituliu OpenAPI (WPF 247db567f3/86e58bda95); core recognition leaves them at their defaults
+// so previously written payloads keep parsing.
+internal sealed record PersistedOperBoxOwnedOperator(
+    string Id,
+    string Name,
+    int Rarity,
+    int Elite,
+    int Level,
+    bool Own,
+    int Potential,
+    int MainSkillLevel = 0,
+    IReadOnlyList<PersistedOperBoxSkill>? Skills = null,
+    IReadOnlyList<PersistedOperBoxEquip>? Equips = null);
+
+internal sealed record PersistedOperBoxSkill(string Id, int Level);
+
+internal sealed record PersistedOperBoxEquip(string Id, string Type, int Level);
 
 internal static class ToolboxUiOperationResultExtensions
 {

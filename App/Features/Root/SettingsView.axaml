@@ -54,6 +54,8 @@
                   Classes="settings-section-anchor" />
           <Border x:Name="SectionExternalNotification"
                   Classes="settings-section-anchor" />
+          <Border x:Name="SectionThirdParty"
+                  Classes="settings-section-anchor" />
           <Border x:Name="SectionHotKey"
                   Classes="settings-section-anchor" />
           <Border x:Name="SectionAchievement"
