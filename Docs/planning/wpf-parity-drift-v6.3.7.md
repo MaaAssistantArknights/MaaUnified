@@ -285,3 +285,14 @@
 - 波次三：本地化 key 审计与选项链（P1-31/P1-32）、引导状态机（P1-33）、外部更新器委托与强制完整包（P0-12/P0-13 收尾）、干员识别自动接入 Copilot 与导出列（P1-10/P1-28 收尾）。
 
 仍保留的已知边界（不阻塞本 PR）：Windows 真实 `MAA.Updater.exe` 端到端未在 macOS 验证；resx 历史乱序按基线冻结、未做全量重排；引导任务演示未 1:1 复刻 WPF 的拖拽与 11 个 gate；干员卡片技能/模组徽标与 `BlackFlow` 主题未接入；Copilot 悖论列表对象数组契约要求 Core ≥ `4843310bec`（随包 Core 已满足）。
+
+## 复核补缺（2026-11-12 第二轮）
+
+四/五波继续补齐复核发现的缺失项：自动像素画（P1-26，整块新特性：点阵/OKLab/Fit/Dither/文本排版/预览交互/AsstPixelPaint 参数）、运行时长上限三态（P1-01，bool? null=仅本次）、外部更新器成功标记消费与同版本修复入口（P0-12/P0-13）、干员卡技能/模组徽标（P1-28）、外部通知 Delivery 历史日志与触发设置（P1-06）。
+
+仍存的明确边界：
+- P1-07 渠道实例化未做：配置仍是固定 provider + `ExternalNotification.Enabled` CSV，未写 `Configs` 数组，WPF dev-v2 互导时多实例渠道会丢；单实例凭据与 DiscordWebhook 兼容别名可用。
+- P1-31 仅落点分命名/集合审计与冻结预算，未做 resx 全量重排。
+- P1-32 `Common.NotAdapted` 只提供链式能力，`BlackFlow` 主题未引入。
+- P1-33 演示已覆盖 7 个 gate（含拖拽排序入口），未 1:1 复刻 WPF 的全部拖拽细节。
+- P1-04 macOS/Linux 锁屏为占位降级；P0-12 Windows 真实 `MAA.Updater.exe` 端到端未在 macOS 验证。
