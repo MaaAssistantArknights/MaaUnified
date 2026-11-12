@@ -283,6 +283,7 @@ public sealed partial class SettingsPageViewModel
             globalUpdates: snapshot.ToGlobalSettingUpdates(),
             profileUpdates: snapshot.ToProfileSettingUpdates(),
             successScope: "Settings.Save.StartPerformance",
+            profileKeysToRemove: ProfileScopedPerformanceKeys,
             cancellationToken: cancellationToken);
         if (!await ApplyResultAsync(saveResult, "Settings.Save.StartPerformance", cancellationToken))
         {
@@ -305,6 +306,11 @@ public sealed partial class SettingsPageViewModel
         if (persistedSnapshot.DeploymentWithPause != readBackSnapshot.DeploymentWithPause)
         {
             await TrySyncCoreInstanceOptionsAsync("Settings.StartPerformance.SyncInstanceOptions", cancellationToken);
+        }
+
+        if (persistedSnapshot.SoftwareRendering != readBackSnapshot.SoftwareRendering)
+        {
+            await PromptForSoftwareRenderingRestartAsync(cancellationToken);
         }
 
         if (ShouldPromptForGpuRestart(persistedSnapshot, readBackSnapshot))
@@ -447,6 +453,16 @@ public sealed partial class SettingsPageViewModel
             : RootTexts.GetOrDefault("Settings.Start.Status.EmulatorPathSelectionClosed", "Emulator path dialog was closed.");
     }
 
+    // dev-v2 f464016813 retires the profile-scoped Performance keys; every performance save drops
+    // any stale copies so the global values stay authoritative for global-first readers.
+    private static readonly string[] ProfileScopedPerformanceKeys =
+    [
+        ConfigurationKeys.PerformanceUseGpu,
+        ConfigurationKeys.PerformanceAllowDeprecatedGpu,
+        ConfigurationKeys.PerformancePreferredGpuDescription,
+        ConfigurationKeys.PerformancePreferredGpuInstancePath,
+    ];
+
     private StartPerformanceSettingsSnapshot BuildNormalizedStartPerformanceSnapshot()
     {
         var gpuUse = PerformanceUseGpu;
@@ -487,6 +503,7 @@ public sealed partial class SettingsPageViewModel
             PerformanceAllowDeprecatedGpu: PerformanceAllowDeprecatedGpu,
             PerformancePreferredGpuDescription: gpuDescription,
             PerformancePreferredGpuInstancePath: gpuInstancePath,
+            SoftwareRendering: UseSoftwareRendering,
             DeploymentWithPause: DeploymentWithPause,
             StartsWithScript: (StartsWithScript ?? string.Empty).Trim(),
             EndsWithScript: (EndsWithScript ?? string.Empty).Trim(),
@@ -561,8 +578,8 @@ public sealed partial class SettingsPageViewModel
     {
         var emulatorPath = ReadProfileString(config, ConfigurationKeys.EmulatorPath, string.Empty).Trim();
         var emulatorAddCommand = ReadProfileString(config, ConfigurationKeys.EmulatorAddCommand, string.Empty).Trim();
-        var preferredGpuDescription = ReadProfileString(config, ConfigurationKeys.PerformancePreferredGpuDescription, string.Empty).Trim();
-        var preferredGpuInstancePath = ReadProfileString(config, ConfigurationKeys.PerformancePreferredGpuInstancePath, string.Empty).Trim();
+        var preferredGpuDescription = ReadGlobalString(config, ConfigurationKeys.PerformancePreferredGpuDescription, string.Empty).Trim();
+        var preferredGpuInstancePath = ReadGlobalString(config, ConfigurationKeys.PerformancePreferredGpuInstancePath, string.Empty).Trim();
 
         var rawWaitSeconds = ReadProfileInt(config, ConfigurationKeys.EmulatorWaitSeconds, DefaultEmulatorWaitSeconds);
         var emulatorWaitSeconds = Math.Clamp(rawWaitSeconds, EmulatorWaitSecondsMin, EmulatorWaitSecondsMax);
@@ -583,10 +600,13 @@ public sealed partial class SettingsPageViewModel
             EmulatorPath: emulatorPath,
             EmulatorAddCommand: emulatorAddCommand,
             EmulatorWaitSeconds: emulatorWaitSeconds,
-            PerformanceUseGpu: ReadProfileBoolFlexible(config, ConfigurationKeys.PerformanceUseGpu, false),
-            PerformanceAllowDeprecatedGpu: ReadProfileBoolFlexible(config, ConfigurationKeys.PerformanceAllowDeprecatedGpu, false),
+            // WPF dev-v2 f464016813 keeps the whole Performance section global. Read global-first so
+            // an already migrated config wins, while un-migrated profile copies still load.
+            PerformanceUseGpu: ReadGlobalBoolFlexible(config, ConfigurationKeys.PerformanceUseGpu, false),
+            PerformanceAllowDeprecatedGpu: ReadGlobalBoolFlexible(config, ConfigurationKeys.PerformanceAllowDeprecatedGpu, false),
             PerformancePreferredGpuDescription: preferredGpuDescription,
             PerformancePreferredGpuInstancePath: preferredGpuInstancePath,
+            SoftwareRendering: ReadSoftwareRendering(config),
             DeploymentWithPause: ReadProfileBoolFlexible(config, ConfigurationKeys.RoguelikeDeploymentWithPause, false),
             StartsWithScript: ReadProfileString(config, ConfigurationKeys.StartsWithScript, string.Empty).Trim(),
             EndsWithScript: ReadProfileString(config, ConfigurationKeys.EndsWithScript, string.Empty).Trim(),
@@ -804,6 +824,7 @@ public sealed partial class SettingsPageViewModel
             PerformanceAllowDeprecatedGpu = snapshot.PerformanceAllowDeprecatedGpu;
             PerformancePreferredGpuDescription = snapshot.PerformancePreferredGpuDescription;
             PerformancePreferredGpuInstancePath = snapshot.PerformancePreferredGpuInstancePath;
+            UseSoftwareRendering = snapshot.SoftwareRendering;
             DeploymentWithPause = snapshot.DeploymentWithPause;
             StartsWithScript = snapshot.StartsWithScript;
             EndsWithScript = snapshot.EndsWithScript;

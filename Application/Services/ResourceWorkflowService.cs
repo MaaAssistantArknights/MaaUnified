@@ -120,11 +120,14 @@ public sealed class ResourceWorkflowService
 
     private static GpuPreference ReadGpuPreference(UnifiedConfig config)
     {
+        // WPF dev-v2 f464016813: GPU preference lives in the global Performance section. The
+        // load-time migration promotes old profile copies, so global-first keeps both shapes
+        // readable (profile values remain the fallback).
         return new GpuPreference(
-            UseGpu: ReadProfileBoolFlexible(config, ConfigurationKeys.PerformanceUseGpu, false),
-            AllowDeprecatedGpu: ReadProfileBoolFlexible(config, ConfigurationKeys.PerformanceAllowDeprecatedGpu, false),
-            PreferredGpuDescription: ReadProfileString(config, ConfigurationKeys.PerformancePreferredGpuDescription, string.Empty).Trim(),
-            PreferredGpuInstancePath: ReadProfileString(config, ConfigurationKeys.PerformancePreferredGpuInstancePath, string.Empty).Trim());
+            UseGpu: ReadGlobalBoolFlexible(config, ConfigurationKeys.PerformanceUseGpu, false),
+            AllowDeprecatedGpu: ReadGlobalBoolFlexible(config, ConfigurationKeys.PerformanceAllowDeprecatedGpu, false),
+            PreferredGpuDescription: ReadGlobalString(config, ConfigurationKeys.PerformancePreferredGpuDescription, string.Empty).Trim(),
+            PreferredGpuInstancePath: ReadGlobalString(config, ConfigurationKeys.PerformancePreferredGpuInstancePath, string.Empty).Trim());
     }
 
     private static CoreGpuInitializeRequest? BuildGpuRequest(GpuPreference preference, GpuSelectionResolution resolution)
@@ -269,21 +272,19 @@ public sealed class ResourceWorkflowService
     internal static bool IsGpuDriverOutdated(DateTime driverDate, DateTime now)
         => driverDate.Date < now.Date.AddYears(-2);
 
-    private static string ReadProfileString(UnifiedConfig config, string key, string fallback)
+    private static string ReadGlobalString(UnifiedConfig config, string key, string fallback)
     {
-        if (TryGetProfileValue(config, key, out var value))
+        if (config.GlobalValues.TryGetValue(key, out var globalValue) && globalValue is not null)
         {
-            return value;
+            return globalValue.ToString();
         }
 
-        return config.GlobalValues.TryGetValue(key, out var globalValue) && globalValue is not null
-            ? globalValue.ToString()
-            : fallback;
+        return TryGetProfileValue(config, key, out var value) ? value : fallback;
     }
 
-    private static bool ReadProfileBoolFlexible(UnifiedConfig config, string key, bool fallback)
+    private static bool ReadGlobalBoolFlexible(UnifiedConfig config, string key, bool fallback)
     {
-        var text = ReadProfileString(config, key, string.Empty);
+        var text = ReadGlobalString(config, key, string.Empty);
         if (bool.TryParse(text, out var parsedBool))
         {
             return parsedBool;

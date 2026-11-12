@@ -6,11 +6,15 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using MAAUnified.App.Controls;
 using settingsViews = MAAUnified.App.Features.Settings;
 using MAAUnified.App.ViewModels.Settings;
+using MAAUnified.Application.Configuration;
 
 namespace MAAUnified.App.Features.Root;
 
@@ -28,25 +32,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private const int ResizeActiveSectionRadius = 1;
     private const double ResizeFallbackPlaceholderHeight = 96d;
     private const double SectionActivationPadding = 8d;
-    private static readonly string[] SectionOrder =
-    [
-        "ConfigurationManager",
-        "Timer",
-        "Performance",
-        "Game",
-        "Connect",
-        "Start",
-        "RemoteControl",
-        "GUI",
-        "Background",
-        "ExternalNotification",
-        "ThirdParty",
-        "HotKey",
-        "Achievement",
-        "VersionUpdate",
-        "IssueReport",
-        "About",
-    ];
+    private static readonly string[] DefaultSectionOrder = [.. SettingsSectionLayout.DefaultOrder];
     private static readonly object BackgroundSectionWarmupGate = new();
     private static readonly Dictionary<string, Control> PrewarmedSectionContentCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> PrewarmedSectionKeys = new(StringComparer.OrdinalIgnoreCase);
@@ -58,6 +44,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private readonly Dictionary<string, TextBlock> _sectionTitleAnchors = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, double> _sectionPlaceholderHeights = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _materializedSections = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _renderedCollapsedHeaders = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, double> _sectionTopCache = new(StringComparer.OrdinalIgnoreCase);
     private ScrollViewer? _sectionScrollViewer;
     private StackPanel? _sectionContentPanel;
@@ -94,6 +81,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             RebuildSectionAnchors();
             EnsureSectionMaterializationInitialized();
             EnsureCurrentSectionMaterialized();
+            ApplyAllSectionCollapseStates();
             Dispatcher.UIThread.Post(ScrollToSelectedSection, DispatcherPriority.Loaded);
             StartProgressiveSectionMaterialization();
         };
@@ -135,6 +123,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
                 RebuildSectionAnchors();
                 EnsureSectionMaterializationInitialized(forceReset: true);
                 EnsureCurrentSectionMaterialized();
+                ApplyAllSectionCollapseStates();
                 ScrollToSelectedSection();
                 StartProgressiveSectionMaterialization();
             }, DispatcherPriority.Loaded);
@@ -168,6 +157,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         RebuildSectionAnchors();
         EnsureSectionMaterializationInitialized(forceReset: true);
         EnsureCurrentSectionMaterialized();
+        ApplyAllSectionCollapseStates();
         StartProgressiveSectionMaterialization();
     }
 
@@ -181,7 +171,8 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
 
         lock (BackgroundSectionWarmupGate)
         {
-            if (_backgroundSectionWarmupTimer is not null || PrewarmedSectionKeys.Count >= SectionOrder.Length)
+            if (_backgroundSectionWarmupTimer is not null
+                || PrewarmedSectionKeys.Count >= SettingsSectionLayout.Sections.Count)
             {
                 return;
             }
@@ -207,12 +198,181 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         if (_observedViewModel is not null)
         {
             _observedViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _observedViewModel.SectionLayoutChanged -= OnSectionLayoutChanged;
+            _observedViewModel.SectionCollapsedChanged -= OnSectionCollapsedChanged;
         }
 
         _observedViewModel = VM;
         if (_observedViewModel is not null)
         {
             _observedViewModel.PropertyChanged += OnViewModelPropertyChanged;
+            _observedViewModel.SectionLayoutChanged += OnSectionLayoutChanged;
+            _observedViewModel.SectionCollapsedChanged += OnSectionCollapsedChanged;
+        }
+    }
+
+    private void OnSectionLayoutChanged(object? sender, EventArgs e)
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => OnSectionLayoutChanged(sender, e), DispatcherPriority.Loaded);
+            return;
+        }
+
+        var scrollPosition = CaptureCurrentSectionScrollPosition();
+        _sectionMaterializationInitialized = false;
+        RefreshSectionLayoutReferences();
+        RebuildSectionAnchors();
+        EnsureSectionMaterializationInitialized(forceReset: true);
+        EnsureCurrentSectionMaterialized();
+        ApplyAllSectionCollapseStates();
+        InvalidateSectionTopCache();
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (VisualRoot is null)
+                {
+                    return;
+                }
+
+                if (!RestoreSectionScrollPosition(scrollPosition))
+                {
+                    ScrollToSelectedSection();
+                }
+
+                StartProgressiveSectionMaterialization(
+                    initialDelayMs: LocalizedSectionRefreshInitialDelayMs,
+                    intervalMs: LocalizedSectionRefreshIntervalMs);
+            },
+            DispatcherPriority.Loaded);
+    }
+
+    private void OnSectionCollapsedChanged(object? sender, SettingsSectionCollapseEventArgs e)
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => OnSectionCollapsedChanged(sender, e), DispatcherPriority.Loaded);
+            return;
+        }
+
+        ApplySectionCollapseState(e.SectionKey);
+    }
+
+    private void ApplyAllSectionCollapseStates()
+    {
+        foreach (var section in VM?.Sections ?? [])
+        {
+            ApplySectionCollapseState(section.Key);
+        }
+    }
+
+    /// <summary>
+    /// Renders a compact header for a collapsed section (WPF Expander semantics) instead of the
+    /// full section content; clicking the header expands the section again.
+    /// </summary>
+    private void ApplySectionCollapseState(string sectionKey)
+    {
+        if (string.IsNullOrWhiteSpace(sectionKey)
+            || !_sectionAnchors.TryGetValue(sectionKey, out var anchor)
+            || VM is not { } vm)
+        {
+            return;
+        }
+
+        var isCollapsed = vm.IsSectionCollapsed(sectionKey);
+        if (isCollapsed == _renderedCollapsedHeaders.Contains(sectionKey))
+        {
+            return;
+        }
+
+        if (isCollapsed)
+        {
+            DetachMaterializedSectionContent(sectionKey, anchor);
+            if (_renderedCollapsedHeaders.Add(sectionKey))
+            {
+                var header = CreateCollapsedSectionHeader(sectionKey);
+                anchor.Child = header;
+                UpdateSectionTitleAnchor(sectionKey, header);
+            }
+        }
+        else
+        {
+            _renderedCollapsedHeaders.Remove(sectionKey);
+            anchor.Child = null;
+            _sectionTitleAnchors.Remove(sectionKey);
+            EnsureSectionMaterializedCore(sectionKey, loadDeferredData: true);
+        }
+
+        InvalidateSectionTopCache();
+        QueueSectionLayoutRefresh();
+    }
+
+    private void DetachMaterializedSectionContent(string sectionKey, Border anchor)
+    {
+        if (_materializedSectionContent.TryGetValue(sectionKey, out var content)
+            && ReferenceEquals(anchor.Child, content))
+        {
+            anchor.Child = null;
+        }
+
+        _materializedSectionContent.Remove(sectionKey);
+        _materializedSections.Remove(sectionKey);
+        ClearSectionPlaceholderHeight(anchor);
+    }
+
+    private Control CreateCollapsedSectionHeader(string sectionKey)
+    {
+        var section = VM?.Sections.FirstOrDefault(
+            item => string.Equals(item.Key, sectionKey, StringComparison.OrdinalIgnoreCase));
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "▸",
+            Classes = { "settings-section-collapse-glyph" },
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        var title = new TextBlock
+        {
+            Text = section?.DisplayName ?? sectionKey,
+            Classes = { "settings-page-title" },
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        panel.Children.Add(title);
+
+        var button = new Button
+        {
+            Content = panel,
+            Tag = sectionKey,
+            Classes = { "settings-section-collapsed-header" },
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(4),
+        };
+        button.Click += OnCollapsedSectionHeaderClick;
+        return button;
+    }
+
+    private async void OnCollapsedSectionHeaderClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: string sectionKey } && VM is { } vm)
+        {
+            e.Handled = true;
+            await vm.SetSectionCollapsedAsync(sectionKey, false);
+        }
+    }
+
+    private async void OnSectionCollapseToggleClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is SettingsSectionViewModel section && VM is { } vm)
+        {
+            e.Handled = true;
+            await vm.ToggleSectionCollapsedAsync(section.Key);
         }
     }
 
@@ -307,6 +467,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         }
 
         EnsureCurrentSectionMaterialized();
+        ApplyAllSectionCollapseStates();
         _ = RecordSettingsViewTimingAsync(
             "SettingsView.RefreshLocalizedSections.MaterializeCurrent",
             step,
@@ -441,22 +602,62 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private void RebuildSectionAnchors()
     {
         _sectionAnchors.Clear();
-        RegisterSectionAnchor("ConfigurationManager", "SectionConfigurationManager");
-        RegisterSectionAnchor("Timer", "SectionTimer");
-        RegisterSectionAnchor("Performance", "SectionPerformance");
-        RegisterSectionAnchor("Game", "SectionGame");
-        RegisterSectionAnchor("Connect", "SectionConnect");
-        RegisterSectionAnchor("Start", "SectionStart");
-        RegisterSectionAnchor("RemoteControl", "SectionRemoteControl");
-        RegisterSectionAnchor("GUI", "SectionGui");
-        RegisterSectionAnchor("Background", "SectionBackground");
-        RegisterSectionAnchor("ExternalNotification", "SectionExternalNotification");
-        RegisterSectionAnchor("HotKey", "SectionHotKey");
-        RegisterSectionAnchor("Achievement", "SectionAchievement");
-        RegisterSectionAnchor("VersionUpdate", "SectionVersionUpdate");
-        RegisterSectionAnchor("IssueReport", "SectionIssueReport");
-        RegisterSectionAnchor("About", "SectionAbout");
+        foreach (var key in ResolveSectionOrder())
+        {
+            RegisterSectionAnchor(key, GetSectionAnchorControlName(key));
+        }
+
+        ApplySectionOrderToContentPanel();
         InvalidateSectionTopCache();
+    }
+
+    private IReadOnlyList<string> ResolveSectionOrder()
+    {
+        var sections = VM?.Sections;
+        if (sections is { Count: > 0 })
+        {
+            return sections.Select(static section => section.Key).ToArray();
+        }
+
+        return DefaultSectionOrder;
+    }
+
+    private static string GetSectionAnchorControlName(string sectionKey)
+        => sectionKey switch
+        {
+            "GUI" => "SectionGui",
+            _ => "Section" + sectionKey,
+        };
+
+    /// <summary>
+    /// Physically reorders the section anchors so the persisted order (WPF <c>Gui.SettingOrders</c>,
+    /// <c>b5412be3a1</c>) takes effect without restarting the page.
+    /// </summary>
+    private void ApplySectionOrderToContentPanel()
+    {
+        if (_sectionContentPanel is null || _sectionAnchors.Count == 0)
+        {
+            return;
+        }
+
+        var orderedAnchors = ResolveSectionOrder()
+            .Where(_sectionAnchors.ContainsKey)
+            .Select(key => (Control)_sectionAnchors[key])
+            .ToArray();
+        if (orderedAnchors.Length == 0)
+        {
+            return;
+        }
+
+        foreach (var anchor in orderedAnchors)
+        {
+            _sectionContentPanel.Children.Remove(anchor);
+        }
+
+        for (var index = 0; index < orderedAnchors.Length; index++)
+        {
+            _sectionContentPanel.Children.Insert(index, orderedAnchors[index]);
+        }
     }
 
     private void RegisterSectionAnchor(string key, string controlName)
@@ -480,6 +681,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
         _sectionPlaceholderHeights.Clear();
         _sectionTitleAnchors.Clear();
         _materializedSections.Clear();
+        _renderedCollapsedHeaders.Clear();
         InvalidateSectionTopCache();
     }
 
@@ -514,7 +716,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
     private bool EnsureSectionsThrough(string key)
     {
         var anyMaterialized = false;
-        foreach (var sectionKey in SectionOrder)
+        foreach (var sectionKey in ResolveSectionOrder())
         {
             if (EnsureSectionMaterialized(sectionKey))
             {
@@ -539,6 +741,12 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             || _materializedSections.Contains(key)
             || !_sectionAnchors.TryGetValue(key, out var anchor))
         {
+            return false;
+        }
+
+        if (VM?.IsSectionCollapsed(key) == true)
+        {
+            ApplySectionCollapseState(key);
             return false;
         }
 
@@ -585,8 +793,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             "Start" => new settingsViews.StartSettingsView(),
             "RemoteControl" => new settingsViews.RemoteControlSettingsView(),
             "GUI" => new settingsViews.GuiSettingsView(),
-            "Background" => new settingsViews.BackgroundSettingsView(),
-            "ExternalNotification" => new settingsViews.ExternalNotificationSettingsView(),
+            "Notification" => new settingsViews.ExternalNotificationSettingsView(),
             "ThirdParty" => new settingsViews.ThirdPartySettingsView(),
             "HotKey" => new settingsViews.HotKeySettingsView(),
             "Achievement" => new settingsViews.AchievementSettingsView(),
@@ -745,9 +952,9 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
 
     private bool TryMaterializeNextSectionInOrder()
     {
-        foreach (var sectionKey in SectionOrder)
+        foreach (var sectionKey in ResolveSectionOrder())
         {
-            if (_materializedSections.Contains(sectionKey))
+            if (_materializedSections.Contains(sectionKey) || _renderedCollapsedHeaders.Contains(sectionKey))
             {
                 continue;
             }
@@ -772,6 +979,7 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
 
         var pendingSections = ResolveProgressiveMaterializationTargets()
             .Where(sectionKey => !_materializedSections.Contains(sectionKey))
+            .Where(sectionKey => !vm.IsSectionCollapsed(sectionKey))
             .ToArray();
         if (pendingSections.Length == 0)
         {
@@ -794,9 +1002,9 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             dispatcherPriority ?? DispatcherPriority.Background);
     }
 
-    private static IEnumerable<string> ResolveProgressiveMaterializationTargets()
+    private IEnumerable<string> ResolveProgressiveMaterializationTargets()
     {
-        return SectionOrder;
+        return ResolveSectionOrder();
     }
 
     private void CancelProgressiveSectionMaterialization()
@@ -925,9 +1133,9 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
 
     private static bool TryPrewarmNextSectionInOrder()
     {
-        while (_backgroundSectionWarmupIndex < SectionOrder.Length)
+        while (_backgroundSectionWarmupIndex < DefaultSectionOrder.Length)
         {
-            var sectionKey = SectionOrder[_backgroundSectionWarmupIndex++];
+            var sectionKey = DefaultSectionOrder[_backgroundSectionWarmupIndex++];
             if (PrewarmedSectionKeys.Contains(sectionKey))
             {
                 continue;
@@ -1218,11 +1426,12 @@ public partial class SettingsView : UserControl, INotifyPropertyChanged
             : ResolveSectionIndex(selectedKey);
     }
 
-    private static int ResolveSectionIndex(string key)
+    private int ResolveSectionIndex(string key)
     {
-        for (var i = 0; i < SectionOrder.Length; i++)
+        var order = ResolveSectionOrder();
+        for (var i = 0; i < order.Count; i++)
         {
-            if (string.Equals(SectionOrder[i], key, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(order[i], key, StringComparison.OrdinalIgnoreCase))
             {
                 return i;
             }

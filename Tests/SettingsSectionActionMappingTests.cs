@@ -28,13 +28,13 @@ public sealed class SettingsSectionActionMappingTests
     }
 
     [Fact]
-    public async Task SelectedSection_ExternalNotification_ShouldExposeValidateTestAndSaveActions()
+    public async Task SelectedSection_Notification_ShouldExposeValidateTestAndSaveActions()
     {
         await using var fixture = await RuntimeFixture.CreateAsync();
         var vm = new SettingsPageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
         await vm.InitializeAsync();
 
-        vm.SelectedSection = vm.Sections.Single(section => section.Key == "ExternalNotification");
+        vm.SelectedSection = vm.Sections.Single(section => section.Key == "Notification");
         var actionIds = vm.CurrentSectionActions.Select(action => action.ActionId).ToArray();
 
         Assert.Contains("settings.save-notification", actionIds);
@@ -50,7 +50,7 @@ public sealed class SettingsSectionActionMappingTests
         await vm.InitializeAsync();
 
         vm.Language = "zh-cn";
-        vm.SelectedSection = vm.Sections.Single(section => section.Key == "ExternalNotification");
+        vm.SelectedSection = vm.Sections.Single(section => section.Key == "Notification");
 
         var sectionBefore = Assert.IsType<SettingsSectionViewModel>(vm.SelectedSection);
         var sectionNameBefore = sectionBefore.DisplayName;
@@ -60,9 +60,9 @@ public sealed class SettingsSectionActionMappingTests
         vm.Language = "en-us";
 
         var sectionAfter = Assert.IsType<SettingsSectionViewModel>(vm.SelectedSection);
-        Assert.Equal("ExternalNotification", sectionAfter.Key);
+        Assert.Equal("Notification", sectionAfter.Key);
         Assert.NotSame(sectionBefore, sectionAfter);
-        Assert.Equal("External notifications", sectionAfter.DisplayName);
+        Assert.Equal("Notifications", sectionAfter.DisplayName);
         Assert.NotEqual(sectionNameBefore, sectionAfter.DisplayName);
         Assert.DoesNotContain(vm.Sections, section => ReferenceEquals(section, sectionBefore));
 

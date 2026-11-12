@@ -4020,6 +4020,9 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
   <data name="Settings.Section.ExternalNotification" xml:space="preserve">
     <value>External notifications</value>
   </data>
+  <data name="Settings.Section.Notification" xml:space="preserve">
+    <value>Notifications</value>
+  </data>
   <data name="Settings.Section.GUI" xml:space="preserve">
     <value>GUI</value>
   </data>

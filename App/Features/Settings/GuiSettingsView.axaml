@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:MAAUnified.App.Controls"
+             xmlns:settingsViews="clr-namespace:MAAUnified.App.Features.Settings"
              xmlns:vm="clr-namespace:MAAUnified.App.ViewModels.Settings"
              Classes="settings-page"
              x:Class="MAAUnified.App.Features.Settings.GuiSettingsView">
@@ -69,12 +70,6 @@
                                          Tip="{Binding RootTexts[Settings.GUI.MainTasksInvertNullFunctionTip]}"
                                          IsChecked="{Binding MainTasksInvertNullFunction}" />
           </controls:AdaptiveSpacingStackPanel>
-          <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
-            <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.GUI.UseSoftwareRendering]}"
-                                         Tip="{DynamicResource BadModules.UseSoftwareRenderingTip}"
-                                         IsChecked="{Binding UseSoftwareRendering}" />
-          </controls:AdaptiveSpacingStackPanel>
-
           <controls:AdaptiveSpacingStackPanel Classes="settings-page-column-stack settings-page-meta-block">
             <Grid Classes="settings-page-labeled-row"
                   controls:SettingsLabelWidthCoordinator.GroupKey="Gui.Log"
@@ -233,6 +228,11 @@
                      TextWrapping="Wrap" />
         </controls:AdaptiveSpacingStackPanel>
       </Border>
+
+      <!-- WPF dev-v2 f464016813 merged the background section into the interface section. -->
+      <StackPanel Margin="0,24,0,0">
+        <settingsViews:BackgroundSettingsView />
+      </StackPanel>
     </controls:AdaptiveSpacingStackPanel>
   </Grid>
 </UserControl>

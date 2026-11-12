@@ -36,7 +36,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     private const string DefaultOperNameLanguage = "OperNameLanguageMAA";
     private const string DefaultInverseClearMode = "Clear";
     private const string DeveloperModeConfigKey = "GUI.DeveloperMode";
-    private const string SoftwareRenderingConfigKey = ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering;
+    // dev-v2 f464016813 moved the software rendering switch into the global Performance section;
+    // the flat v6.3.7 key stays readable until the load-time migration rewrites it.
+    private const string SoftwareRenderingConfigKey = ConfigurationKeys.PerformanceIgnoreBadModulesAndUseSoftwareRendering;
+    private const string LegacySoftwareRenderingConfigKey = ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering;
     private const string ShowGuiHotkeyName = HotkeyConfigurationCodec.ShowGuiHotkeyName;
     private const string LinkStartHotkeyName = HotkeyConfigurationCodec.LinkStartHotkeyName;
     private static readonly string DefaultHotkeyShowGui = HotkeyConfigurationCodec.DefaultHotkeyShowGui;
@@ -125,25 +128,6 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         SettingsDataBucketExternalNotification,
         SettingsDataBucketVersionUpdate,
         SettingsDataBucketAchievement,
-    ];
-    private static readonly string[] SectionOrder =
-    [
-        "ConfigurationManager",
-        "Timer",
-        "Performance",
-        "Game",
-        "Connect",
-        "Start",
-        "RemoteControl",
-        "GUI",
-        "Background",
-        "ExternalNotification",
-        "ThirdParty",
-        "HotKey",
-        "Achievement",
-        "VersionUpdate",
-        "IssueReport",
-        "About",
     ];
     private static readonly string[] DefaultNotificationProviders =
     [
@@ -269,6 +253,8 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     };
 
     private SettingsSectionViewModel? _selectedSection;
+    private List<string> _sectionOrder = [.. SettingsSectionLayout.DefaultOrder];
+    private HashSet<string> _collapsedSections = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _guiSaveSemaphore = new(1, 1);
     private readonly SemaphoreSlim _configurationProfileSwitchSemaphore = new(1, 1);
     private readonly Action<LocalizationFallbackInfo>? _localizationFallbackReporter;
@@ -558,6 +544,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         RefreshHotkeyUiText();
         ApplyHotkeyDraft(_showGuiHotkeyState, DefaultHotkeyShowGui, nameof(HotkeyShowGui), clearFeedback: false);
         ApplyHotkeyDraft(_linkStartHotkeyState, DefaultHotkeyLinkStart, nameof(HotkeyLinkStart), clearFeedback: false);
+        LoadSectionLayout();
         RebuildSections();
 
         Timers = new ObservableCollection<TimerSlotViewModel>(
@@ -631,6 +618,12 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
     public event EventHandler<GuiSettingsAppliedEventArgs>? GuiSettingsApplied;
     public event EventHandler<GuiSettingsPreviewChangedEventArgs>? GuiSettingsPreviewChanged;
     public event EventHandler? ResourceVersionUpdated;
+
+    /// <summary>Raised when the persisted section order changed and the navigation must be rebuilt.</summary>
+    public event EventHandler? SectionLayoutChanged;
+
+    /// <summary>Raised when one section was collapsed or expanded.</summary>
+    public event EventHandler<SettingsSectionCollapseEventArgs>? SectionCollapsedChanged;
     public event EventHandler? UpdateAvailabilityChanged;
     public event EventHandler<ConfigurationContextChangedEventArgs>? ConfigurationContextChanged;
     public Func<CancellationToken, Task<UiOperationResult>>? BeforeConfigurationProfileSwitchAsync { private get; set; }
@@ -860,8 +853,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             OnPropertyChanged(nameof(IsStartSelected));
             OnPropertyChanged(nameof(IsRemoteControlSelected));
             OnPropertyChanged(nameof(IsGuiSelected));
-            OnPropertyChanged(nameof(IsBackgroundSelected));
-            OnPropertyChanged(nameof(IsExternalNotificationSelected));
+            OnPropertyChanged(nameof(IsNotificationSelected));
             OnPropertyChanged(nameof(IsHotkeySelected));
             OnPropertyChanged(nameof(IsAchievementSelected));
             OnPropertyChanged(nameof(IsVersionUpdateSelected));
@@ -920,9 +912,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
     public bool IsGuiSelected => IsSelectedSection("GUI");
 
-    public bool IsBackgroundSelected => IsSelectedSection("Background");
-
-    public bool IsExternalNotificationSelected => IsSelectedSection("ExternalNotification");
+    public bool IsNotificationSelected => IsSelectedSection("Notification");
 
     public bool IsHotkeySelected => IsSelectedSection("HotKey");
 
@@ -1252,11 +1242,19 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         get => _useSoftwareRendering;
         set
         {
-            if (SetProperty(ref _useSoftwareRendering, value))
+            if (!SetProperty(ref _useSoftwareRendering, value))
+            {
+                return;
+            }
+
+            // The performance section owns the switch now; applying its snapshot (load, read-back,
+            // section switch) must not dirty the GUI save batch.
+            if (!_suppressStartPerformanceDirtyTracking)
             {
                 MarkGuiSettingsDirty();
-                NotifyGuiSettingsPreviewChanged();
             }
+
+            NotifyGuiSettingsPreviewChanged();
         }
     }
 
@@ -3936,16 +3934,226 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
     private void RebuildSections(string? preferredKey = null)
     {
-        var target = preferredKey ?? SelectedSection?.Key ?? SectionOrder[0];
+        var target = preferredKey ?? SelectedSection?.Key ?? SettingsSectionLayout.DefaultSectionKey;
         Sections.Clear();
-        foreach (var key in SectionOrder)
+        foreach (var key in _sectionOrder)
         {
-            Sections.Add(new SettingsSectionViewModel(key, RootTexts[$"Settings.Section.{key}"]));
+            if (!SettingsSectionLayout.IsKnownSection(key))
+            {
+                continue;
+            }
+
+            Sections.Add(new SettingsSectionViewModel(key, RootTexts[$"Settings.Section.{key}"])
+            {
+                IsCollapsed = _collapsedSections.Contains(key),
+            });
+        }
+
+        if (Sections.Count == 0)
+        {
+            Sections.Add(new SettingsSectionViewModel(
+                SettingsSectionLayout.DefaultSectionKey,
+                RootTexts[$"Settings.Section.{SettingsSectionLayout.DefaultSectionKey}"]));
         }
 
         var selected = Sections.FirstOrDefault(section => string.Equals(section.Key, target, StringComparison.OrdinalIgnoreCase))
             ?? Sections.First();
         SelectedSection = selected;
+    }
+
+    /// <summary>
+    /// Reads the persisted section order and collapsed-section list from the global configuration
+    /// (WPF <c>Gui.SettingOrders</c> / <c>Gui.CollapesStates</c>).
+    /// </summary>
+    private void LoadSectionLayout()
+    {
+        var globalValues = Runtime.ConfigurationService.CurrentConfig.GlobalValues;
+        _sectionOrder = [.. SettingsSectionLayout.ReadOrder(globalValues)];
+        _collapsedSections = new HashSet<string>(
+            SettingsSectionLayout.ReadCollapsed(globalValues),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Reloads the section layout after a configuration context change (profile switch, import)
+    /// and rebuilds the navigation immediately.
+    /// </summary>
+    public bool ReloadSectionLayout()
+    {
+        var globalValues = Runtime.ConfigurationService.CurrentConfig.GlobalValues;
+        var order = SettingsSectionLayout.ReadOrder(globalValues);
+        var collapsed = SettingsSectionLayout.ReadCollapsed(globalValues);
+        if (_sectionOrder.SequenceEqual(order, StringComparer.Ordinal)
+            && _collapsedSections.SetEquals(collapsed))
+        {
+            return false;
+        }
+
+        _sectionOrder = [.. order];
+        _collapsedSections = new HashSet<string>(collapsed, StringComparer.OrdinalIgnoreCase);
+        RebuildSections(SelectedSection?.Key);
+        RaiseSectionLayoutChanged();
+        return true;
+    }
+
+    public bool IsSectionCollapsed(string sectionKey)
+        => !string.IsNullOrWhiteSpace(sectionKey) && _collapsedSections.Contains(sectionKey);
+
+    public IReadOnlyList<string> GetSectionOrder() => [.. _sectionOrder];
+
+    /// <summary>
+    /// Applies a new section order, rebuilds <see cref="Sections"/> immediately and persists the
+    /// order in WPF's <c>Gui.SettingOrders</c> shape (WPF <c>b5412be3a1</c>).
+    /// </summary>
+    public async Task<bool> ApplySectionOrderAsync(
+        IReadOnlyList<string> sectionKeys,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(sectionKeys);
+        var requested = new JsonArray();
+        foreach (var key in sectionKeys)
+        {
+            requested.Add(key);
+        }
+
+        var normalized = SettingsSectionLayout.NormalizeOrder(requested);
+        if (_sectionOrder.SequenceEqual(normalized, StringComparer.Ordinal))
+        {
+            return true;
+        }
+
+        var previousOrder = _sectionOrder;
+        var selectedKey = SelectedSection?.Key;
+        _sectionOrder = [.. normalized];
+        RebuildSections(selectedKey);
+        RaiseSectionLayoutChanged();
+
+        if (await PersistSectionLayoutAsync(cancellationToken))
+        {
+            return true;
+        }
+
+        _sectionOrder = previousOrder;
+        RebuildSections(selectedKey);
+        RaiseSectionLayoutChanged();
+        return false;
+    }
+
+    /// <summary>
+    /// Collapses or expands one section. The state is persisted in WPF's <c>Gui.CollapesStates</c>.
+    /// </summary>
+    public async Task SetSectionCollapsedAsync(
+        string sectionKey,
+        bool collapsed,
+        CancellationToken cancellationToken = default)
+    {
+        if (!SettingsSectionLayout.IsKnownSection(sectionKey))
+        {
+            return;
+        }
+
+        var changed = collapsed ? _collapsedSections.Add(sectionKey) : _collapsedSections.Remove(sectionKey);
+        if (!changed)
+        {
+            ApplyCollapsedStateToSections();
+            return;
+        }
+
+        ApplyCollapsedStateToSections();
+        SectionCollapsedChanged?.Invoke(this, new SettingsSectionCollapseEventArgs(sectionKey, collapsed));
+        await PersistSectionLayoutAsync(cancellationToken);
+    }
+
+    public Task ToggleSectionCollapsedAsync(string sectionKey, CancellationToken cancellationToken = default)
+        => SetSectionCollapsedAsync(sectionKey, !IsSectionCollapsed(sectionKey), cancellationToken);
+
+    private void ApplyCollapsedStateToSections()
+    {
+        foreach (var section in Sections)
+        {
+            section.IsCollapsed = _collapsedSections.Contains(section.Key);
+        }
+    }
+
+    private void RaiseSectionLayoutChanged()
+    {
+        SectionLayoutChanged?.Invoke(this, EventArgs.Empty);
+        OnPropertyChanged(nameof(Sections));
+        OnPropertyChanged(nameof(SelectedSectionTitle));
+    }
+
+    private async Task<bool> PersistSectionLayoutAsync(CancellationToken cancellationToken)
+    {
+        var config = Runtime.ConfigurationService.CurrentConfig;
+        var hadOrder = config.GlobalValues.TryGetValue(SettingsSectionLayout.SettingOrdersKey, out var previousOrder);
+        var previousOrderNode = previousOrder?.DeepClone();
+        var hadCollapsed = config.GlobalValues.TryGetValue(SettingsSectionLayout.CollapsedSectionsKey, out var previousCollapsed);
+        var previousCollapsedNode = previousCollapsed?.DeepClone();
+
+        config.GlobalValues[SettingsSectionLayout.SettingOrdersKey] =
+            SettingsSectionLayout.CreateOrderNode(_sectionOrder);
+        if (_collapsedSections.Count == 0)
+        {
+            config.GlobalValues.Remove(SettingsSectionLayout.CollapsedSectionsKey);
+        }
+        else
+        {
+            config.GlobalValues[SettingsSectionLayout.CollapsedSectionsKey] =
+                SettingsSectionLayout.CreateCollapsedNode(_collapsedSections);
+        }
+
+        try
+        {
+            await Runtime.ConfigurationService.SaveAsync(cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            RestoreSectionLayoutValues(config, hadOrder, previousOrderNode, hadCollapsed, previousCollapsedNode);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            RestoreSectionLayoutValues(config, hadOrder, previousOrderNode, hadCollapsed, previousCollapsedNode);
+            LastErrorMessage = string.Format(
+                RootTexts.GetOrDefault(
+                    "Settings.SectionLayout.Error.SaveFailed",
+                    "Failed to save the settings-page section layout: {0}"),
+                ex.Message);
+            await RecordUnhandledExceptionAsync(
+                "Settings.SectionLayout.Save",
+                ex,
+                UiErrorCode.SettingsSaveFailed,
+                LastErrorMessage,
+                cancellationToken);
+            return false;
+        }
+    }
+
+    private static void RestoreSectionLayoutValues(
+        UnifiedConfig config,
+        bool hadOrder,
+        JsonNode? previousOrderNode,
+        bool hadCollapsed,
+        JsonNode? previousCollapsedNode)
+    {
+        if (hadOrder && previousOrderNode is not null)
+        {
+            config.GlobalValues[SettingsSectionLayout.SettingOrdersKey] = previousOrderNode;
+        }
+        else
+        {
+            config.GlobalValues.Remove(SettingsSectionLayout.SettingOrdersKey);
+        }
+
+        if (hadCollapsed && previousCollapsedNode is not null)
+        {
+            config.GlobalValues[SettingsSectionLayout.CollapsedSectionsKey] = previousCollapsedNode;
+        }
+        else
+        {
+            config.GlobalValues.Remove(SettingsSectionLayout.CollapsedSectionsKey);
+        }
     }
 
     private void RefreshCurrentSectionActions()
@@ -3960,7 +4168,6 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         switch (key)
         {
             case "GUI":
-            case "Background":
                 CurrentSectionActions.Add(new SettingsSectionActionItem("settings.save-gui", RootTexts["Settings.Action.SaveGui"], IsPrimary: true));
                 break;
             case "Connect":
@@ -3987,7 +4194,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             case "HotKey":
                 CurrentSectionActions.Add(new SettingsSectionActionItem("settings.register-hotkeys", RootTexts["Settings.Action.RegisterHotkeys"], IsPrimary: true));
                 break;
-            case "ExternalNotification":
+            case "Notification":
                 CurrentSectionActions.Add(new SettingsSectionActionItem("settings.save-notification", RootTexts["Settings.Action.SaveNotification"], IsPrimary: true));
                 CurrentSectionActions.Add(new SettingsSectionActionItem("settings.validate-notification", RootTexts["Settings.Action.ValidateNotification"]));
                 CurrentSectionActions.Add(new SettingsSectionActionItem("settings.test-notification", RootTexts["Settings.Action.TestNotification"]));
@@ -5750,7 +5957,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             lockAcquired = true;
 
             var snapshot = BuildNormalizedGuiSnapshot();
-            var previousSoftwareRendering = ReadGlobalBool(Runtime.ConfigurationService.CurrentConfig, SoftwareRenderingConfigKey, false);
+            var previousSoftwareRendering = ReadSoftwareRendering(Runtime.ConfigurationService.CurrentConfig);
             // Revert target for a rejected background path is the effective previous value, so a
             // missing key maps to the conventional default (N2 missing-vs-empty semantics). Using a
             // plain empty fallback here would turn "never written -> default applies" into an
@@ -6299,7 +6506,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             "Settings.AutoSave.Timer" => "Timer",
             "Settings.AutoSave.ConnectionGame" => "Connect",
             "Settings.AutoSave.Remote" => "RemoteControl",
-            "Settings.AutoSave.Notification" => "ExternalNotification",
+            "Settings.AutoSave.Notification" => "Notification",
             "Settings.AutoSave.VersionUpdate" => "VersionUpdate",
             "Settings.AutoSave.Achievement" => "Achievement",
             "Settings.AutoSave.Autostart" => "Start",
@@ -7086,6 +7293,9 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         CancellationToken cancellationToken = default,
         ImportReport? report = null)
     {
+        // The section layout lives in the global configuration, so a profile switch or an import
+        // may have replaced it; apply it before subscribers re-render the page.
+        ReloadSectionLayout();
         var args = new ConfigurationContextChangedEventArgs(reason, message, report);
         if (ApplyConfigurationContextChangedAsync is not null)
         {
@@ -8220,7 +8430,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         var rawOperNameLanguage = ReadGlobalString(config, ConfigurationKeys.OperNameLanguage, DefaultOperNameLanguage);
         // WPF reads GUI.InverseClearMode via ConfigurationHelper.GetGlobalValue.
         var rawInverseClearMode = ReadGlobalString(config, ConfigurationKeys.InverseClearMode, DefaultInverseClearMode);
-        var rawUseSoftwareRendering = ReadGlobalBool(config, SoftwareRenderingConfigKey, false);
+        var rawUseSoftwareRendering = ReadSoftwareRendering(config);
         var rawHotkeys = ReadGlobalString(config, ConfigurationKeys.HotKeys, string.Empty);
         var parsedHotkeys = HotkeyConfigurationCodec.Parse(rawHotkeys);
         hotkeyWarnings.AddRange(parsedHotkeys.Warnings);
@@ -8680,13 +8890,6 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
     private void SetGuiValidationMessageForCurrentSection(string message)
     {
-        if (IsBackgroundSelected)
-        {
-            GuiSectionValidationMessage = string.Empty;
-            BackgroundValidationMessage = message;
-            return;
-        }
-
         GuiSectionValidationMessage = message;
         BackgroundValidationMessage = string.Empty;
     }
@@ -8812,7 +9015,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             "Game" => [SettingsDataBucketConnectionGame, SettingsDataBucketStartPerformance],
             "Connect" => [SettingsDataBucketConnectionGame],
             "RemoteControl" => [SettingsDataBucketRemoteControl],
-            "ExternalNotification" => [SettingsDataBucketExternalNotification],
+            "Notification" => [SettingsDataBucketExternalNotification],
             "ThirdParty" => [SettingsDataBucketStartPerformance],
             "Achievement" => [SettingsDataBucketAchievement],
             "VersionUpdate" => [SettingsDataBucketConnectionGame, SettingsDataBucketVersionUpdate],
@@ -8930,7 +9133,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         var rawOperNameLanguage = ReadGlobalString(config, ConfigurationKeys.OperNameLanguage, DefaultOperNameLanguage);
         // WPF reads GUI.InverseClearMode via ConfigurationHelper.GetGlobalValue.
         var rawInverseClearMode = ReadGlobalString(config, ConfigurationKeys.InverseClearMode, DefaultInverseClearMode);
-        var rawUseSoftwareRendering = ReadGlobalBool(config, SoftwareRenderingConfigKey, false);
+        var rawUseSoftwareRendering = ReadSoftwareRendering(config);
         var rawHotkeys = ReadGlobalString(config, ConfigurationKeys.HotKeys, string.Empty);
         var parsedHotkeys = HotkeyConfigurationCodec.Parse(rawHotkeys);
         hotkeyWarnings.AddRange(parsedHotkeys.Warnings);
@@ -9215,6 +9418,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
     private static bool ReadGlobalBool(UnifiedConfig config, string key, bool fallback)
         => ReadBool(config, key, fallback, ConfigValuePreference.GlobalFirst);
+
+    private static bool ReadSoftwareRendering(UnifiedConfig config)
+        => config.GlobalValues.ContainsKey(SoftwareRenderingConfigKey)
+            ? ReadGlobalBool(config, SoftwareRenderingConfigKey, false)
+            : ReadGlobalBool(config, LegacySoftwareRenderingConfigKey, false);
 
     private static bool ReadProfileBool(UnifiedConfig config, string key, bool fallback)
         => ReadBool(config, key, fallback, ConfigValuePreference.ProfileFirst);
@@ -10912,7 +11120,7 @@ public sealed record GuiSettingsSnapshot(
             [ConfigurationKeys.MinimizeToTray] = MinimizeToTray.ToString(),
             [ConfigurationKeys.WindowTitleScrollable] = WindowTitleScrollable.ToString(),
             [ConfigurationKeys.UiScalePercent] = UiScalePercent.ToString(CultureInfo.InvariantCulture),
-            [ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering] = UseSoftwareRendering.ToString(),
+            [ConfigurationKeys.PerformanceIgnoreBadModulesAndUseSoftwareRendering] = UseSoftwareRendering.ToString(),
             ["GUI.DeveloperMode"] = DeveloperModeEnabled.ToString(),
             [ConfigurationKeys.LogItemDateFormat] = LogItemDateFormatString,
             [ConfigurationKeys.OperNameLanguage] = OperNameLanguage,
@@ -10960,6 +11168,7 @@ public sealed record StartPerformanceSettingsSnapshot(
     bool PerformanceAllowDeprecatedGpu,
     string PerformancePreferredGpuDescription,
     string PerformancePreferredGpuInstancePath,
+    bool SoftwareRendering,
     bool DeploymentWithPause,
     string StartsWithScript,
     string EndsWithScript,
@@ -10981,13 +11190,20 @@ public sealed record StartPerformanceSettingsSnapshot(
 {
     public IReadOnlyDictionary<string, string> ToGlobalSettingUpdates()
     {
+        // WPF dev-v2 f464016813: GPU preference, deprecated-GPU opt-in and the software rendering
+        // switch are machine-wide and live in the global Performance section.
         return new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [ConfigurationKeys.MinimizeDirectly] = MinimizeDirectly.ToString(),
+            [ConfigurationKeys.PerformanceUseGpu] = PerformanceUseGpu.ToString(),
+            [ConfigurationKeys.PerformanceAllowDeprecatedGpu] = PerformanceAllowDeprecatedGpu.ToString(),
+            [ConfigurationKeys.PerformancePreferredGpuDescription] = PerformancePreferredGpuDescription,
+            [ConfigurationKeys.PerformancePreferredGpuInstancePath] = PerformancePreferredGpuInstancePath,
+            [ConfigurationKeys.PerformanceIgnoreBadModulesAndUseSoftwareRendering] = SoftwareRendering.ToString(),
         };
     }
 
-    public IReadOnlyDictionary<string, string> ToProfileSettingUpdates(bool includeGpuSettings = true)
+    public IReadOnlyDictionary<string, string> ToProfileSettingUpdates()
     {
         var updates = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -11015,16 +11231,6 @@ public sealed record StartPerformanceSettingsSnapshot(
             [ThirdPartySettingKeys.YituliuOpenApiToken] = YituliuOpenApiToken,
             [ThirdPartySettingKeys.OperBoxUseYituliuApi] = OperBoxUseYituliuApi.ToString(),
         };
-
-        // GPU settings are profile-scoped to match WPF GpuOption (ConfigurationHelper.SetValue)
-        // and the profile-first readers in SettingsPageViewModel/ResourceWorkflowService.
-        if (includeGpuSettings)
-        {
-            updates[ConfigurationKeys.PerformanceUseGpu] = PerformanceUseGpu.ToString();
-            updates[ConfigurationKeys.PerformanceAllowDeprecatedGpu] = PerformanceAllowDeprecatedGpu.ToString();
-            updates[ConfigurationKeys.PerformancePreferredGpuDescription] = PerformancePreferredGpuDescription;
-            updates[ConfigurationKeys.PerformancePreferredGpuInstancePath] = PerformancePreferredGpuInstancePath;
-        }
 
         return updates;
     }
@@ -11116,6 +11322,19 @@ public sealed record TimerSettingsSnapshot(
 
         return updates;
     }
+}
+
+public sealed class SettingsSectionCollapseEventArgs : EventArgs
+{
+    public SettingsSectionCollapseEventArgs(string sectionKey, bool isCollapsed)
+    {
+        SectionKey = sectionKey;
+        IsCollapsed = isCollapsed;
+    }
+
+    public string SectionKey { get; }
+
+    public bool IsCollapsed { get; }
 }
 
 public sealed class GuiSettingsAppliedEventArgs : EventArgs

@@ -2700,6 +2700,9 @@ DEBUGディレクトリに保存される画像には数量制限があり、超
   <data name="Settings.Section.ExternalNotification" xml:space="preserve">
     <value>外部通知</value>
   </data>
+  <data name="Settings.Section.Notification" xml:space="preserve">
+    <value>通知</value>
+  </data>
   <data name="Settings.Section.GUI" xml:space="preserve">
     <value>UI設定</value>
   </data>

@@ -202,7 +202,12 @@ internal static class LegacyConfigValueMappings
         ["Performance.GpuDescription"] = "Performance.PreferredGpuDescription",
         ["Performance.GpuInstancePath"] = "Performance.PreferredGpuInstancePath",
         ["Performance.AllowDeprecatedGpu"] = "Performance.AllowDeprecatedGpu",
-        ["Performance.IgnoreBadModulesAndUseSoftwareRendering"] = "GUI.IgnoreBadModulesAndUseSoftwareRendering",
+        // dev-v2 f464016813 nests the software rendering switch in Gui.Performance; the flat key
+        // only survives until the load-time migration rewrites it.
+        ["Performance.IgnoreBadModulesAndUseSoftwareRendering"] = "Performance.IgnoreBadModulesAndUseSoftwareRendering",
+        // Settings-page section order / collapse state (dev-v2 0bc04350c0, ff2d6cd2e7).
+        ["SettingOrders"] = "GUI.SettingOrders",
+        ["CollapesStates"] = "GUI.CollapesStates",
     };
 
     private static readonly Dictionary<string, string> ClientTypeAliases = new(StringComparer.OrdinalIgnoreCase)

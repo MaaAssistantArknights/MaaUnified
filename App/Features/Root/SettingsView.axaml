@@ -17,8 +17,15 @@
         <controls:AppSelectionList.ItemTemplate>
           <DataTemplate DataType="settingsVm:SettingsSectionViewModel">
             <Border Classes="app-selection-list-item-shell settings-rail-item">
-              <TextBlock Classes="settings-rail-item-text long-wrap"
-                         Text="{Binding DisplayName}" />
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="settings-rail-item-text long-wrap"
+                           Text="{Binding DisplayName}" />
+                <Button Grid.Column="1"
+                        Classes="settings-rail-collapse"
+                        Content="{Binding CollapseGlyph}"
+                        Click="OnSectionCollapseToggleClick"
+                        Focusable="False" />
+              </Grid>
             </Border>
           </DataTemplate>
         </controls:AppSelectionList.ItemTemplate>
@@ -50,9 +57,7 @@
                   Classes="settings-section-anchor" />
           <Border x:Name="SectionGui"
                   Classes="settings-section-anchor" />
-          <Border x:Name="SectionBackground"
-                  Classes="settings-section-anchor" />
-          <Border x:Name="SectionExternalNotification"
+          <Border x:Name="SectionNotification"
                   Classes="settings-section-anchor" />
           <Border x:Name="SectionThirdParty"
                   Classes="settings-section-anchor" />

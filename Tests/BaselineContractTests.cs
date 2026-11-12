@@ -357,6 +357,7 @@ internal static class BaselineTestSupport
         "ExternalNotification.Whitelist",
         "Start.SkipStartupAutoRunAfterUpdate",
         "Start.StartupAutoRunCountdownSeconds",
+        "Performance.IgnoreBadModulesAndUseSoftwareRendering",
         "VersionUpdate.GitHubToken",
         "VersionUpdate.GitHubTokenExpired",
         "VersionUpdate.ShowUpdaterConsole",

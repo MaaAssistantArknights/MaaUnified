@@ -84,7 +84,7 @@ public sealed record StartupShellSnapshot(
                 ReadGlobalInt(config, ConfigurationKeys.UiScalePercent, DefaultUiScalePercent),
                 UiScalePercentMin,
                 UiScalePercentMax),
-            UseSoftwareRendering: ReadGlobalBool(config, ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering, false),
+            UseSoftwareRendering: ReadSoftwareRendering(config),
             LogItemDateFormatString: NormalizeLogItemDateFormat(
                 ReadGlobalString(config, ConfigurationKeys.LogItemDateFormat, DefaultLogItemDateFormat)),
             BackgroundImagePath: ReadBackgroundImagePath(config),
@@ -100,6 +100,15 @@ public sealed record StartupShellSnapshot(
                 ReadGlobalString(config, ConfigurationKeys.BackgroundImageStretchMode, DefaultBackgroundStretchMode)),
             HotkeyShowGui: parsedHotkeys.ShowGui,
             HotkeyLinkStart: parsedHotkeys.LinkStart);
+    }
+
+    private static bool ReadSoftwareRendering(UnifiedConfig config)
+    {
+        // dev-v2 f464016813 nests the switch in the global Performance section; fall back to the
+        // flat v6.3.7 key for configs that have not gone through the load-time migration yet.
+        return config.GlobalValues.ContainsKey(ConfigurationKeys.PerformanceIgnoreBadModulesAndUseSoftwareRendering)
+            ? ReadGlobalBool(config, ConfigurationKeys.PerformanceIgnoreBadModulesAndUseSoftwareRendering, false)
+            : ReadGlobalBool(config, ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering, false);
     }
 
     private static string ReadThemeModeWithLegacyFallback(UnifiedConfig config)

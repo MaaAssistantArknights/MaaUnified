@@ -370,6 +370,10 @@ public static class ConfigurationKeys
     public const string PerformancePreferredGpuInstancePath = "Performance.PreferredGpuInstancePath";
     public const string PerformanceAllowDeprecatedGpu = "Performance.AllowDeprecatedGpu";
 
+    // WPF dev-v2 f464016813 moved the software rendering switch from the flat global key into the
+    // global Performance section.
+    public const string PerformanceIgnoreBadModulesAndUseSoftwareRendering = "Performance.IgnoreBadModulesAndUseSoftwareRendering";
+
     // The following should not be modified manually
     public const string VersionName = "VersionUpdate.name";
 

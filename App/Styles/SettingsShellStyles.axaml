@@ -106,6 +106,38 @@
     <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.DisabledForeground}" />
   </Style>
 
+  <Style Selector="Button.settings-rail-collapse">
+    <Setter Property="MinWidth" Value="18" />
+    <Setter Property="Width" Value="18" />
+    <Setter Property="Height" Value="18" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="4,0,0,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.settings-rail-collapse:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Primary}" />
+  </Style>
+
+  <Style Selector="Button.settings-section-collapsed-header">
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.settings-section-collapsed-header:pointerover TextBlock.settings-page-title">
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Action.PrimaryBackground}" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-section-collapse-glyph">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource MAA.Brush.App.Text.Secondary}" />
+  </Style>
+
   <Style Selector="StackPanel.settings-section-shell">
     <Setter Property="Spacing" Value="{DynamicResource MAA.App.Settings.SectionSpacing}" />
   </Style>

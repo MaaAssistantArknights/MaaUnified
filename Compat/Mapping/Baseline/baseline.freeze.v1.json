@@ -5332,6 +5332,20 @@
       }
     },
     {
+      "key": "Performance.IgnoreBadModulesAndUseSoftwareRendering",
+      "owner_item_id": "Settings.Performance",
+      "parity_status": "Gap",
+      "priority": "P0",
+      "notes": "dev-v2 新增配置键（v6.3.7 冻结基线之外）。dev-v2 f464016813 把软件渲染开关从扁平 GUI 键迁入全局 Performance 段；MAAUnified 启动期与设置页均按新键读写并迁移旧键。",
+      "evidence": {
+        "ui_path": "App/Features/Settings/PerformanceSettingsView.axaml",
+        "log_path": "debug/avalonia-ui-startup.log",
+        "scope": "Config.Performance.IgnoreBadModulesAndUseSoftwareRendering",
+        "case_id": "CFG-321"
+      },
+      "mapping_target": null
+    },
+    {
       "key": "Performance.PreferredGpuDescription",
       "owner_item_id": "Settings.Performance",
       "parity_status": "Gap",
@@ -7216,10 +7230,10 @@
   "metadata": {
     "feature_item_count": 38,
     "system_item_count": 12,
-    "config_key_count": 320,
+    "config_key_count": 321,
     "fallback_record_count": 15,
     "wpf_config_key_count": 292,
-    "avalonia_extension_config_key_count": 28,
+    "avalonia_extension_config_key_count": 29,
     "wpf_config_key_set_sha256": "566082d9e031b813dd5806d73baa6c319b0e44db24a2a6001be3b16eae94a0cd"
   }
 }

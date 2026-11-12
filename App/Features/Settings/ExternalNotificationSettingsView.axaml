@@ -46,7 +46,7 @@
   <Grid Margin="4"
         RowDefinitions="Auto,Auto">
     <TextBlock Classes="settings-page-title"
-               Text="{Binding RootTexts[Settings.Section.ExternalNotification]}" />
+               Text="{Binding RootTexts[Settings.Section.Notification]}" />
 
     <controls:AdaptiveSpacingStackPanel Grid.Row="1"
                 Margin="{DynamicResource MAA.Thickness.Settings.SectionTopMargin}"

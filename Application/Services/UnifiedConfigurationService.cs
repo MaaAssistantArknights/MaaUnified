@@ -18,6 +18,19 @@ public enum ConfigValidationMode
     Full = 1,
 }
 
+/// <summary>
+/// One persisted configuration value that changed between two saves. <see cref="Path"/> is the
+/// JSON path inside <c>config/avalonia.json</c> (for example
+/// <c>GlobalValues.GUI.SettingOrders[2]</c> or <c>Profiles.Default.Values.RunDirectly</c>).
+/// Sensitive values never expose their payload: both <see cref="OldValue"/> and
+/// <see cref="NewValue"/> are <see langword="null"/> and <see cref="IsSensitive"/> is set.
+/// </summary>
+public readonly record struct ConfigValueChange(
+    string Path,
+    string? OldValue,
+    string? NewValue,
+    bool IsSensitive);
+
 public sealed class UnifiedConfigurationService
 {
     private static readonly JsonSerializerOptions _reportOptions = new()
@@ -49,6 +62,7 @@ public sealed class UnifiedConfigurationService
     private readonly SemaphoreSlim _saveSemaphore = new(1, 1);
     private List<ConfigValidationIssue> _currentValidationIssues = [];
     private string? _lastPersistedConfigSnapshot;
+    private Dictionary<string, string> _lastPersistedSensitiveValues = new(StringComparer.Ordinal);
     private IReadOnlyList<ImportUnreadableConfigValue> _pendingUnreadableLegacySensitiveValues = [];
 
     public UnifiedConfigurationService(
@@ -57,7 +71,8 @@ public sealed class UnifiedConfigurationService
         IConfigImporter guiImporter,
         UiLogService logService,
         string baseDirectory,
-        SensitiveSettingsService? sensitiveSettingsService = null)
+        SensitiveSettingsService? sensitiveSettingsService = null,
+        bool demoMode = false)
     {
         _store = store;
         _guiNewImporter = guiNewImporter;
@@ -67,7 +82,15 @@ public sealed class UnifiedConfigurationService
             ?? SensitiveSettingsService.CreatePersistentFileForTests(baseDirectory);
         _sensitiveSettingsService.StateChanged += () => SensitiveStorageStateChanged?.Invoke();
         LogService = logService;
+        IsDemoMode = demoMode;
     }
+
+    /// <summary>
+    /// Gets a value indicating whether the process runs in demo mode (README screenshots).
+    /// Demo mode keeps every mutation in memory and never writes configuration files
+    /// (WPF dev-v2 <c>382009b97b</c>, <c>ConfigFactory.Save/SaveAsync</c> short-circuit).
+    /// </summary>
+    public bool IsDemoMode { get; }
 
     public UiLogService LogService { get; }
 
@@ -92,6 +115,13 @@ public sealed class UnifiedConfigurationService
     public bool HasUnreadableLegacySensitiveValuesPending => _pendingUnreadableLegacySensitiveValues.Count > 0;
 
     public event Action<UnifiedConfig>? ConfigChanged;
+
+    /// <summary>
+    /// Raised once per configuration value that changed in a successful save. Sensitive values
+    /// (see <see cref="SensitiveSettingKeyRegistry"/>) are reported with masked payloads so
+    /// consumers may log the path but never the secret.
+    /// </summary>
+    public event Action<ConfigValueChange>? ConfigValueChanged;
 
     public event Action? SensitiveStorageStateChanged;
 
@@ -169,6 +199,7 @@ public sealed class UnifiedConfigurationService
             await _store.SaveAsync(configToPersist, cancellationToken);
             CurrentConfig.SensitiveStorage = CloneSensitiveStorageMetadata(configToPersist.SensitiveStorage);
             _lastPersistedConfigSnapshot = SerializeConfigSnapshot(configToPersist);
+            _lastPersistedSensitiveValues = CollectSensitiveValues(CurrentConfig);
             _sensitiveSettingsService.MarkBackendActive(configToPersist.SensitiveStorage.Backend);
             try
             {
@@ -262,6 +293,10 @@ public sealed class UnifiedConfigurationService
                     var clearedRecruitExpeditedCount = ClearOneShotRecruitExpedited(CurrentConfig);
                     var clearedObsoleteAutoRestartOnDropCount = ClearObsoleteAutoRestartOnDrop(CurrentConfig);
                     var migratedCopilotSettingCount = MigrateCopilotSettingsToProfiles(CurrentConfig);
+                    var migratedPerformanceSettingCount = MigratePerformanceSettingsToGlobal(CurrentConfig);
+                    // dev-v2 f464016813 merges ExternalNotificationSettings into NotificationSettings and
+                    // drops the removed BackgroundSettings key; v6.3.7 expander booleans become collapse state.
+                    var normalizedSectionLayout = SettingsSectionLayout.NormalizeGlobalLayout(CurrentConfig.GlobalValues);
                     var legacyConversionReport = new ImportReport
                     {
                         Source = ImportSource.Auto,
@@ -293,6 +328,8 @@ public sealed class UnifiedConfigurationService
                         || clearedRecruitExpeditedCount > 0
                         || clearedObsoleteAutoRestartOnDropCount > 0
                         || migratedCopilotSettingCount > 0
+                        || migratedPerformanceSettingCount > 0
+                        || normalizedSectionLayout
                         || decryptedLegacySensitiveValueCount > 0
                         || normalizedSensitiveScopeCount > 0
                         || repairedNullEntries
@@ -344,6 +381,18 @@ public sealed class UnifiedConfigurationService
                             $"Moved {migratedCopilotSettingCount} legacy global Copilot setting(s) into per-profile configuration.");
                     }
 
+                    if (migratedPerformanceSettingCount > 0)
+                    {
+                        LogService.Info(
+                            $"Moved {migratedPerformanceSettingCount} profile-scoped Performance value(s) to global configuration.");
+                    }
+
+                    if (normalizedSectionLayout)
+                    {
+                        LogService.Info(
+                            "Normalized the settings-page section order and collapse state in config/avalonia.json.");
+                    }
+
                     if (decryptedLegacySensitiveValueCount > 0)
                     {
                         LogService.Info($"Converted {decryptedLegacySensitiveValueCount} legacy encrypted sensitive value(s) before secure storage migration.");
@@ -387,6 +436,7 @@ public sealed class UnifiedConfigurationService
                     if (!normalizedConfigChanged || persistedNormalizedConfig)
                     {
                         _lastPersistedConfigSnapshot = SerializeConfigSnapshot(CreateRedactedConfigSnapshot(CurrentConfig));
+                        _lastPersistedSensitiveValues = CollectSensitiveValues(CurrentConfig);
                     }
                     else
                     {
@@ -553,6 +603,10 @@ public sealed class UnifiedConfigurationService
             ClearObsoleteAutoRestartOnDrop(config);
             // WPF dev-v2 (382009b97b / 5b39509df6) moves Copilot list/settings into each profile.
             MigrateCopilotSettingsToProfiles(config);
+            // WPF dev-v2 (f464016813) makes the Performance section global and merges the
+            // settings-page sections; normalize both shapes before the imported config is saved.
+            MigratePerformanceSettingsToGlobal(config);
+            SettingsSectionLayout.NormalizeGlobalLayout(config.GlobalValues);
 
             config.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
             NormalizeFightStageSelections(config);
@@ -830,6 +884,205 @@ public sealed class UnifiedConfigurationService
         }
     }
 
+    private void RaiseConfigValueChanged(ConfigValueChange change)
+    {
+        var handlers = ConfigValueChanged?.GetInvocationList();
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (Action<ConfigValueChange> handler in handlers)
+        {
+            try
+            {
+                handler(change);
+            }
+            catch (Exception ex)
+            {
+                LogService.Warn($"ConfigValueChanged subscriber failed and was isolated: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Demo mode keeps mutations in memory only. Normalizations still run so the in-memory model
+    /// matches what a real save would leave behind, but no store, backup or sensitive document is
+    /// written (WPF dev-v2 <c>ConfigFactory.SaveAsync</c> short-circuit).
+    /// </summary>
+    private IReadOnlyList<ConfigValidationIssue> ApplyDemoModeSave(
+        UnifiedConfig config,
+        ConfigValidationMode validationMode)
+    {
+        var candidate = CloneConfigForSave(config);
+        candidate.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
+        var normalizedTaskParamCount = NormalizeTaskQueueParams(candidate);
+        if (normalizedTaskParamCount > 0)
+        {
+            LogService.Info($"Normalized {normalizedTaskParamCount} task parameter set(s) in demo mode");
+        }
+
+        var previousSnapshot = _lastPersistedConfigSnapshot;
+        var previousSensitiveValues = _lastPersistedSensitiveValues;
+        var currentSensitiveValues = CollectSensitiveValues(candidate);
+        var redactedSnapshot = SerializeConfigSnapshot(CreateRedactedConfigSnapshot(candidate));
+        ApplySuccessfulSaveNormalization(config, candidate);
+        CurrentConfig = config;
+        var issues = RefreshValidationState(validationMode, logIssues: true);
+        NotifyConfigValueChanges(previousSnapshot, redactedSnapshot, previousSensitiveValues, currentSensitiveValues);
+        _lastPersistedConfigSnapshot = redactedSnapshot;
+        _lastPersistedSensitiveValues = currentSensitiveValues;
+        RaiseConfigChanged();
+        LogService.Info("Demo mode enabled: skipped persisting config/avalonia.json");
+        return issues;
+    }
+
+    /// <summary>
+    /// Emits one <see cref="ConfigValueChanged"/> per changed configuration value. Sensitive
+    /// values are compared separately (they are stripped from the durable snapshot) and are
+    /// reported as “updated” with masked payloads.
+    /// </summary>
+    private void NotifyConfigValueChanges(
+        string? previousSnapshot,
+        string currentSnapshot,
+        IReadOnlyDictionary<string, string> previousSensitiveValues,
+        IReadOnlyDictionary<string, string> currentSensitiveValues)
+    {
+        var previous = FlattenConfigSnapshot(previousSnapshot);
+        var current = FlattenConfigSnapshot(currentSnapshot);
+        foreach (var path in previous.Keys.Union(current.Keys).OrderBy(static path => path, StringComparer.Ordinal))
+        {
+            previous.TryGetValue(path, out var oldValue);
+            current.TryGetValue(path, out var newValue);
+            if (string.Equals(oldValue, newValue, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            RaiseConfigValueChanged(new ConfigValueChange(path, oldValue, newValue, IsSensitive: false));
+            LogService.Info(
+                $"Configuration {path} has been set: `{oldValue ?? "<none>"}` -> `{newValue ?? "<none>"}`");
+        }
+
+        foreach (var path in previousSensitiveValues.Keys
+                     .Concat(currentSensitiveValues.Keys)
+                     .Distinct(StringComparer.Ordinal)
+                     .OrderBy(static path => path, StringComparer.Ordinal))
+        {
+            previousSensitiveValues.TryGetValue(path, out var oldValue);
+            currentSensitiveValues.TryGetValue(path, out var newValue);
+            if (string.Equals(oldValue, newValue, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // Never publish the payload: the change event and the log only say “updated”.
+            RaiseConfigValueChanged(new ConfigValueChange(path, null, null, IsSensitive: true));
+            LogService.Info($"Configuration {path} has been updated");
+        }
+    }
+
+    private static SortedDictionary<string, string> FlattenConfigSnapshot(string? snapshot)
+    {
+        var result = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(snapshot))
+        {
+            return result;
+        }
+
+        try
+        {
+            if (JsonNode.Parse(snapshot) is JsonObject root)
+            {
+                FlattenNode(root, string.Empty, result);
+            }
+        }
+        catch (JsonException)
+        {
+            // A malformed previous snapshot must not break saving; skip the per-key diff.
+        }
+
+        return result;
+    }
+
+    private static void FlattenNode(JsonNode? node, string path, IDictionary<string, string> result)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var (name, child) in obj)
+                {
+                    FlattenNode(child, string.IsNullOrEmpty(path) ? name : $"{path}.{name}", result);
+                }
+
+                break;
+            case JsonArray array:
+                for (var index = 0; index < array.Count; index++)
+                {
+                    FlattenNode(array[index], $"{path}[{index}]", result);
+                }
+
+                break;
+            case JsonValue value:
+                result[path] = value.TryGetValue(out string? text) && text is not null
+                    ? text
+                    : value.ToJsonString();
+                break;
+            case null:
+                result[path] = string.Empty;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Collects the current sensitive payloads keyed by their configuration path. The values are
+    /// only used to detect changes between saves and are never logged or published.
+    /// </summary>
+    private static Dictionary<string, string> CollectSensitiveValues(UnifiedConfig config)
+    {
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var definition in SensitiveSettingKeyRegistry.Definitions)
+        {
+            if (definition.Scope == SensitiveSettingScope.Global)
+            {
+                AddSensitiveValue(values, config.GlobalValues, definition.Key, $"GlobalValues.{definition.Key}");
+                continue;
+            }
+
+            AddSensitiveValue(values, config.GlobalValues, definition.Key, $"GlobalValues.{definition.Key}");
+            foreach (var (profileName, profile) in config.Profiles)
+            {
+                AddSensitiveValue(
+                    values,
+                    profile.Values,
+                    definition.Key,
+                    $"Profiles.{profileName}.Values.{definition.Key}");
+            }
+        }
+
+        return values;
+    }
+
+    private static void AddSensitiveValue(
+        IDictionary<string, string> values,
+        IReadOnlyDictionary<string, JsonNode?> source,
+        string key,
+        string path)
+    {
+        if (!source.TryGetValue(key, out var node) || node is null)
+        {
+            return;
+        }
+
+        var text = node is JsonValue value && value.TryGetValue(out string? scalar) && scalar is not null
+            ? scalar
+            : node.ToJsonString();
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            values[path] = text;
+        }
+    }
+
     private async Task<IReadOnlyList<ConfigValidationIssue>> SaveCoreAsync(
         UnifiedConfig config,
         bool logSavedConfig,
@@ -841,6 +1094,11 @@ public sealed class UnifiedConfigurationService
         await _saveSemaphore.WaitAsync(cancellationToken);
         try
         {
+            if (IsDemoMode)
+            {
+                return ApplyDemoModeSave(config, validationMode);
+            }
+
             await using var commitLock = await _store.AcquireCommitLockAsync(cancellationToken);
             // Save-time repairs must remain detached until the config store accepts the write.
             // Callers may recover their own pending edits after a failed save, but they cannot
@@ -910,12 +1168,19 @@ public sealed class UnifiedConfigurationService
             // which would diverge the live model from the persisted file.
             await SanitizeKnownConfigBackupsAsync(CancellationToken.None);
             config.MarkNullEntryRepairsPersisted();
+            var previousSnapshot = _lastPersistedConfigSnapshot;
+            var previousSensitiveValues = _lastPersistedSensitiveValues;
+            // Capture the secrets before the sensitive service strips them from the persisted
+            // document so per-key change events can report “updated” without exposing payloads.
+            var currentSensitiveValues = CollectSensitiveValues(candidate);
             _lastPersistedConfigSnapshot = configSnapshot;
+            _lastPersistedSensitiveValues = currentSensitiveValues;
             ApplySuccessfulSaveNormalization(config, candidate);
             SensitiveSettingKeyRegistry.NormalizeMisplacedProfileValues(config);
             config.SensitiveStorage = CloneSensitiveStorageMetadata(configToPersist.SensitiveStorage);
             CurrentConfig = config;
             var issues = RefreshValidationState(validationMode, logIssues: true);
+            NotifyConfigValueChanges(previousSnapshot, configSnapshot, previousSensitiveValues, currentSensitiveValues);
             RaiseConfigChanged();
 
             if (logSavedConfig)
@@ -1493,6 +1758,114 @@ public sealed class UnifiedConfigurationService
     // `Start.AutoRestartOnDrop` switch no longer exists. The key constant is kept in
     // LegacyConfigurationKeys so legacy files still import cleanly, but the value is dropped
     // from the persisted config once imported or loaded.
+    private static readonly string[] ProfileScopedPerformanceKeys =
+    [
+        ConfigurationKeys.PerformanceUseGpu,
+        ConfigurationKeys.PerformanceAllowDeprecatedGpu,
+        ConfigurationKeys.PerformancePreferredGpuDescription,
+        ConfigurationKeys.PerformancePreferredGpuInstancePath,
+    ];
+
+    /// <summary>
+    /// WPF dev-v2 (<c>f464016813</c>) moved the Performance section from every profile into the
+    /// global <c>Gui.Performance</c> object because GPU preference and rendering mode are
+    /// machine-wide. Only the current profile's values are promoted; values of other profiles are
+    /// dropped as dead keys (no merge semantics), mirroring <c>SettingsPageReorgMigrationConverter</c>.
+    /// The flat v6.3.7 software-rendering key also moves into the global Performance section.
+    /// </summary>
+    private static int MigratePerformanceSettingsToGlobal(UnifiedConfig config)
+    {
+        var migrated = 0;
+
+        if (config.GlobalValues.Remove(
+                ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering,
+                out var legacySoftwareRendering))
+        {
+            migrated++;
+            if (legacySoftwareRendering is not null
+                && !config.GlobalValues.ContainsKey(ConfigurationKeys.PerformanceIgnoreBadModulesAndUseSoftwareRendering))
+            {
+                config.GlobalValues[ConfigurationKeys.PerformanceIgnoreBadModulesAndUseSoftwareRendering] =
+                    CoerceBooleanNode(legacySoftwareRendering) ?? JsonValue.Create(false);
+            }
+        }
+
+        if (config.Profiles.TryGetValue(config.CurrentProfile, out var currentProfile))
+        {
+            foreach (var key in ProfileScopedPerformanceKeys)
+            {
+                if (!currentProfile.Values.Remove(key, out var value))
+                {
+                    continue;
+                }
+
+                migrated++;
+                if (value is not null && !config.GlobalValues.ContainsKey(key))
+                {
+                    config.GlobalValues[key] = CoercePerformanceValue(key, value);
+                }
+            }
+        }
+
+        foreach (var profile in config.Profiles.Values)
+        {
+            foreach (var key in ProfileScopedPerformanceKeys)
+            {
+                if (profile.Values.Remove(key))
+                {
+                    migrated++;
+                }
+            }
+        }
+
+        return migrated;
+    }
+
+    private static JsonNode CoercePerformanceValue(string key, JsonNode value)
+    {
+        // "枚举强转"：旧迁移/手改档可能把布尔写成字符串或 0/1，写入全局前统一成布尔。
+        if (key is ConfigurationKeys.PerformanceUseGpu or ConfigurationKeys.PerformanceAllowDeprecatedGpu)
+        {
+            return CoerceBooleanNode(value) ?? value.DeepClone();
+        }
+
+        return value.DeepClone();
+    }
+
+    private static JsonNode? CoerceBooleanNode(JsonNode node)
+    {
+        if (node is not JsonValue value)
+        {
+            return null;
+        }
+
+        if (value.TryGetValue(out bool parsedBool))
+        {
+            return JsonValue.Create(parsedBool);
+        }
+
+        if (value.TryGetValue(out int parsedInt))
+        {
+            return JsonValue.Create(parsedInt != 0);
+        }
+
+        if (value.TryGetValue(out string? text) && !string.IsNullOrWhiteSpace(text))
+        {
+            var trimmed = text.Trim();
+            if (bool.TryParse(trimmed, out var parsedText))
+            {
+                return JsonValue.Create(parsedText);
+            }
+
+            if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedTextInt))
+            {
+                return JsonValue.Create(parsedTextInt != 0);
+            }
+        }
+
+        return null;
+    }
+
     private static int ClearObsoleteAutoRestartOnDrop(UnifiedConfig config)
     {
         var cleared = config.GlobalValues.Remove(ConfigurationKeys.AutoRestartOnDrop) ? 1 : 0;

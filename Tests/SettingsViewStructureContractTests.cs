@@ -142,6 +142,43 @@ public sealed class SettingsViewStructureContractTests
     }
 
     [Fact]
+    public void SettingsView_ShouldExposeSectionOrderAndCollapseContracts()
+    {
+        var root = GetMaaUnifiedRoot();
+        var text = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "SettingsView.axaml"));
+        var codeBehind = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "SettingsView.axaml.cs"));
+        var styles = File.ReadAllText(Path.Combine(root, "App", "Styles", "SettingsShellStyles.axaml"));
+
+        Assert.Contains("Content=\"{Binding CollapseGlyph}\"", text, StringComparison.Ordinal);
+        Assert.Contains("Click=\"OnSectionCollapseToggleClick\"", text, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"SectionNotification\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"SectionBackground\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"SectionExternalNotification\"", text, StringComparison.Ordinal);
+
+        Assert.Contains("ApplySectionOrderToContentPanel()", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("CreateCollapsedSectionHeader(", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("SectionCollapsedChanged", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("IsSectionCollapsed(", codeBehind, StringComparison.Ordinal);
+
+        Assert.Contains("Button.settings-rail-collapse", styles, StringComparison.Ordinal);
+        Assert.Contains("Button.settings-section-collapsed-header", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GuiSettingsView_ShouldEmbedBackgroundSection_AndPerformanceShouldOwnSoftwareRendering()
+    {
+        var root = GetMaaUnifiedRoot();
+        var gui = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "GuiSettingsView.axaml"));
+        var performance = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "PerformanceSettingsView.axaml"));
+
+        // WPF dev-v2 f464016813: background merged into the interface section, software rendering
+        // moved into the performance section.
+        Assert.Contains("<settingsViews:BackgroundSettingsView />", gui, StringComparison.Ordinal);
+        Assert.DoesNotContain("UseSoftwareRendering", gui, StringComparison.Ordinal);
+        Assert.Contains("IsChecked=\"{Binding UseSoftwareRendering}\"", performance, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SettingsShellStyles_ShouldKeepTightNotesVerticalOnly_AndProvideScrollTailSpacer()
     {
         var root = GetMaaUnifiedRoot();
@@ -311,6 +348,10 @@ public sealed class SettingsViewStructureContractTests
 
         var performance = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "PerformanceSettingsView.axaml"));
         Assert.Contains("UseGpuForInferenceTip", performance, StringComparison.Ordinal);
+        // WPF dev-v2 f464016813 moved the software rendering switch from the interface section
+        // into the performance section.
+        Assert.Contains("BadModules.UseSoftwareRenderingTip", performance, StringComparison.Ordinal);
+        Assert.Contains("IsChecked=\"{Binding UseSoftwareRendering}\"", performance, StringComparison.Ordinal);
 
         var timer = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "TimerSettingsView.axaml"));
         Assert.Contains("ForceScheduledStartTip", timer, StringComparison.Ordinal);
@@ -321,7 +362,7 @@ public sealed class SettingsViewStructureContractTests
 
         var gui = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "GuiSettingsView.axaml"));
         Assert.Contains("SystemNotificationInfo", gui, StringComparison.Ordinal);
-        Assert.Contains("BadModules.UseSoftwareRenderingTip", gui, StringComparison.Ordinal);
+        Assert.DoesNotContain("BadModules.UseSoftwareRenderingTip", gui, StringComparison.Ordinal);
 
         var versionUpdate = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "VersionUpdateSettingsView.axaml"));
         Assert.Contains("UpdateAutoCheckTip", versionUpdate, StringComparison.Ordinal);
@@ -444,11 +485,11 @@ public sealed class SettingsViewStructureContractTests
             "Settings section control warmup should start after first screen, before waiting for the settings root page to load.");
 
         var settingsView = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "SettingsView.axaml.cs"));
-        Assert.Contains("if (_backgroundSectionWarmupTimer is not null || PrewarmedSectionKeys.Count >= SectionOrder.Length)", settingsView, StringComparison.Ordinal);
+        Assert.Contains("PrewarmedSectionKeys.Count >= SettingsSectionLayout.Sections.Count", settingsView, StringComparison.Ordinal);
         Assert.Contains("PrewarmedSectionContentCache[sectionKey] = content;", settingsView, StringComparison.Ordinal);
         Assert.Contains("PrewarmedSectionKeys.Add(sectionKey);", settingsView, StringComparison.Ordinal);
-        Assert.Contains("private static IEnumerable<string> ResolveProgressiveMaterializationTargets()", settingsView, StringComparison.Ordinal);
-        Assert.Contains("return SectionOrder;", settingsView, StringComparison.Ordinal);
+        Assert.Contains("private IEnumerable<string> ResolveProgressiveMaterializationTargets()", settingsView, StringComparison.Ordinal);
+        Assert.Contains("return ResolveSectionOrder();", settingsView, StringComparison.Ordinal);
         Assert.Contains("MaterializeSectionsSequentiallyAsync(", settingsView, StringComparison.Ordinal);
         Assert.Contains("QueueScrollToSelectedSectionAfterLayout()", settingsView, StringComparison.Ordinal);
     }

@@ -723,10 +723,12 @@ public sealed class ConfigurationImportTests
         Assert.True(globals["MainFunction.InverseMode"]?.GetValue<bool>());
         Assert.Equal(4, globals["Guide.StepIndex"]?.GetValue<int>());
         Assert.True(globals["Performance.UseGpu"]?.GetValue<bool>());
-        Assert.True(globals["GUI.IgnoreBadModulesAndUseSoftwareRendering"]?.GetValue<bool>());
+        // dev-v2 f464016813 nests the software rendering switch in the global Performance section.
+        Assert.True(globals["Performance.IgnoreBadModulesAndUseSoftwareRendering"]?.GetValue<bool>());
+        Assert.False(globals.ContainsKey("GUI.IgnoreBadModulesAndUseSoftwareRendering"));
         Assert.Equal("bg.png", globals["GUI.Background.ImagePath"]?.GetValue<string>());
         Assert.Equal(70, globals["GUI.Background.Opacity"]?.GetValue<int>());
-        Assert.Contains(
+        Assert.DoesNotContain(
             report.Warnings,
             warning => warning.Contains("Root `Gui` key `SettingOrders`", StringComparison.Ordinal));
     }

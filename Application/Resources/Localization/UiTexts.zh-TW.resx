@@ -2592,6 +2592,9 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="Settings.Section.ExternalNotification" xml:space="preserve">
     <value>外部通知</value>
   </data>
+  <data name="Settings.Section.Notification" xml:space="preserve">
+    <value>通知</value>
+  </data>
   <data name="Settings.Section.GUI" xml:space="preserve">
     <value>介面設定</value>
   </data>

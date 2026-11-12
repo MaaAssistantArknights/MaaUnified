@@ -360,8 +360,18 @@ internal static class Program
         try
         {
             var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
+            var globalValues = root?["GlobalValues"] as JsonObject;
+            // dev-v2 f464016813 moved the switch into the global Performance section; keep reading
+            // the flat v6.3.7 key so an un-migrated config still starts in the expected mode.
+            if (TryReadBooleanNode(
+                    globalValues?[ConfigurationKeys.PerformanceIgnoreBadModulesAndUseSoftwareRendering],
+                    out value))
+            {
+                return true;
+            }
+
             return TryReadBooleanNode(
-                root?["GlobalValues"]?[ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering],
+                globalValues?[ConfigurationKeys.IgnoreBadModulesAndUseSoftwareRendering],
                 out value);
         }
         catch (Exception ex)
@@ -382,6 +392,14 @@ internal static class Program
         try
         {
             var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
+            // dev-v2 (f464016813) nests the switch under Gui.Performance; v6.3.7 kept it flat in GUI.
+            if (TryReadBooleanNode(
+                    root?["Gui"]?["Performance"]?[ConfigurationKeys.PerformanceIgnoreBadModulesAndUseSoftwareRendering],
+                    out value))
+            {
+                return true;
+            }
+
             return TryReadBooleanNode(
                 root?["GUI"]?["IgnoreBadModulesAndUseSoftwareRendering"],
                 out value);

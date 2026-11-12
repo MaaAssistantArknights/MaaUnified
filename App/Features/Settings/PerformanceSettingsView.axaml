@@ -33,6 +33,13 @@
         </controls:AppSelect>
       </Grid>
 
+      <!-- WPF dev-v2 f464016813 merged the software rendering switch into the performance section. -->
+      <controls:AdaptiveSpacingStackPanel Classes="settings-page-inline-field-group">
+        <controls:AppHintedCheckBox Text="{Binding RootTexts[Settings.GUI.UseSoftwareRendering]}"
+                                     Tip="{DynamicResource BadModules.UseSoftwareRenderingTip}"
+                                     IsChecked="{Binding UseSoftwareRendering}" />
+      </controls:AdaptiveSpacingStackPanel>
+
       <controls:AdaptiveSpacingStackPanel Classes="settings-page-branch-block settings-page-compact-flow"
                   IsVisible="{Binding IsGpuCustomSelectionFieldsVisible}">
         <Grid Classes="settings-page-labeled-row"

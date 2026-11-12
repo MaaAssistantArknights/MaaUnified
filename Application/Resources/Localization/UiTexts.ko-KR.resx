@@ -2701,6 +2701,9 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   <data name="Settings.Section.ExternalNotification" xml:space="preserve">
     <value>외부 알림</value>
   </data>
+  <data name="Settings.Section.Notification" xml:space="preserve">
+    <value>알림</value>
+  </data>
   <data name="Settings.Section.GUI" xml:space="preserve">
     <value>UI 설정</value>
   </data>

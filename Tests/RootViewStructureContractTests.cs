@@ -372,7 +372,8 @@ public sealed class RootViewStructureContractTests
         var sectionHostCount = System.Text.RegularExpressions.Regex.Matches(
             text,
             "<Border\\s+x:Name=\"Section[A-Za-z]+\"").Count;
-        Assert.Equal(16, sectionHostCount);
+        // dev-v2 f464016813 merges the background section into the interface section (16 -> 15).
+        Assert.Equal(15, sectionHostCount);
 
         Assert.DoesNotContain("settingsViews:ConfigurationManagerView", text, StringComparison.Ordinal);
         Assert.DoesNotContain("settingsViews:AboutSettingsView", text, StringComparison.Ordinal);

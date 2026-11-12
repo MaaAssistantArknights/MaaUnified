@@ -25,7 +25,7 @@ public sealed class SettingsThirdPartyFeatureTests
 
         var keys = vm.Sections.Select(section => section.Key).ToList();
         Assert.Contains("ThirdParty", keys);
-        Assert.True(keys.IndexOf("ThirdParty") > keys.IndexOf("ExternalNotification"));
+        Assert.True(keys.IndexOf("ThirdParty") > keys.IndexOf("Notification"));
         Assert.True(keys.IndexOf("ThirdParty") < keys.IndexOf("HotKey"));
         var section = vm.Sections.Single(item => item.Key == "ThirdParty");
         Assert.False(string.IsNullOrWhiteSpace(section.DisplayName));
