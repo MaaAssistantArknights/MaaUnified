@@ -4130,7 +4130,6 @@ public sealed class TaskQueueFeatureService : ITaskQueueFeatureService
 
 public sealed class CopilotFeatureService : ICopilotFeatureService
 {
-    private const string CopilotIdPrefix = "maa://";
     private const string PrtsPlusCopilotGet = "https://prts.maa.plus/copilot/get/";
     private const string PrtsPlusCopilotSetGet = "https://prts.maa.plus/set/get?id=";
     private const string PrtsPlusCopilotRating = "https://prts.maa.plus/copilot/rating";
@@ -4197,7 +4196,7 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
         {
             return UiOperationResult<CopilotRemotePayload>.Fail(
                 UiErrorCode.CopilotIdMissing,
-                "作业码无效。请输入 `maa://123456` 或纯数字作业码。");
+                "作业码无效。请输入 `maa://123456`、`prts://123456`、`s123456` 或纯数字作业码。");
         }
 
         var remote = await GetRemoteJsonObjectAsync($"{PrtsPlusCopilotGet}{copilotId}", cancellationToken);
@@ -4262,7 +4261,7 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
         {
             return UiOperationResult<CopilotRemoteSetPayload>.Fail(
                 UiErrorCode.CopilotIdMissing,
-                "作业集码无效。请输入 `maa://123456` 或纯数字作业集码。");
+                "作业集码无效。请输入 `prts://s123456`、`s123456` 或纯数字作业集码。");
         }
 
         var remote = await GetRemoteJsonObjectAsync($"{PrtsPlusCopilotSetGet}{setId}", cancellationToken);
@@ -4424,7 +4423,7 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
         {
             return UiOperationResult.Fail(
                 UiErrorCode.CopilotIdMissing,
-                "作业码无效。请输入 `maa://123456` 或纯数字作业码。");
+                "作业码无效。请输入 `maa://123456`、`prts://123456`、`s123456` 或纯数字作业码。");
         }
 
         var body = JsonSerializer.Serialize(new
@@ -4662,21 +4661,14 @@ public sealed class CopilotFeatureService : ICopilotFeatureService
 
     private static bool TryParseCopilotCode(string source, out int copilotId)
     {
-        copilotId = 0;
-        var normalized = (source ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(normalized))
+        // dev-v2 72213def33：全部作业站代码格式（maa://、prts://、prts://s、s<id>、纯数字）
+        // 共用同一解析器，服务层只关心数字 id。
+        if (!CopilotCodeSourceParser.TryParse(source, out _, out copilotId))
         {
             return false;
         }
 
-        if (normalized.StartsWith(CopilotIdPrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            // WPF GetCopilotAsync 对齐（冻结 CopilotViewModel.cs:1097-1103）：剥离前缀后直接
-            // int.TryParse，不额外容忍多余斜杠（maa:///123 在 WPF 中解析失败）
-            normalized = normalized[CopilotIdPrefix.Length..];
-        }
-
-        return int.TryParse(normalized, out copilotId) && copilotId > 0;
+        return copilotId > 0;
     }
 
     private async Task<UiOperationResult<JsonObject>> GetRemoteJsonObjectAsync(string url, CancellationToken cancellationToken)

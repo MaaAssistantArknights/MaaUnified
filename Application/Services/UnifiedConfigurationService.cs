@@ -255,6 +255,7 @@ public sealed class UnifiedConfigurationService
                     var normalizedTaskParamCount = NormalizeTaskQueueParams(CurrentConfig);
                     var clearedRecruitExpeditedCount = ClearOneShotRecruitExpedited(CurrentConfig);
                     var clearedObsoleteAutoRestartOnDropCount = ClearObsoleteAutoRestartOnDrop(CurrentConfig);
+                    var migratedCopilotSettingCount = MigrateCopilotSettingsToProfiles(CurrentConfig);
                     var legacyConversionReport = new ImportReport
                     {
                         Source = ImportSource.Auto,
@@ -285,6 +286,7 @@ public sealed class UnifiedConfigurationService
                         || normalizedTaskParamCount > 0
                         || clearedRecruitExpeditedCount > 0
                         || clearedObsoleteAutoRestartOnDropCount > 0
+                        || migratedCopilotSettingCount > 0
                         || decryptedLegacySensitiveValueCount > 0
                         || normalizedSensitiveScopeCount > 0
                         || repairedNullEntries
@@ -328,6 +330,12 @@ public sealed class UnifiedConfigurationService
                     {
                         LogService.Info(
                             $"Removed {clearedObsoleteAutoRestartOnDropCount} obsolete `{ConfigurationKeys.AutoRestartOnDrop}` value(s).");
+                    }
+
+                    if (migratedCopilotSettingCount > 0)
+                    {
+                        LogService.Info(
+                            $"Moved {migratedCopilotSettingCount} legacy global Copilot setting(s) into per-profile configuration.");
                     }
 
                     if (decryptedLegacySensitiveValueCount > 0)
@@ -537,6 +545,8 @@ public sealed class UnifiedConfigurationService
             // WPF dev-v2 (01184e2484) drops the removed restart-on-drop switch during migration
             // so an imported config never carries the dead key forward.
             ClearObsoleteAutoRestartOnDrop(config);
+            // WPF dev-v2 (382009b97b / 5b39509df6) moves Copilot list/settings into each profile.
+            MigrateCopilotSettingsToProfiles(config);
 
             config.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
             NormalizeFightStageSelections(config);
@@ -1434,6 +1444,44 @@ public sealed class UnifiedConfigurationService
 
     private void LogConfigBackupSanitizationFailure(string errorCode)
         => LogService.Warn($"Known config backup sanitization skipped: errorCode={errorCode}.");
+
+    // WPF dev-v2 382009b97b / 5b39509df6：Copilot 的列表与设置迁入每档案 Copilot 分节。
+    // MAAUnified 此前把它们存在全局扁平键，加载时搬到所有档案（旧全局值对每个档案同样生效），
+    // 再从 GlobalValues 删除，避免旧值继续遮蔽档案值。
+    private static readonly string[] LegacyGlobalCopilotKeys =
+    [
+        ConfigurationKeys.CopilotTaskList,
+        ConfigurationKeys.CopilotUserAdditional,
+        ConfigurationKeys.CopilotAddUserAdditional,
+        ConfigurationKeys.CopilotSelectFormation,
+        ConfigurationKeys.CopilotSupportUnitUsage,
+        ConfigurationKeys.CopilotLoopTimes,
+    ];
+
+    internal static int MigrateCopilotSettingsToProfiles(UnifiedConfig config)
+    {
+        var migrated = 0;
+        foreach (var key in LegacyGlobalCopilotKeys)
+        {
+            if (!config.GlobalValues.Remove(key, out var value) || value is null)
+            {
+                continue;
+            }
+
+            foreach (var profile in config.Profiles.Values)
+            {
+                if (profile.Values.ContainsKey(key))
+                {
+                    continue;
+                }
+
+                profile.Values[key] = value.DeepClone();
+                migrated += 1;
+            }
+        }
+
+        return migrated;
+    }
 
     // WPF dev-v2 (01184e2484): a dropped connection always stops the queue, so the
     // `Start.AutoRestartOnDrop` switch no longer exists. The key constant is kept in

@@ -47,7 +47,9 @@ public static class CopilotVersionGate
         }
 
         var minimumRequired = ReadMinimumRequired(jobObject);
-        if (!SemanticVersion.TryParse(minimumRequired, out var requiredVersion))
+        // WPF dev-v2 25481d16ca 对齐：minimum_required 使用 SemVersionStyles.OptionalPatch，
+        // 两段版本号（如 ｢6.3｣）按 6.3.0 处理；core 版本仍保持严格三段。
+        if (!SemanticVersion.TryParse(minimumRequired, out var requiredVersion, allowOptionalPatch: true))
         {
             // WPF: "Unable to parse required version"（缺失/空串/非法版本号均落入此分支，即事实上必填）
             return "作业缺少可解析的 minimum_required 最低 core 版本号，无法导入。";
@@ -161,7 +163,7 @@ public static class CopilotVersionGate
     private sealed record SemanticVersion(int Major, int Minor, int Patch, IReadOnlyList<string> PreRelease)
         : IComparable<SemanticVersion>
     {
-        public static bool TryParse(string? value, out SemanticVersion version)
+        public static bool TryParse(string? value, out SemanticVersion version, bool allowOptionalPatch = false)
         {
             version = null!;
             // WPF Semver 3.0.0 锚定解析对齐：不裁剪首尾空白（含空白即非法）
@@ -202,12 +204,22 @@ public static class CopilotVersionGate
             }
 
             var components = core.Split('.');
-            if (components.Length != 3
+            // Semver 3.0 OptionalPatch：缺少补丁段时按 0 处理（仅 minimum_required 使用；
+            // core 版本仍强制三段）。一段版本号（｢6｣）与带空白值仍拒绝。
+            var expectedComponentCount = allowOptionalPatch ? 2 : 3;
+            if (components.Length < expectedComponentCount
+                || components.Length > 3
                 // Semver 对齐：主/次/补丁版本号禁止前导零
                 || components.Any(static component => component.Length > 1 && component[0] == '0')
                 || !int.TryParse(components[0], NumberStyles.None, CultureInfo.InvariantCulture, out var major)
-                || !int.TryParse(components[1], NumberStyles.None, CultureInfo.InvariantCulture, out var minor)
-                || !int.TryParse(components[2], NumberStyles.None, CultureInfo.InvariantCulture, out var patch))
+                || !int.TryParse(components[1], NumberStyles.None, CultureInfo.InvariantCulture, out var minor))
+            {
+                return false;
+            }
+
+            var patch = 0;
+            if (components.Length == 3
+                && !int.TryParse(components[2], NumberStyles.None, CultureInfo.InvariantCulture, out patch))
             {
                 return false;
             }

@@ -783,7 +783,9 @@ public sealed class CopilotN3ExecutionTests
         var list = Assert.IsType<JsonArray>(payload["copilot_list"]);
         var first = Assert.IsType<JsonObject>(list[0]);
         Assert.Equal(filePath, first["filename"]?.GetValue<string>());
-        Assert.Equal("1-7", first["stage_name"]?.GetValue<string>());
+        // WPF dev-v2 c2021e694a：列表不再下发 stage_name；手动添加条目按用户输入的导航名下发起覆盖
+        Assert.False(first.ContainsKey("stage_name"));
+        Assert.Equal("1-7", first["nav_name_override"]?.GetValue<string>());
         Assert.False(first["is_raid"]?.GetValue<bool>() ?? true);
         Assert.True(payload["formation"]?.GetValue<bool>() ?? false);
         Assert.Equal(3, payload["support_unit_usage"]?.GetValue<int>());
@@ -796,8 +798,9 @@ public sealed class CopilotN3ExecutionTests
     }
 
     [Fact]
-    public async Task StartAsync_WhenUseCopilotListContainsLegacyItem_ShouldFailWithWpfParityMessage()
+    public async Task StartAsync_WhenUseCopilotListContainsLegacyItemWithoutTabIndex_ShouldNotReject_WpfParity()
     {
+        // WPF dev-v2 d6601334f2：列表校验不再依赖 tab_index；旧条目（tab_index 缺失）按作业内容判定类型
         await using var fixture = await CopilotN3Fixture.CreateAsync();
         Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(fixture.Runtime.ConnectFeatureService, fixture.ReadyAdbPath)).Success);
 
@@ -811,9 +814,8 @@ public sealed class CopilotN3ExecutionTests
 
         await vm.StartAsync();
 
-        Assert.Contains("旧版本条目", vm.LastErrorMessage, StringComparison.Ordinal);
-        Assert.Empty(fixture.Bridge.AppendedTasks);
-        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+        Assert.Single(fixture.Bridge.AppendedTasks);
+        Assert.True(vm.IsRunning);
     }
 
     private static async Task<bool> WaitForAsync(Func<bool> condition, int retries = 40, int delayMs = 25)
@@ -1003,9 +1005,11 @@ public sealed class CopilotN3ExecutionTests
 
         var appended = Assert.Single(fixture.Bridge.AppendedTasks);
         var list = Assert.IsType<JsonArray>(JsonNode.Parse(appended.ParamsJson)?["copilot_list"]);
-        Assert.Equal(["B", "C", "A"], list.Select(node => node!["stage_name"]!.GetValue<string>()).ToArray());
+        // dev-v2 c2021e694a 后列表不再下发 stage_name；顺序由 id 与列表项本身断言
+        Assert.Equal(["B", "C", "A"], vm.Items.Select(item => item.Name).ToArray());
         Assert.Equal([0, 1, 2], list.Select(node => node!["id"]!.GetValue<int>()).ToArray());
         Assert.Equal([0, 1, 2], vm.Items.Select(item => item.Index).ToArray());
+        Assert.All(list, node => Assert.False(((JsonObject)node!).ContainsKey("stage_name")));
     }
 
     [Fact]
@@ -1308,6 +1312,101 @@ public sealed class CopilotN3ExecutionTests
     }
 
     [Fact]
+    public async Task StartAsync_WhenListItemNameOverridden_ShouldSendNavNameOverride_WpfParity()
+    {
+        // WPF dev-v2 c2021e694a：仅用户覆盖关卡名时下发 nav_name_override
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        await fixture.CreateResourceDirectoryAsync(
+            overviewJson: """
+                {
+                  "main_01-07": { "code": "1-7", "levelId": "main/level_main_01-07", "name": "暴君", "stageId": "main_01-07" }
+                }
+                """);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = fixture.ViewModel;
+        vm.UseCopilotList = true;
+        await vm.ImportFromClipboardAsync("""{"stage_name":"main_01-07"}""");
+        var item = Assert.Single(vm.Items);
+        vm.SelectedItem = item;
+        vm.CopilotTaskName = "1-7-custom";
+
+        await vm.StartAsync();
+
+        var appended = Assert.Single(fixture.Bridge.AppendedTasks);
+        var listItem = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson)!["copilot_list"]![0]);
+        Assert.Equal("1-7-custom", listItem["nav_name_override"]?.GetValue<string>());
+        Assert.False(listItem.ContainsKey("stage_name"));
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenListMixedContentTypes_ShouldReject_WpfParity()
+    {
+        // WPF dev-v2 d6601334f2：按作业内容判定类型，混用两种具体类型拒绝启动
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        await fixture.CreateResourceDirectoryAsync(
+            overviewJson: """
+                {
+                  "main_01-07": { "code": "1-7", "levelId": "main/level_main_01-07", "name": "暴君", "stageId": "main_01-07" },
+                  "mem_12fce_1": { "code": "12F-1", "levelId": "mem/level_mem_12fce_1", "name": "12F", "stageId": "mem_12fce_1" }
+                }
+                """);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = fixture.ViewModel;
+        vm.UseCopilotList = true;
+        vm.Items.Add(new CopilotItemViewModel("1-7", vm.Types[0], inlinePayload: """{"stage_name":"1-7"}""")
+        {
+            IsChecked = true,
+            TabIndex = null,
+        });
+        vm.Items.Add(new CopilotItemViewModel("12F-1", vm.Types[2], inlinePayload: """{"stage_name":"mem_12fce_1"}""")
+        {
+            IsChecked = true,
+            TabIndex = null,
+        });
+
+        await vm.StartAsync();
+
+        Assert.Contains("不支持混用", vm.LastErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("悖论模拟", vm.LastErrorMessage, StringComparison.Ordinal);
+        Assert.Empty(fixture.Bridge.AppendedTasks);
+        Assert.Null(fixture.Runtime.SessionService.CurrentRunOwner);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenItemTabIndexDiffersFromCurrentTab_ShouldNotReject_WpfParity()
+    {
+        // WPF dev-v2 d6601334f2：不再要求列表项 tab_index 与当前页签一致
+        await using var fixture = await CopilotN3Fixture.CreateAsync();
+        await fixture.CreateResourceDirectoryAsync(
+            overviewJson: """
+                {
+                  "main_01-07": { "code": "1-7", "levelId": "main/level_main_01-07", "name": "暴君", "stageId": "main_01-07" }
+                }
+                """);
+        Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
+            fixture.Runtime.ConnectFeatureService,
+            fixture.ReadyAdbPath)).Success);
+
+        var vm = fixture.ViewModel;
+        vm.UseCopilotList = true;
+        vm.Items.Add(new CopilotItemViewModel("1-7", vm.Types[1], inlinePayload: """{"stage_name":"1-7"}""")
+        {
+            IsChecked = true,
+            TabIndex = 1,
+        });
+
+        await vm.StartAsync();
+
+        Assert.Single(fixture.Bridge.AppendedTasks);
+    }
+
+    [Fact]
     public async Task StartAsync_WhenParadoxOperNameIllegal_ShouldFailWithWpfParityMessage()
     {
         // WPF 对齐：VerifyParadoxTasks 校验悖论列表干员名合法性，非法干员名拒绝启动
@@ -1463,8 +1562,10 @@ public sealed class CopilotN3ExecutionTests
         await fixture.ViewModel.StartAsync();
 
         var appended = Assert.Single(fixture.Bridge.AppendedTasks);
-        var stageName = JsonNode.Parse(appended.ParamsJson)?["copilot_list"]?[0]?["stage_name"]?.GetValue<string>();
-        Assert.Equal("1-7", stageName);
+        var listItem = JsonNode.Parse(appended.ParamsJson)?["copilot_list"]?[0] as JsonObject;
+        Assert.NotNull(listItem);
+        // 自动入列未覆盖导航名：不下发 nav_name_override，由 Core 从作业内容推导
+        Assert.False(listItem!.ContainsKey("nav_name_override"));
     }
 
     [Fact]
@@ -1485,7 +1586,7 @@ public sealed class CopilotN3ExecutionTests
     }
 
     [Fact]
-    public void ApplyUnsupportedSkillCorrections_ShouldZeroSkillByRarity_WpfParity()
+    public void CanonicalizeCopilotPayload_ShouldZeroSkillByRarity_WpfParity()
     {
         // WPF ParseCopilotAsync 对齐：skill3&rarity<6 / skill2&rarity<4 / skill1&rarity<3 置 0 并告警
         var battleData = """
@@ -1499,18 +1600,22 @@ public sealed class CopilotN3ExecutionTests
             """;
         var payload = """{"stage_name":"1-7","opers":[{"name":"阿米娅","skill":3},{"name":"陈","skill":3},{"name":"杜林","skill":1}],"groups":[{"name":"主力","opers":[{"name":"阿米娅","skill":2}]}]}""";
 
-        var corrected = CopilotPageViewModel.ApplyUnsupportedSkillCorrections(payload, battleData, out var warnings);
+        var corrected = CopilotPageViewModel.CanonicalizeCopilotPayload(payload, battleData, out var warnings);
 
         var root = JsonNode.Parse(corrected)!.AsObject();
-        Assert.Equal(0, root["opers"]![0]!["skill"]!.GetValue<int>());
+        // WPF dev-v2 d9457ebd91：技能 3 对阿米娅（char_002_amiya）放行；5★ 阿米娅技能 2 也满足 4★ 门槛
+        Assert.Equal(3, root["opers"]![0]!["skill"]!.GetValue<int>());
         Assert.Equal(3, root["opers"]![1]!["skill"]!.GetValue<int>());
         Assert.Equal(0, root["opers"]![2]!["skill"]!.GetValue<int>());
         Assert.Equal(2, root["groups"]![0]!["opers"]![0]!["skill"]!.GetValue<int>());
-        Assert.Equal(2, warnings.Count);
+        var warning = Assert.Single(
+            warnings,
+            warning => warning.Kind == CopilotPageViewModel.CopilotCanonicalizationWarningKind.UnsupportedSkill);
+        Assert.Equal("杜林", warning.Name);
     }
 
     [Fact]
-    public void ApplyUnsupportedSkillCorrections_WhenSssPayload_ShouldSkip_WpfParity()
+    public void CanonicalizeCopilotPayload_WhenSssPayload_ShouldSkip_WpfParity()
     {
         // WPF 对齐：ParseSSSCopilot 不做技能稀有度校验
         var battleData = """
@@ -1518,14 +1623,14 @@ public sealed class CopilotN3ExecutionTests
             """;
         var payload = """{"type":"SSS","stage_name":"sss-1","opers":[{"name":"阿米娅","skill":3}]}""";
 
-        var corrected = CopilotPageViewModel.ApplyUnsupportedSkillCorrections(payload, battleData, out var warnings);
+        var corrected = CopilotPageViewModel.CanonicalizeCopilotPayload(payload, battleData, out var warnings);
 
         Assert.Equal(payload, corrected);
         Assert.Empty(warnings);
     }
 
     [Fact]
-    public void ApplyUnsupportedSkillCorrections_WhenOperatorUnknown_ShouldTreatRarityAsMinusOne_WpfParity()
+    public void CanonicalizeCopilotPayload_WhenOperatorUnknown_ShouldTreatRarityAsMinusOne_WpfParity()
     {
         // WPF 对齐：DataHelper.GetCharacterByNameOrAlias(...)?.Rarity ?? -1，未知干员按 -1 处理
         var battleData = """
@@ -1533,7 +1638,7 @@ public sealed class CopilotN3ExecutionTests
             """;
         var payload = """{"stage_name":"1-7","opers":[{"name":"不存在干员","skill":3}]}""";
 
-        var corrected = CopilotPageViewModel.ApplyUnsupportedSkillCorrections(payload, battleData, out var warnings);
+        var corrected = CopilotPageViewModel.CanonicalizeCopilotPayload(payload, battleData, out var warnings);
 
         var root = JsonNode.Parse(corrected)!.AsObject();
         Assert.Equal(0, root["opers"]![0]!["skill"]!.GetValue<int>());
@@ -1541,9 +1646,10 @@ public sealed class CopilotN3ExecutionTests
     }
 
     [Fact]
-    public void ApplyUnsupportedSkillCorrections_WhenSkillFieldMissing_ShouldTreatAsDefaultOne_WpfParity()
+    public void CanonicalizeCopilotPayload_WhenSkillFieldMissing_ShouldTreatAsDefaultZero_WpfParity()
     {
-        // WPF Oper.Skill 默认 1：1-2★ 干员未写 skill 字段同样触发 skill1&rarity<3 清零告警
+        // WPF dev-v2 b2d8591974：Oper.Skill 默认 0（不指定技能），未写 skill 字段不再触发
+        // skill1&rarity<3 清零告警，也不应凭空写入 skill 字段
         var battleData = """
             {
               "chars": {
@@ -1554,30 +1660,120 @@ public sealed class CopilotN3ExecutionTests
             """;
         var payload = """{"stage_name":"1-7","opers":[{"name":"杜林"},{"name":"阿米娅"}]}""";
 
-        var corrected = CopilotPageViewModel.ApplyUnsupportedSkillCorrections(payload, battleData, out var warnings);
+        var corrected = CopilotPageViewModel.CanonicalizeCopilotPayload(payload, battleData, out var warnings);
 
-        var root = JsonNode.Parse(corrected)!.AsObject();
-        Assert.Equal(0, root["opers"]![0]!["skill"]!.GetValue<int>());
-        Assert.Null(root["opers"]![1]!["skill"]);
-        var warning = Assert.Single(warnings);
-        Assert.Equal("杜林", warning.Name);
-        Assert.Equal(1, warning.Skill);
+        Assert.Equal(payload, corrected);
+        Assert.Empty(warnings);
     }
 
     [Fact]
-    public void ApplyUnsupportedSkillCorrections_ShouldMatchOperatorNameCaseInsensitive_WpfParity()
+    public void CanonicalizeCopilotPayload_ShouldMatchOperatorNameCaseInsensitive_WpfParity()
     {
-        // WPF DataHelper 干员名索引为 OrdinalIgnoreCase，大小写不一致的名字不应误判为未知干员
+        // WPF DataHelper 干员名索引为 OrdinalIgnoreCase：AMIYA 命中 char_002_amiya，
+        // 技能 3 按阿米娅例外放行（未命中则稀有度按 -1 清零）
         var battleData = """
             { "chars": { "char_002_amiya": { "name": "阿米娅", "name_en": "Amiya", "profession": "CASTER", "rarity": 5 } } }
             """;
         var payload = """{"stage_name":"1-7","opers":[{"name":"AMIYA","skill":3}]}""";
 
-        var corrected = CopilotPageViewModel.ApplyUnsupportedSkillCorrections(payload, battleData, out var warnings);
+        var corrected = CopilotPageViewModel.CanonicalizeCopilotPayload(payload, battleData, out var warnings);
 
         var root = JsonNode.Parse(corrected)!.AsObject();
-        Assert.Equal(0, root["opers"]![0]!["skill"]!.GetValue<int>());
-        Assert.Single(warnings);
+        Assert.Equal(3, root["opers"]![0]!["skill"]!.GetValue<int>());
+        Assert.DoesNotContain(
+            warnings,
+            warning => warning.Kind == CopilotPageViewModel.CopilotCanonicalizationWarningKind.UnsupportedSkill);
+        // 技能 3 同时推导精英 2
+        Assert.Contains(
+            warnings,
+            warning => warning.Kind == CopilotPageViewModel.CopilotCanonicalizationWarningKind.EliteEmpty
+                && warning.RequiredElite == 2);
+    }
+
+    [Fact]
+    public void CanonicalizeCopilotPayload_ShouldDeriveEliteFromSkillLevelAndModule_WpfParity()
+    {
+        // WPF dev-v2 92bf7c7962：按 skill-1 / skill_level / module 推导 requirements.elite，
+        // 缺失补全（EliteEmpty）、过低抬高（EliteAdjust）
+        var battleData = """
+            {
+              "chars": {
+                "char_010_chen": { "name": "陈", "profession": "WARRIOR", "rarity": 6 },
+                "char_003_kalts": { "name": "凯尔希", "profession": "MEDIC", "rarity": 6 }
+              }
+            }
+            """;
+        var payload = """
+            {
+              "stage_name": "1-7",
+              "opers": [
+                { "name": "陈", "skill": 3 },
+                { "name": "凯尔希", "skill": 0, "requirements": { "elite": 0, "skill_level": 10 } }
+              ],
+              "groups": [
+                { "name": "模块", "opers": [ { "name": "陈", "skill": 0, "requirements": { "module": 5 } } ] }
+              ]
+            }
+            """;
+
+        var corrected = CopilotPageViewModel.CanonicalizeCopilotPayload(payload, battleData, out var warnings);
+
+        var root = JsonNode.Parse(corrected)!.AsObject();
+        Assert.Equal(2, root["opers"]![0]!["requirements"]!["elite"]!.GetValue<int>());
+        Assert.Equal(2, root["opers"]![1]!["requirements"]!["elite"]!.GetValue<int>());
+        Assert.Equal(2, root["groups"]![0]!["opers"]![0]!["requirements"]!["elite"]!.GetValue<int>());
+        Assert.Contains(
+            warnings,
+            warning => warning.Kind == CopilotPageViewModel.CopilotCanonicalizationWarningKind.EliteEmpty
+                && warning.Name == "陈"
+                && warning.RequiredElite == 2);
+        Assert.Contains(
+            warnings,
+            warning => warning.Kind == CopilotPageViewModel.CopilotCanonicalizationWarningKind.EliteAdjust
+                && warning.Name == "凯尔希"
+                && warning.PreviousElite == 0
+                && warning.RequiredElite == 2);
+    }
+
+    [Fact]
+    public void CanonicalizeCopilotPayload_ShouldPreferLocationAndRectAndPreserveUnknownFields_WpfParity()
+    {
+        // WPF dev-v2 5994a8db49/62f60b9b98/1ca41b0847：动作同填干员与坐标时清 name/role 保坐标，
+        // Click 同填 rect 与 location 时清 location；未知字段原样透传
+        var battleData = """
+            { "chars": { "char_010_chen": { "name": "陈", "profession": "WARRIOR", "rarity": 6 } } }
+            """;
+        var payload = """
+            {
+              "stage_name": "1-7",
+              "unknown_root": { "keep": true },
+              "opers": [ { "name": "陈", "skill": 3, "unknown_oper": 7 } ],
+              "actions": [
+                { "type": "Skill", "name": "陈", "role": "WARRIOR", "location": [ 1, 2 ], "unknown_action": "keep" },
+                { "type": "Click", "rect": [ 10, 20, 30, 40 ], "location": [ 5, 6 ] }
+              ]
+            }
+            """;
+
+        var corrected = CopilotPageViewModel.CanonicalizeCopilotPayload(payload, battleData, out var warnings);
+
+        var root = JsonNode.Parse(corrected)!.AsObject();
+        Assert.NotNull(root["unknown_root"]);
+        Assert.Equal(7, root["opers"]![0]!["unknown_oper"]!.GetValue<int>());
+        var skillAction = Assert.IsType<JsonObject>(root["actions"]![0]);
+        Assert.False(skillAction.ContainsKey("name"));
+        Assert.False(skillAction.ContainsKey("role"));
+        Assert.Equal([1, 2], skillAction["location"]!.AsArray().Select(node => node!.GetValue<int>()).ToArray());
+        Assert.Equal("keep", skillAction["unknown_action"]!.GetValue<string>());
+        var clickAction = Assert.IsType<JsonObject>(root["actions"]![1]);
+        Assert.False(clickAction.ContainsKey("location"));
+        Assert.Equal([10, 20, 30, 40], clickAction["rect"]!.AsArray().Select(node => node!.GetValue<int>()).ToArray());
+        Assert.Contains(
+            warnings,
+            warning => warning.Kind == CopilotPageViewModel.CopilotCanonicalizationWarningKind.ActionWithBothLocationAndOperator);
+        Assert.Contains(
+            warnings,
+            warning => warning.Kind == CopilotPageViewModel.CopilotCanonicalizationWarningKind.ActionWithBothRectAndLocation);
     }
 
     [Fact]
@@ -1587,13 +1783,13 @@ public sealed class CopilotN3ExecutionTests
         await using var fixture = await CopilotN3Fixture.CreateAsync();
         await fixture.CreateResourceDirectoryAsync(
             battleDataJson: """
-                { "chars": { "char_002_amiya": { "name": "阿米娅", "profession": "CASTER", "rarity": 5 } } }
+                { "chars": { "char_501_durin": { "name": "杜林", "profession": "CASTER", "rarity": 2 } } }
                 """);
         Assert.True((await TestConnectionFixtureSupport.ConnectReadyAsync(
             fixture.Runtime.ConnectFeatureService,
             fixture.ReadyAdbPath)).Success);
 
-        await fixture.ViewModel.LoadCurrentFromClipboardAsync("""{"stage_name":"1-7","opers":[{"name":"阿米娅","skill":3}]}""");
+        await fixture.ViewModel.LoadCurrentFromClipboardAsync("""{"stage_name":"1-7","opers":[{"name":"杜林","skill":1}]}""");
         await fixture.ViewModel.StartAsync();
 
         var appended = Assert.Single(fixture.Bridge.AppendedTasks);

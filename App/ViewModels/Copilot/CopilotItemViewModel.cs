@@ -15,6 +15,7 @@ public sealed class CopilotItemViewModel : ObservableObject
     private int _copilotId;
     private int _index;
     private int? _tabIndex;
+    private bool _isNavNameOverride;
     private string _raidLabel = "突袭";
     private string _inlinePayloadHint = "inline-json";
 
@@ -114,6 +115,14 @@ public sealed class CopilotItemViewModel : ObservableObject
     {
         get => _tabIndex;
         set => SetProperty(ref _tabIndex, value);
+    }
+
+    // WPF dev-v2 c2021e694a：仅用户覆盖导航关卡名时随列表下发 nav_name_override，
+    // 未覆盖时交给 Core 从作业内容推导，避免用列表显示名覆盖真实关卡。
+    public bool IsNavNameOverride
+    {
+        get => _isNavNameOverride;
+        set => SetProperty(ref _isNavNameOverride, value);
     }
 
     public string ExecutionPathHint

@@ -2480,9 +2480,11 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             CopilotTaskListConfigScope,
             async ct =>
             {
-                saveResult = await Runtime.SettingsFeatureService.SaveGlobalSettingAsync(
-                    LegacyConfigurationKeys.CopilotTaskList,
-                    payload,
+                saveResult = await Runtime.SettingsFeatureService.SaveProfileSettingsAsync(
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        [LegacyConfigurationKeys.CopilotTaskList] = payload,
+                    },
                     ct);
                 return saveResult;
             },
@@ -2559,6 +2561,8 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
 
     private void LoadPersistedItems()
     {
+        Items.Clear();
+        SetSelectedItemSilently(null);
         if (!TryReadPersistedPayload(out var payload))
         {
             return;
@@ -2582,6 +2586,7 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 IsChecked = item.IsChecked,
                 IsRaid = item.IsRaid,
                 TabIndex = item.TabIndex,
+                IsNavNameOverride = item.IsNavNameOverride,
             });
         }
 
@@ -2598,8 +2603,18 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
     private bool TryReadPersistedPayload(out string payload)
     {
         payload = string.Empty;
-        if (!Runtime.ConfigurationService.CurrentConfig.GlobalValues.TryGetValue(LegacyConfigurationKeys.CopilotTaskList, out var node)
-            || node is null)
+        JsonNode? node = null;
+        var found = Runtime.ConfigurationService.TryGetCurrentProfile(out var profile)
+            && profile.Values.TryGetValue(LegacyConfigurationKeys.CopilotTaskList, out node);
+        if (!found)
+        {
+            // 旧配置兼容：全局扁平键在加载迁移前仍可读；写入始终落当前档案
+            found = Runtime.ConfigurationService.CurrentConfig.GlobalValues.TryGetValue(
+                LegacyConfigurationKeys.CopilotTaskList,
+                out node);
+        }
+
+        if (!found || node is null)
         {
             return false;
         }
@@ -2685,7 +2700,19 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
             var isChecked = TryReadOptionalBoolProperty(obj, "is_checked", out var persistedIsChecked)
                 ? persistedIsChecked
                 : !TryReadOptionalBoolProperty(obj, "IsChecked", out persistedIsChecked) || persistedIsChecked;
-            items.Add(new PersistedCopilotItem(name, type, sourcePath, inlinePayload, copilotId, tabIndex, isRaid, isChecked));
+            var isNavNameOverride = TryReadOptionalBoolProperty(obj, "is_nav_name_override", out var persistedNavNameOverride)
+                ? persistedNavNameOverride
+                : TryReadOptionalBoolProperty(obj, "IsNavNameOverride", out persistedNavNameOverride) && persistedNavNameOverride;
+            items.Add(new PersistedCopilotItem(
+                name,
+                type,
+                sourcePath,
+                inlinePayload,
+                copilotId,
+                tabIndex,
+                isRaid,
+                isChecked,
+                isNavNameOverride));
         }
 
         if (array.Count > 0 && items.Count == 0)
@@ -2856,7 +2883,8 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 item.CopilotId,
                 item.TabIndex,
                 item.IsRaid,
-                item.IsChecked))
+                item.IsChecked,
+                item.IsNavNameOverride))
             .ToArray();
         return JsonSerializer.Serialize(items);
     }
@@ -2871,5 +2899,6 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
         int CopilotId,
         int? TabIndex,
         bool IsRaid,
-        bool IsChecked);
+        bool IsChecked,
+        bool IsNavNameOverride);
 }

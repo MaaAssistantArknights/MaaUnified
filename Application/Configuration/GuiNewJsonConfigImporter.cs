@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MAAUnified.Application.Models;
+using MAAUnified.Compat.Constants;
 
 namespace MAAUnified.Application.Configuration;
 
@@ -64,6 +66,15 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
                             && valueProp.Value.ValueKind == JsonValueKind.Object)
                         {
                             MergeProfileGuiSection(profile, configProp.Name, valueProp.Value, fillMissingOnly, report);
+                            continue;
+                        }
+
+                        // dev-v2 382009b97b / 5b39509df6：Copilot 设置是每档案的独立对象（与 Gui 平级），
+                        // 内容迁入 CurrentConfig.Copilot；MAAUnified 仍以扁平键存于 profile.Values。
+                        if (string.Equals(valueProp.Name, "Copilot", StringComparison.Ordinal)
+                            && valueProp.Value.ValueKind == JsonValueKind.Object)
+                        {
+                            MergeProfileCopilotSection(profile, configProp.Name, valueProp.Value, fillMissingOnly, report);
                             continue;
                         }
 
@@ -576,6 +587,114 @@ public sealed class GuiNewJsonConfigImporter : IConfigImporter
         }
 
         report.Warnings.Add($"Root `Gui` key `{path}` is not supported by MAAUnified and was skipped.");
+    }
+
+    private static void MergeProfileCopilotSection(
+        UnifiedProfile profile,
+        string profileName,
+        JsonElement copilot,
+        bool fillMissingOnly,
+        ImportReport report)
+    {
+        foreach (var prop in copilot.EnumerateObject())
+        {
+            var key = prop.Name switch
+            {
+                "TaskList" => ConfigurationKeys.CopilotTaskList,
+                "UserAdditional" => ConfigurationKeys.CopilotUserAdditional,
+                "EnableUserAdditional" => ConfigurationKeys.CopilotAddUserAdditional,
+                "SupportMode" => ConfigurationKeys.CopilotSupportUnitUsage,
+                "UseFormation" => CopilotSettingKeys.UseFormation,
+                "SelectFormation" => ConfigurationKeys.CopilotSelectFormation,
+                "LoopTimes" => ConfigurationKeys.CopilotLoopTimes,
+                _ => null,
+            };
+            if (key is null)
+            {
+                report.Warnings.Add(
+                    $"Profile `{profileName}` key `Copilot.{prop.Name}` is not supported by MAAUnified and was skipped.");
+                continue;
+            }
+
+            JsonNode? value;
+            switch (prop.Name)
+            {
+                case "TaskList":
+                    if (prop.Value.ValueKind != JsonValueKind.Array)
+                    {
+                        report.Warnings.Add(
+                            $"Profile `{profileName}` Copilot.TaskList is not an array and was skipped.");
+                        continue;
+                    }
+
+                    // 列表项保留原字段（name/file_path/copilot_id/is_raid/is_checked 等大小写变体
+                    // 由 PersistedCopilotItem 读取逻辑统一兼容），下次保存时再规范化为 MAAUnified 形状。
+                    value = JsonImportMergeHelper.ToJsonNode(prop.Value);
+                    break;
+                case "UserAdditional":
+                    if (prop.Value.ValueKind != JsonValueKind.Array)
+                    {
+                        report.Warnings.Add(
+                            $"Profile `{profileName}` Copilot.UserAdditional is not an array and was skipped.");
+                        continue;
+                    }
+
+                    // dev-v2 保存为 UserAdditional 对象数组；MAAUnified 的 UserAdditional 是字符串键，
+                    // 这里转成等价的 JSON 字符串，交给 ParseUserAdditionalItems 统一解析。
+                    value = JsonValue.Create(prop.Value.GetRawText());
+                    break;
+                case "SupportMode":
+                    if (!TryNormalizeCopilotSupportMode(prop.Value, out var supportMode))
+                    {
+                        report.Warnings.Add(
+                            $"Profile `{profileName}` Copilot.SupportMode has an unrecognized value and was skipped.");
+                        continue;
+                    }
+
+                    value = JsonValue.Create(supportMode.ToString(CultureInfo.InvariantCulture));
+                    break;
+                default:
+                    value = JsonImportMergeHelper.ToJsonNode(prop.Value);
+                    break;
+            }
+
+            JsonImportMergeHelper.MergeProfileValue(profile, profileName, key, value, fillMissingOnly, report);
+        }
+    }
+
+    // WPF CopilotSupportMode：WhenNeeded = 1、Random = 3；旧档可能存数字或枚举名
+    private static bool TryNormalizeCopilotSupportMode(JsonElement value, out int supportMode)
+    {
+        supportMode = 1;
+        switch (value.ValueKind)
+        {
+            case JsonValueKind.Number when value.TryGetInt32(out var numeric):
+                supportMode = numeric == 3 ? 3 : 1;
+                return true;
+            case JsonValueKind.String:
+                var raw = value.GetString();
+                if (string.Equals(raw, "Random", StringComparison.OrdinalIgnoreCase))
+                {
+                    supportMode = 3;
+                    return true;
+                }
+
+                if (string.Equals(raw, "WhenNeeded", StringComparison.OrdinalIgnoreCase))
+                {
+                    supportMode = 1;
+                    return true;
+                }
+
+                if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+                {
+                    supportMode = parsed == 3 ? 3 : 1;
+                    return true;
+                }
+
+                return false;
+            default:
+                return false;
+        }
     }
 
     private static void MergeProfileGuiSection(

@@ -3390,6 +3390,11 @@ public sealed class MainShellViewModel : ObservableObject
         {
             case ConfigurationContextChangeReason.ProfileSwitched:
                 await TaskQueuePage.ReloadConfigurationContextAsync();
+                if (TryGetCopilotPage(out var switchedCopilotPage))
+                {
+                    switchedCopilotPage.ReloadConfigurationContext();
+                }
+
                 break;
 
             case ConfigurationContextChangeReason.LegacyImport:
@@ -3398,6 +3403,11 @@ public sealed class MainShellViewModel : ObservableObject
                 await ApplyGuiSettingsAsync(SettingsPage.CurrentGuiSnapshot);
                 RefreshShellCloseButtonVisibilityFromConfig();
                 await TaskQueuePage.ReloadConfigurationContextAsync(forceReloadStageOptions: true);
+                if (TryGetCopilotPage(out var importedCopilotPage))
+                {
+                    importedCopilotPage.ReloadConfigurationContext();
+                }
+
                 break;
         }
 

@@ -387,6 +387,132 @@ public sealed class ConfigurationImportTests
     }
 
     [Fact]
+    public async Task GuiNewImport_DevV2ProfileCopilotSection_ShouldMapToProfileValues_AndRoundTrip()
+    {
+        // WPF dev-v2 382009b97b / 5b39509df6：Copilot 设置迁入每档案 Copilot 分节
+        // （TaskList/UserAdditional/EnableUserAdditional/SupportMode/UseFormation/SelectFormation/LoopTimes）
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "config", "gui.new.json"),
+            """
+            {
+              "Current": "Default",
+              "Configurations": {
+                "Default": {
+                  "TaskQueue": [],
+                  "Gui": {},
+                  "Copilot": {
+                    "TaskList": [
+                      {
+                        "Name": "1-7",
+                        "FilePath": "resource/copilot/1-7.json",
+                        "CopilotId": 123,
+                        "IsNavNameOverride": true,
+                        "Index": 0
+                      }
+                    ],
+                    "UserAdditional": [
+                      { "Name": "史尔特尔", "Skill": 3, "Module": 5 }
+                    ],
+                    "EnableUserAdditional": true,
+                    "SupportMode": 3,
+                    "UseFormation": true,
+                    "SelectFormation": 2,
+                    "LoopTimes": 5
+                  }
+                }
+              }
+            }
+            """);
+
+        var service = CreateService(root);
+        var report = await service.ImportLegacyAsync(ImportSource.GuiNewOnly, manualImport: false);
+
+        Assert.True(report.Success);
+        var profile = service.CurrentConfig.Profiles["Default"];
+        Assert.False(profile.Values.ContainsKey("Copilot"));
+        Assert.DoesNotContain(report.Warnings, warning => warning.Contains("Copilot.", StringComparison.Ordinal));
+
+        var taskList = Assert.IsType<JsonArray>(profile.Values["Copilot.CopilotTaskList"]);
+        var task = Assert.IsType<JsonObject>(taskList[0]);
+        Assert.Equal("1-7", task["Name"]?.GetValue<string>());
+        Assert.True(task["IsNavNameOverride"]?.GetValue<bool>());
+
+        var userAdditionalText = profile.Values["Copilot.UserAdditional"]?.GetValue<string>();
+        Assert.False(string.IsNullOrWhiteSpace(userAdditionalText));
+        var userAdditional = JsonNode.Parse(userAdditionalText!);
+        var userAdditionalItem = Assert.IsType<JsonObject>(Assert.IsType<JsonArray>(userAdditional)[0]);
+        Assert.Equal("史尔特尔", userAdditionalItem["Name"]?.GetValue<string>());
+        Assert.Equal(3, userAdditionalItem["Skill"]?.GetValue<int>());
+        Assert.Equal(5, userAdditionalItem["Module"]?.GetValue<int>());
+
+        Assert.True(profile.Values["Copilot.AddUserAdditional"]?.GetValue<bool>());
+        Assert.Equal("3", profile.Values["Copilot.SupportUnitUsage"]?.GetValue<string>());
+        Assert.True(profile.Values["Copilot.UseFormation"]?.GetValue<bool>());
+        Assert.Equal(2, profile.Values["Copilot.SelectFormation"]?.GetValue<int>());
+        Assert.Equal(5, profile.Values["Copilot.LoopTimes"]?.GetValue<int>());
+
+        // 档案化落盘往返：重新加载后键值与列表内容保持
+        await service.SaveAsync();
+        var reloaded = CreateService(root);
+        await reloaded.LoadOrBootstrapAsync();
+        var reloadedProfile = reloaded.CurrentConfig.Profiles["Default"];
+        Assert.Equal(
+            "1-7",
+            Assert.IsType<JsonArray>(reloadedProfile.Values["Copilot.CopilotTaskList"])[0]?["Name"]?.GetValue<string>());
+        Assert.True(reloadedProfile.Values["Copilot.AddUserAdditional"]?.GetValue<bool>());
+        Assert.Equal("3", reloadedProfile.Values["Copilot.SupportUnitUsage"]?.GetValue<string>());
+        Assert.True(reloadedProfile.Values["Copilot.UseFormation"]?.GetValue<bool>());
+        Assert.Equal(2, reloadedProfile.Values["Copilot.SelectFormation"]?.GetValue<int>());
+        Assert.Equal(5, reloadedProfile.Values["Copilot.LoopTimes"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task CopilotLegacyGlobalSettings_ShouldMigrateIntoEveryProfile_AndPersist()
+    {
+        // WPF dev-v2 5b39509df6：旧扁平 Copilot 键迁移后 DeleteValue；MAAUnified 的旧键是全局值，
+        // 迁移时搬到所有档案（旧语义对每个档案同样生效），并从 GlobalValues 删除
+        var root = CreateTempRoot();
+        Directory.CreateDirectory(Path.Combine(root, "config"));
+
+        var bootstrap = CreateService(root);
+        await bootstrap.LoadOrBootstrapAsync();
+        bootstrap.CurrentConfig.Profiles["Alt"] = new UnifiedProfile();
+        bootstrap.CurrentConfig.GlobalValues["Copilot.CopilotTaskList"] = JsonValue.Create(
+            """[{"Name":"1-7","FilePath":"resource/copilot/1-7.json","IsRaid":false,"IsChecked":true}]""");
+        bootstrap.CurrentConfig.GlobalValues["Copilot.UserAdditional"] =
+            JsonValue.Create("""[{"name":"史尔特尔","skill":3,"module":1}]""");
+        bootstrap.CurrentConfig.GlobalValues["Copilot.AddUserAdditional"] = JsonValue.Create(true);
+        bootstrap.CurrentConfig.GlobalValues["Copilot.SelectFormation"] = JsonValue.Create(3);
+        bootstrap.CurrentConfig.GlobalValues["Copilot.SupportUnitUsage"] = JsonValue.Create(3);
+        bootstrap.CurrentConfig.GlobalValues["Copilot.LoopTimes"] = JsonValue.Create(7);
+        await bootstrap.SaveAsync();
+
+        var migrated = CreateService(root);
+        await migrated.LoadOrBootstrapAsync();
+
+        Assert.False(migrated.CurrentConfig.GlobalValues.ContainsKey("Copilot.CopilotTaskList"));
+        Assert.False(migrated.CurrentConfig.GlobalValues.ContainsKey("Copilot.SelectFormation"));
+        foreach (var profileName in new[] { "Default", "Alt" })
+        {
+            var profile = migrated.CurrentConfig.Profiles[profileName];
+            Assert.Equal(3, profile.Values["Copilot.SelectFormation"]?.GetValue<int>());
+            Assert.Equal(3, profile.Values["Copilot.SupportUnitUsage"]?.GetValue<int>());
+            Assert.Equal(7, profile.Values["Copilot.LoopTimes"]?.GetValue<int>());
+            Assert.True(profile.Values["Copilot.AddUserAdditional"]?.GetValue<bool>());
+            Assert.NotNull(profile.Values["Copilot.CopilotTaskList"]);
+        }
+
+        // 迁移结果已落盘：再次加载仍然保持且不会重复迁移
+        var reloaded = CreateService(root);
+        await reloaded.LoadOrBootstrapAsync();
+        Assert.False(reloaded.CurrentConfig.GlobalValues.ContainsKey("Copilot.LoopTimes"));
+        Assert.Equal(7, reloaded.CurrentConfig.Profiles["Alt"].Values["Copilot.LoopTimes"]?.GetValue<int>());
+    }
+
+    [Fact]
     public async Task GuiNewImport_DevV2UnsupportedProfileGuiKeys_ShouldWarnInsteadOfDropping()
     {
         var root = CreateTempRoot();

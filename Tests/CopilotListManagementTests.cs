@@ -37,6 +37,68 @@ public sealed class CopilotListManagementTests
     }
 
     [Fact]
+    public async Task NavNameOverrideFlag_ShouldPersistAndReload_WpfParity()
+    {
+        // WPF dev-v2 c2021e694a：条目新增 IsNavNameOverride，重启后仍需保留覆盖标记
+        await using var fixture = await CopilotFixture.CreateAsync();
+        var vm = fixture.ViewModel;
+
+        await vm.AddEmptyTaskAsync();
+        var item = Assert.Single(vm.Items);
+        item.Name = "1-7-override";
+        item.IsNavNameOverride = true;
+        await vm.SetListItemCheckedAsync(item, false);
+
+        var persistedArray = Assert.IsType<JsonArray>(JsonNode.Parse(GetPersistedTaskListPayload(fixture.Config)!));
+        Assert.Equal("1-7-override", persistedArray[0]?["Name"]?.GetValue<string>());
+        Assert.True(persistedArray[0]?["IsNavNameOverride"]?.GetValue<bool>());
+
+        var reloaded = new CopilotPageViewModel(fixture.Runtime);
+        var reloadedItem = Assert.Single(reloaded.Items);
+        Assert.Equal("1-7-override", reloadedItem.Name);
+        Assert.True(reloadedItem.IsNavNameOverride);
+        Assert.False(reloadedItem.IsChecked);
+    }
+
+    [Fact]
+    public async Task CopilotSettings_ShouldPersistPerProfile_AndReloadOnProfileSwitch()
+    {
+        // WPF dev-v2 382009b97b / 5b39509df6：Copilot 列表与设置随档案隔离；切换档案后重新加载
+        await using var fixture = await CopilotFixture.CreateAsync();
+        var vm = fixture.ViewModel;
+
+        await vm.AddEmptyTaskAsync();
+        vm.LoopTimes = 9;
+        vm.UseFormation = true;
+        vm.FormationIndex = 3;
+
+        var defaultProfile = fixture.Config.CurrentConfig.Profiles["Default"];
+        Assert.Equal("9", defaultProfile.Values[LegacyConfigurationKeys.CopilotLoopTimes]?.GetValue<string>());
+        Assert.False(fixture.Config.CurrentConfig.GlobalValues.ContainsKey(LegacyConfigurationKeys.CopilotLoopTimes));
+        Assert.False(fixture.Config.CurrentConfig.GlobalValues.ContainsKey(LegacyConfigurationKeys.CopilotTaskList));
+
+        fixture.Config.CurrentConfig.Profiles["Alt"] = new UnifiedProfile
+        {
+            Values =
+            {
+                [LegacyConfigurationKeys.CopilotTaskList] = JsonValue.Create(
+                    """[{"Name":"Alt-1","Type":"主线/故事集/SideStory","SourcePath":"","InlinePayload":"{\"stage_name\":\"1-7\"}","CopilotId":0,"TabIndex":null,"IsRaid":false,"IsChecked":true}]"""),
+                [LegacyConfigurationKeys.CopilotLoopTimes] = JsonValue.Create("4"),
+                [LegacyConfigurationKeys.CopilotSelectFormation] = JsonValue.Create("2"),
+                [CopilotSettingKeys.UseFormation] = JsonValue.Create("true"),
+            },
+        };
+        fixture.Config.CurrentConfig.CurrentProfile = "Alt";
+
+        vm.ReloadConfigurationContext();
+
+        Assert.Equal("Alt-1", Assert.Single(vm.Items).Name);
+        Assert.Equal(4, vm.LoopTimes);
+        Assert.True(vm.UseFormation);
+        Assert.Equal(2, vm.FormationIndex);
+    }
+
+    [Fact]
     public async Task RemoveSelectedAsync_WithoutSelection_ShouldSetFailureFeedbackAndLog()
     {
         await using var fixture = await CopilotFixture.CreateAsync();
@@ -671,9 +733,9 @@ public sealed class CopilotListManagementTests
     }
 
     [Fact]
-    public async Task UserAdditionalPopup_SkillShouldClampToWpfRange()
+    public async Task UserAdditionalPopup_SkillShouldClampToWpfZeroToThree()
     {
-        // WPF 对齐：追加干员技能在打开弹窗与保存时均夹取到 [1,3]，默认 1
+        // WPF dev-v2 b2d8591974 对齐：追加干员技能夹取到 [0,3]，默认 0（不指定技能）
         await using var fixture = await CopilotFixture.CreateAsync();
         var vm = fixture.ViewModel;
         vm.UserAdditional = "[{\"name\":\"阿米娅\",\"skill\":0},{\"name\":\"能天使\",\"skill\":9}]";
@@ -681,12 +743,12 @@ public sealed class CopilotListManagementTests
         vm.OpenUserAdditionalPopup();
 
         Assert.Equal(2, vm.UserAdditionalItems.Count);
-        Assert.Equal(1, vm.UserAdditionalItems[0].Skill);
+        Assert.Equal(0, vm.UserAdditionalItems[0].Skill);
         Assert.Equal(3, vm.UserAdditionalItems[1].Skill);
     }
 
     [Fact]
-    public async Task UserAdditionalPopup_LegacyFormat_ShouldDefaultSkillToOne()
+    public async Task UserAdditionalPopup_LegacyFormat_ShouldDefaultSkillToZero()
     {
         await using var fixture = await CopilotFixture.CreateAsync();
         var vm = fixture.ViewModel;
@@ -695,8 +757,8 @@ public sealed class CopilotListManagementTests
         vm.OpenUserAdditionalPopup();
 
         Assert.Equal(2, vm.UserAdditionalItems.Count);
-        Assert.Equal(1, vm.UserAdditionalItems[0].Skill);
-        Assert.Equal(1, vm.UserAdditionalItems[1].Skill);
+        Assert.Equal(0, vm.UserAdditionalItems[0].Skill);
+        Assert.Equal(0, vm.UserAdditionalItems[1].Skill);
     }
 
     [Fact]
@@ -1386,14 +1448,23 @@ public sealed class CopilotListManagementTests
 
     private static string? GetPersistedTaskListPayload(UnifiedConfigurationService config)
     {
-        if (!config.CurrentConfig.GlobalValues.TryGetValue(LegacyConfigurationKeys.CopilotTaskList, out var node)
-            || node is not JsonValue value
-            || !value.TryGetValue(out string? payload))
+        if (!config.TryGetCurrentProfile(out var profile))
         {
             return null;
         }
 
-        return payload;
+        if (!profile.Values.TryGetValue(LegacyConfigurationKeys.CopilotTaskList, out var node)
+            && !config.CurrentConfig.GlobalValues.TryGetValue(LegacyConfigurationKeys.CopilotTaskList, out node))
+        {
+            return null;
+        }
+
+        return node switch
+        {
+            JsonArray array => array.ToJsonString(),
+            JsonValue value when value.TryGetValue(out string? persisted) => persisted,
+            _ => null,
+        };
     }
 
     private static async Task<bool> WaitForLogContainsAsync(string path, string expected, int retry = 30, int delayMs = 25)
@@ -1635,6 +1706,75 @@ public sealed class CopilotListManagementTests
             uiVersionResolver: () => "v1.0.0");
         var passResult = await passService.ImportFromClipboardAsync("""{"stage_name":"1-7","minimum_required":"5.0.0-1"}""");
         Assert.True(passResult.Success);
+    }
+
+    [Theory]
+    [InlineData("maa://123", CopilotCodeSourceKind.Copilot, 123)]
+    [InlineData("MAA://123", CopilotCodeSourceKind.Copilot, 123)]
+    [InlineData("prts://123", CopilotCodeSourceKind.Copilot, 123)]
+    [InlineData("prts://s123", CopilotCodeSourceKind.CopilotSet, 123)]
+    [InlineData("PRTS://S123", CopilotCodeSourceKind.CopilotSet, 123)]
+    [InlineData("s123", CopilotCodeSourceKind.CopilotSet, 123)]
+    [InlineData("S123", CopilotCodeSourceKind.CopilotSet, 123)]
+    [InlineData("123", CopilotCodeSourceKind.Copilot, 123)]
+    public void CopilotCodeSourceParser_ShouldRecognizeAllWpfCodeFormats(
+        string source,
+        CopilotCodeSourceKind expectedKind,
+        int expectedId)
+    {
+        // WPF dev-v2 72213def33：maa://、prts://、prts://s、s<id>、纯数字；前缀从长到短匹配
+        Assert.True(CopilotCodeSourceParser.TryParse(source, out var kind, out var id));
+        Assert.Equal(expectedKind, kind);
+        Assert.Equal(expectedId, id);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("maa:///123")]
+    [InlineData("prts://s")]
+    [InlineData("s")]
+    [InlineData("s123x")]
+    [InlineData("prts://abc")]
+    [InlineData("not-a-code")]
+    public void CopilotCodeSourceParser_ShouldRejectInvalidWpfCodeFormats(string source)
+    {
+        Assert.False(CopilotCodeSourceParser.TryParse(source, out var kind, out _));
+        Assert.Equal(CopilotCodeSourceKind.None, kind);
+    }
+
+    [Theory]
+    [InlineData("6.3")]
+    [InlineData("v6.3")]
+    [InlineData("6.3.0")]
+    [InlineData("v6.3.7")]
+    public void CopilotVersionGate_MinimumRequiredTwoSegmentVersion_ShouldPass_WpfParity(string minimumRequired)
+    {
+        // WPF dev-v2 25481d16ca：minimum_required 使用 SemVersionStyles.OptionalPatch，
+        // ｢6.3｣ 视为 6.3.0；core 版本仍要求三段
+        var payload = new JsonObject
+        {
+            ["stage_name"] = "1-7",
+            ["minimum_required"] = minimumRequired,
+        };
+
+        Assert.Null(CopilotVersionGate.Evaluate(payload, "v6.3.7", "v1.0.0"));
+    }
+
+    [Theory]
+    [InlineData("6")]
+    [InlineData(" 6.3")]
+    [InlineData("6.3 ")]
+    [InlineData("v6")]
+    public void CopilotVersionGate_InvalidMinimumRequiredVersion_ShouldReject(string minimumRequired)
+    {
+        var payload = new JsonObject
+        {
+            ["stage_name"] = "1-7",
+            ["minimum_required"] = minimumRequired,
+        };
+
+        Assert.NotNull(CopilotVersionGate.Evaluate(payload, "v6.3.7", "v1.0.0"));
     }
 
 #if DEBUG
@@ -2057,7 +2197,9 @@ public sealed class CopilotListManagementTests
         public Task<UiOperationResult> SaveProfileSettingsAsync(
             IReadOnlyDictionary<string, string> updates,
             CancellationToken cancellationToken = default)
-            => _inner.SaveProfileSettingsAsync(updates, cancellationToken);
+            => Task.FromResult(UiOperationResult.Fail(
+                UiErrorCode.CopilotListPersistenceFailed,
+                "Copilot 列表持久化失败（模拟）。"));
 
         public Task<UiOperationResult> TestNotificationAsync(string title, string message, CancellationToken cancellationToken = default)
             => _inner.TestNotificationAsync(title, message, cancellationToken);
