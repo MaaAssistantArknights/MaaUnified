@@ -523,6 +523,216 @@ public sealed class TaskQueueNotificationTests
         Assert.Equal(expectedCount, fixture.NotificationCapability.NotificationCallCount);
     }
 
+    [Fact]
+    public async Task AllTasksCompleted_WithLogCountTriggerEnabled_SendsSingleExternalNotification()
+    {
+        // WPF f9c14e0be1 NotificationService: the completion line is published once with the
+        // TaskComplete kind, so a kind-selected delivery and the log-count trigger cannot both
+        // fire for the same event.
+        var notificationProvider = new ScriptedNotificationProviderFeatureService();
+        await using var fixture = await NotificationFixture.CreateAsync(
+            useNotify: false,
+            notificationProviderFeatureService: notificationProvider);
+        if (fixture.Config.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Bark");
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenComplete] = JsonValue.Create(true);
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenError] = JsonValue.Create(false);
+            profile.Values[ConfigurationKeys.ExternalNotificationSendAfterLogCount] = JsonValue.Create(true);
+            profile.Values[ConfigurationKeys.ExternalNotificationNewLogCount] = JsonValue.Create(1);
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkSendKey] = JsonValue.Create("bark-key");
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkServer] = JsonValue.Create("https://api.day.app");
+        }
+
+        await fixture.ViewModel.InitializeAsync();
+        fixture.MapCoreTaskId(1, 0);
+        var runLease = fixture.AcquireTaskQueueRun();
+        await NotificationFixture.InvokeCallbackAsync(
+            fixture.ViewModel,
+            new CoreCallbackEvent(
+                0,
+                "AllTasksCompleted",
+                """{"run_id":"completion-dedupe-run","finished_tasks":[1]}""",
+                DateTimeOffset.UtcNow),
+            runLease);
+
+        await WaitForExternalNotificationAsync(
+            notificationProvider,
+            static call => call.Title.Contains("completed", StringComparison.OrdinalIgnoreCase));
+        await Task.Delay(150);
+        Assert.Single(
+            notificationProvider.SendCalls,
+            static call => call.Title.Contains("completed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task TaskChainError_WithLogCountTriggerEnabled_SendsSingleExternalNotification()
+    {
+        // Same single-publication rule for the error path: the TaskChainError line must not also
+        // satisfy the log-count trigger.
+        var notificationProvider = new ScriptedNotificationProviderFeatureService();
+        await using var fixture = await NotificationFixture.CreateAsync(
+            useNotify: false,
+            notificationProviderFeatureService: notificationProvider);
+        if (fixture.Config.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Bark");
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenComplete] = JsonValue.Create(false);
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenError] = JsonValue.Create(true);
+            profile.Values[ConfigurationKeys.ExternalNotificationSendAfterLogCount] = JsonValue.Create(true);
+            profile.Values[ConfigurationKeys.ExternalNotificationNewLogCount] = JsonValue.Create(1);
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkSendKey] = JsonValue.Create("bark-key");
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkServer] = JsonValue.Create("https://api.day.app");
+        }
+
+        await fixture.ViewModel.InitializeAsync();
+        await NotificationFixture.InvokeCallbackAsync(
+            fixture.ViewModel,
+            new CoreCallbackEvent(
+                0,
+                "TaskChainError",
+                """{"run_id":"error-dedupe-run","task_chain":"Fight"}""",
+                DateTimeOffset.UtcNow));
+
+        await WaitForExternalNotificationAsync(
+            notificationProvider,
+            static call => call.Title.Contains("Task error", StringComparison.OrdinalIgnoreCase));
+        await Task.Delay(150);
+        Assert.Single(
+            notificationProvider.SendCalls,
+            static call => call.Title.Contains("Task error", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task AllTasksCompleted_RepeatedCallbackForSameRun_SendsOneNotification()
+    {
+        var notificationProvider = new ScriptedNotificationProviderFeatureService();
+        await using var fixture = await NotificationFixture.CreateAsync(
+            useNotify: true,
+            notificationProviderFeatureService: notificationProvider);
+        if (fixture.Config.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Bark");
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenComplete] = JsonValue.Create(true);
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkSendKey] = JsonValue.Create("bark-key");
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkServer] = JsonValue.Create("https://api.day.app");
+        }
+
+        await fixture.ViewModel.InitializeAsync();
+        fixture.MapCoreTaskId(1, 0);
+        var runLease = fixture.AcquireTaskQueueRun();
+        var callback = new CoreCallbackEvent(
+            0,
+            "AllTasksCompleted",
+            """{"run_id":"completion-repeat-run","finished_tasks":[1]}""",
+            DateTimeOffset.UtcNow);
+        await NotificationFixture.InvokeCallbackAsync(fixture.ViewModel, callback, runLease);
+        await NotificationFixture.InvokeCallbackAsync(fixture.ViewModel, callback, runLease);
+
+        await WaitForNotificationCountAsync(fixture.NotificationCapability, 1);
+        await WaitForExternalNotificationAsync(
+            notificationProvider,
+            static call => call.Title.Contains("completed", StringComparison.OrdinalIgnoreCase));
+        await Task.Delay(150);
+        Assert.Equal(1, fixture.NotificationCapability.NotificationCallCount);
+        Assert.Single(
+            notificationProvider.SendCalls,
+            static call => call.Title.Contains("completed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task AllTasksCompleted_WithFailedTask_UsesErrorTitleAndSummary()
+    {
+        // WPF cda1c3b07f: the completion uses the error title, logs the failed task list and
+        // appends the same list to the external notification body.
+        var notificationProvider = new ScriptedNotificationProviderFeatureService();
+        await using var fixture = await NotificationFixture.CreateAsync(
+            useNotify: true,
+            notificationProviderFeatureService: notificationProvider);
+        Assert.True((await fixture.Runtime.TaskQueueFeatureService.AddTaskAsync("Fight", "fight-a")).Success);
+        if (fixture.Config.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Bark");
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenComplete] = JsonValue.Create(true);
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenError] = JsonValue.Create(false);
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkSendKey] = JsonValue.Create("bark-key");
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkServer] = JsonValue.Create("https://api.day.app");
+        }
+
+        await fixture.ViewModel.InitializeAsync();
+        fixture.MapCoreTaskId(1, 0);
+        var runLease = fixture.AcquireTaskQueueRun();
+        await NotificationFixture.InvokeCallbackAsync(
+            fixture.ViewModel,
+            new CoreCallbackEvent(
+                0,
+                "TaskChainError",
+                """{"run_id":"completion-error-run","task_chain":"Fight","task_id":1}""",
+                DateTimeOffset.UtcNow),
+            runLease);
+        await NotificationFixture.InvokeCallbackAsync(
+            fixture.ViewModel,
+            new CoreCallbackEvent(
+                0,
+                "AllTasksCompleted",
+                """{"run_id":"completion-error-run","finished_tasks":[1]}""",
+                DateTimeOffset.UtcNow),
+            runLease);
+
+        var external = await WaitForExternalNotificationAsync(
+            notificationProvider,
+            static call => call.Title.Contains("errors", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("Errors occurred in this run", external.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("fight-a", external.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            fixture.NotificationCapability.Notifications,
+            notification => notification.Title.Contains("errors", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            fixture.ViewModel.OverlayLogs,
+            log => log.Content.Contains("Errors occurred in this run", StringComparison.OrdinalIgnoreCase)
+                && log.Content.Contains("fight-a", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CheckEncounterUncollected_PublishesTaskCompleteEventAndWarningLog()
+    {
+        // WPF f9c14e0be1: the interactive-exhibition prompt is a TaskComplete event on the
+        // task-queue source; it also writes the warning line through its display callback.
+        var notificationProvider = new ScriptedNotificationProviderFeatureService();
+        await using var fixture = await NotificationFixture.CreateAsync(
+            useNotify: true,
+            notificationProviderFeatureService: notificationProvider);
+        if (fixture.Config.TryGetCurrentProfile(out var profile))
+        {
+            profile.Values[ConfigurationKeys.ExternalNotificationEnabled] = JsonValue.Create("Bark");
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenComplete] = JsonValue.Create(true);
+            profile.Values[ConfigurationKeys.ExternalNotificationSendWhenError] = JsonValue.Create(false);
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkSendKey] = JsonValue.Create("bark-key");
+            profile.Values[ConfigurationKeys.ExternalNotificationBarkServer] = JsonValue.Create("https://api.day.app");
+        }
+
+        await fixture.ViewModel.InitializeAsync();
+        await NotificationFixture.InvokeCallbackAsync(
+            fixture.ViewModel,
+            new CoreCallbackEvent(
+                10002,
+                "SubTaskStart",
+                """{"task_chain":"Fight","subtask":"ProcessTask","details":{"task":"CheckEncounter-Uncollected"}}""",
+                DateTimeOffset.UtcNow));
+
+        var external = await WaitForExternalNotificationAsync(
+            notificationProvider,
+            static call => call.Title.Contains("Interactive Exhibition", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("stopped exploring", external.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            fixture.ViewModel.OverlayLogs,
+            log => string.Equals(log.Level, "WARN", StringComparison.OrdinalIgnoreCase)
+                && log.Content.Contains("stopped exploring", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            fixture.NotificationCapability.Notifications,
+            notification => notification.Title.Contains("Interactive Exhibition", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static async Task WaitForNotificationCountAsync(
         NotificationTrackingPlatformCapabilityService service,
         int expectedCount,

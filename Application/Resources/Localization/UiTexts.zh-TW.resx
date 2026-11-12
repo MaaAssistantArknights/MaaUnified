@@ -1006,6 +1006,16 @@
   <data name="PostAction.Title" xml:space="preserve">
     <value>任務完成後</value>
   </data>
+  <data name="PostAction.SkipOnError" xml:space="preserve">
+    <value>任務出錯時跳過</value>
+  </data>
+  <data name="PostAction.SkipOnErrorTip" xml:space="preserve">
+    <value>勾選後，若任務清單中有一個或多個任務出錯，將跳過以上全部動作。
+僅統計左側任務清單中的任務，Copilot 與工具箱的錯誤不計入。</value>
+  </data>
+  <data name="PostAction.SkippedDueToError" xml:space="preserve">
+    <value>以下任務出錯：{0}，已跳過完成後動作</value>
+  </data>
   <data name="PostAction.Unsupported" xml:space="preserve">
     <value>此動作目前平台不支援，將降級為記錄日誌。</value>
   </data>
@@ -3771,6 +3781,12 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="Toolbox.MiniGame.EventPriority" xml:space="preserve">
     <value>優先系列事件</value>
   </data>
+  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Title" xml:space="preserve">
+    <value>奇象巡展：發現暫未收錄奇象</value>
+  </data>
+  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Content" xml:space="preserve">
+    <value>MAA 已停止自動探索，請返回遊戲完成戰鬥。</value>
+  </data>
   <data name="Toolbox.MiniGame.Name" xml:space="preserve">
     <value>小遊戲名稱</value>
   </data>
@@ -4687,6 +4703,16 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   </data>
   <data name="TacticalRangedOperative" xml:space="preserve">
     <value>遠程戰術分隊</value>
+  </data>
+  <data name="TaskCompletedWithErrors" xml:space="preserve">
+    <value>任務已完成，但出現錯誤！
+(耗時 {0})</value>
+  </data>
+  <data name="TaskErrorSummaryTitle" xml:space="preserve">
+    <value>本輪任務出現以下錯誤：</value>
+  </data>
+  <data name="TaskErrorSummaryItem" xml:space="preserve">
+    <value>{0}</value>
   </data>
   <data name="TaskError" xml:space="preserve">
     <value>任務出錯: </value>

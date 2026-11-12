@@ -1114,6 +1114,16 @@
   <data name="PostAction.Title" xml:space="preserve">
     <value>完了後</value>
   </data>
+  <data name="PostAction.SkipOnError" xml:space="preserve">
+    <value>タスク失敗時はスキップ</value>
+  </data>
+  <data name="PostAction.SkipOnErrorTip" xml:space="preserve">
+    <value>チェックすると、タスクリスト内の1つ以上のタスクが失敗した場合、上記のすべての動作をスキップします。
+左側のタスクリストのタスクのみが対象で、Copilot やツールボックスのエラーは含まれません。</value>
+  </data>
+  <data name="PostAction.SkippedDueToError" xml:space="preserve">
+    <value>タスクが失敗したため、完了後アクションをスキップしました：{0}</value>
+  </data>
   <data name="PostAction.Unsupported" xml:space="preserve">
     <value>このアクションは現在のプラットフォームでは未対応のため、ログ記録にフォールバックします。</value>
   </data>
@@ -3879,6 +3889,12 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="Toolbox.MiniGame.EventPriority" xml:space="preserve">
     <value>優先イベント</value>
   </data>
+  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Title" xml:space="preserve">
+    <value>奇象巡展：未収録の奇象を発見</value>
+  </data>
+  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Content" xml:space="preserve">
+    <value>MAAは自動探索を停止しました。ゲームに戻って手動で戦闘を完了してください。</value>
+  </data>
   <data name="Toolbox.MiniGame.Name" xml:space="preserve">
     <value>ミニゲーム名</value>
   </data>
@@ -4735,6 +4751,16 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   </data>
   <data name="TacticalRangedOperative" xml:space="preserve">
     <value>援護戦術分隊</value>
+  </data>
+  <data name="TaskCompletedWithErrors" xml:space="preserve">
+    <value>すべてのタスクは完了しましたが、エラーが発生しました！
+({0} 後)</value>
+  </data>
+  <data name="TaskErrorSummaryTitle" xml:space="preserve">
+    <value>今回の実行で以下のエラーが発生しました：</value>
+  </data>
+  <data name="TaskErrorSummaryItem" xml:space="preserve">
+    <value>{0}</value>
   </data>
   <data name="TaskError" xml:space="preserve">
     <value>タスクエラー: </value>

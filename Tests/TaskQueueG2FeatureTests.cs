@@ -2538,6 +2538,51 @@ public sealed class TaskQueueG2FeatureTests
     }
 
     [Fact]
+    public async Task Callback_AllTasksCompleted_WithSkipOnError_ShouldSkipActionsAndRestoreOnce()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("Fight", "fight-a")).Success);
+        Assert.True((await fixture.TaskQueue.AddTaskAsync("StartUp", "startup-a")).Success);
+
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+        MapCoreTaskId(fixture.Runtime.SessionService, 3, 0);
+
+        // WPF cda1c3b07f: with ｢this run only｣ checked the post-action changes are not persisted,
+        // so both the skip flag and the checkbox must be restored after the skipped run.
+        vm.PostActionModule.Once = true;
+        vm.PostActionModule.SkipOnError = true;
+        Assert.True(vm.PostActionModule.Once);
+        Assert.True(vm.PostActionModule.SkipOnError);
+
+        Assert.True(fixture.Runtime.SessionService.TryAcquireRun("TaskQueue", out var terminalLease, out _));
+        await InvokeCallbackCoreAsync(
+            vm,
+            new CoreCallbackEvent(
+                3,
+                "TaskChainError",
+                """{"task_chain":"Fight","task_id":3,"run_id":"run-g2-skip-on-error"}""",
+                DateTimeOffset.UtcNow),
+            terminalLease);
+        await InvokeCallbackCoreAsync(
+            vm,
+            new CoreCallbackEvent(
+                3,
+                "AllTasksCompleted",
+                """{"task_chain":"Fight","task_index":0,"run_id":"run-g2-skip-on-error","finished_tasks":[3]}""",
+                DateTimeOffset.UtcNow),
+            terminalLease);
+
+        Assert.Equal(0, fixture.PostAction.ExecuteCount);
+        Assert.False(vm.PostActionModule.Once);
+        Assert.False(vm.PostActionModule.SkipOnError);
+        Assert.Contains(
+            vm.OverlayLogs,
+            log => log.Content.Contains("fight-a", StringComparison.Ordinal)
+                && log.Content.Contains("跳过", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Callback_TaskChainStopped_ShouldResetEveryTaskStatusToIdle()
     {
         await using var fixture = await TestFixture.CreateAsync();

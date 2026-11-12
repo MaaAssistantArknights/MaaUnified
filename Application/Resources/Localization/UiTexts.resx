@@ -2067,6 +2067,16 @@
   <data name="PostAction.Title" xml:space="preserve">
     <value>后置动作</value>
   </data>
+  <data name="PostAction.SkipOnError" xml:space="preserve">
+    <value>任务出错时跳过</value>
+  </data>
+  <data name="PostAction.SkipOnErrorTip" xml:space="preserve">
+    <value>勾选后，若任务列表中有一个或多个任务出错，将跳过以上全部动作。
+仅统计左侧任务列表中的任务，Copilot 与工具箱的报错不计入。</value>
+  </data>
+  <data name="PostAction.SkippedDueToError" xml:space="preserve">
+    <value>以下任务出错：{0}，已跳过完成后动作</value>
+  </data>
   <data name="PostAction.Unsupported" xml:space="preserve">
     <value>该动作当前平台不支持，将降级为日志记录。</value>
   </data>
@@ -4765,6 +4775,16 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TacticalRangedOperative" xml:space="preserve">
     <value>远程战术分队</value>
   </data>
+  <data name="TaskCompletedWithErrors" xml:space="preserve">
+    <value>任务已完成，但出现错误！
+(用时 {0})</value>
+  </data>
+  <data name="TaskErrorSummaryTitle" xml:space="preserve">
+    <value>本轮任务出现以下错误：</value>
+  </data>
+  <data name="TaskErrorSummaryItem" xml:space="preserve">
+    <value>{0}</value>
+  </data>
   <data name="TaskError" xml:space="preserve">
     <value>任务出错: </value>
   </data>
@@ -5535,6 +5555,12 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   </data>
   <data name="Toolbox.MiniGame.EventPriority" xml:space="preserve">
     <value>优先系列事件</value>
+  </data>
+  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Title" xml:space="preserve">
+    <value>奇象巡展：发现暂未收录奇象</value>
+  </data>
+  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Content" xml:space="preserve">
+    <value>MAA 已停止自动探索，请返回游戏完成战斗。</value>
   </data>
   <data name="Toolbox.MiniGame.Name" xml:space="preserve">
     <value>小游戏名称</value>

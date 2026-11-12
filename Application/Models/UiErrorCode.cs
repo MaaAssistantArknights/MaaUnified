@@ -98,6 +98,7 @@ public static class UiErrorCode
     public const string PostActionCancelled = "PostActionCancelled";
     public const string PostActionExecutionFailed = "PostActionExecutionFailed";
     public const string PostActionUnsupported = "PostActionUnsupported";
+    public const string PostActionSkippedOnError = "PostActionSkippedOnError";
 
     public const string InfrastPlanParseFailed = "InfrastPlanParseFailed";
     public const string InfrastPlanOutOfRange = "InfrastPlanOutOfRange";

@@ -2067,6 +2067,16 @@ Right-clicking other options will check/uncheck this option simultaneously</valu
   <data name="PostAction.Title" xml:space="preserve">
     <value>Post Action</value>
   </data>
+  <data name="PostAction.SkipOnError" xml:space="preserve">
+    <value>Skip if any task failed</value>
+  </data>
+  <data name="PostAction.SkipOnErrorTip" xml:space="preserve">
+    <value>When checked, all actions above will be skipped if one or more tasks in the task list failed.
+Only failures of tasks in the left-hand task list count; Copilot and Toolbox errors are ignored.</value>
+  </data>
+  <data name="PostAction.SkippedDueToError" xml:space="preserve">
+    <value>Post actions skipped, failed task(s): {0}</value>
+  </data>
   <data name="PostAction.Unsupported" xml:space="preserve">
     <value>This action is unsupported on current platform and will be downgraded to logging.</value>
   </data>
@@ -4764,6 +4774,16 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="TacticalRangedOperative" xml:space="preserve">
     <value>Tactical Ranged Squad</value>
   </data>
+  <data name="TaskCompletedWithErrors" xml:space="preserve">
+    <value>All task(s) completed with errors!
+(in {0})</value>
+  </data>
+  <data name="TaskErrorSummaryTitle" xml:space="preserve">
+    <value>Errors occurred in this run:</value>
+  </data>
+  <data name="TaskErrorSummaryItem" xml:space="preserve">
+    <value>{0}</value>
+  </data>
   <data name="TaskError" xml:space="preserve">
     <value>Task error: </value>
   </data>
@@ -5546,6 +5566,12 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="Toolbox.MiniGame.EventPriority" xml:space="preserve">
     <value>Preferred event chain</value>
+  </data>
+  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Title" xml:space="preserve">
+    <value>Interactive Exhibition: Unrecorded Wonder Found</value>
+  </data>
+  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Content" xml:space="preserve">
+    <value>MAA has stopped exploring. Return to the game and complete the battle manually.</value>
   </data>
   <data name="Toolbox.MiniGame.Name" xml:space="preserve">
     <value>Mini-game</value>

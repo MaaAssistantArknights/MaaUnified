@@ -281,8 +281,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private static readonly TimeSpan TaskQueueAutoSaveDelay = TimeSpan.FromMilliseconds(200);
     private const string UiMallCreditFightLastTime = "_ui_mall_credit_fight_last_time";
     private const string UiMallVisitFriendsLastTime = "_ui_mall_visit_friends_last_time";
-    private readonly NotificationLogHistory _notificationHistory = new();
-    private readonly ExternalNotificationTrigger _externalNotificationTrigger = new();
+    private readonly INotificationDispatchService? _fallbackNotificationDispatch;
     private readonly SemaphoreSlim _logThumbnailSemaphore = new(1, 1);
     private readonly SemaphoreSlim _queueMutationLock = new(1, 1);
     private readonly SemaphoreSlim _runTransitionLock = new(1, 1);
@@ -401,7 +400,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private string _logTimestampFormat = DefaultLogItemDateFormat;
     private bool _useSystemNotifications = true;
     private bool _useCardLog = true;
-    private string _lastCompletionNotificationRunId = string.Empty;
+    // WPF cda1c3b07f: failed main-queue tasks of the current run. Keyed by Core task id so a
+    // repeated TaskChainError for the same chain is recorded once; the value is the display name
+    // snapshot (with the multi-chain suffix) taken at failure time. Cleared on the next run start,
+    // never on completion: the names are still needed while the post actions run.
+    private readonly object _failedTasksGate = new();
+    private readonly Dictionary<int, string> _failedTasks = [];
+    private readonly List<int> _failedTaskOrder = [];
     private bool _selectedTaskSettingsHostResetPending;
     private bool _isSelectedTaskBindingPending;
     private TaskQueueTaskPanelViewModel? _selectedTaskPanel;
@@ -479,6 +484,16 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         _stopRunOwnerAsync = stopRunOwnerAsync;
         _uiLanguageCoordinator = runtime.UiLanguageCoordinator;
         _uiLanguageCoordinator.LanguageChanged += OnUnifiedLanguageChanged;
+        _fallbackNotificationDispatch = runtime.NotificationDispatchService is null
+            ? new NotificationDispatchService(
+                runtime.ConfigurationService,
+                runtime.PlatformCapabilityService,
+                runtime.NotificationProviderFeatureService,
+                new NotificationLogHistory(),
+                new ExternalNotificationTrigger(),
+                HandleExternalNotificationFailureAsync,
+                HandleSystemNotificationFailureAsync)
+            : null;
         TaskModules = new ObservableCollection<TaskModuleOption>();
         Tasks = new ObservableCollection<TaskQueueItemViewModel>();
         TaskPanels = new ObservableCollection<TaskQueueTaskPanelViewModel>();
@@ -624,6 +639,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public CustomModuleViewModel CustomModule => ResolveModuleForProjection<CustomModuleViewModel>() ?? _fallbackCustomModule;
 
     public PostActionModuleViewModel PostActionModule { get; }
+
+    /// <summary>
+    /// Gets the single notification routing entry point. WPF f9c14e0be1 (NotificationService):
+    /// producers publish events here; transports (system toast, external channels) only deliver
+    /// the already selected payload.
+    /// </summary>
+    private INotificationDispatchService NotificationDispatch =>
+        Runtime.NotificationDispatchService ?? _fallbackNotificationDispatch!;
 
     public TaskRuntimeStatusSnapshot? LastRuntimeStatus
     {
@@ -1284,7 +1307,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return RootTexts.GetOrDefault("TaskQueue.Root.PostActionNone", "Do nothing");
             }
 
-            return string.Join(" / ", actions);
+            var description = string.Join(" / ", actions);
+            if (PostActionModule.SkipOnError)
+            {
+                // WPF cda1c3b07f: the skip flag is a modifier, not an action in the arrow chain.
+                description += Environment.NewLine
+                    + Texts.GetOrDefault("PostAction.SkipOnError", "Skip if any task failed");
+            }
+
+            return description;
         }
     }
 
@@ -3639,6 +3670,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 CurrentSessionState = Runtime.SessionService.CurrentState;
                 _currentRunId = Guid.NewGuid().ToString("N");
                 _lastPostActionRunId = string.Empty;
+                // WPF cda1c3b07f: the failed-task snapshot lives for exactly one run.
+                ClearFailedTasks();
                 _taskQueueRunActive = true;
                 Interlocked.Exchange(ref _stopScriptLaunched, 0);
                 TrackAchievementsAfterStart(appendResult.Value);
@@ -4840,6 +4873,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 CurrentSessionState = Runtime.SessionService.CurrentState;
                 _currentRunId = Guid.NewGuid().ToString("N");
                 _lastPostActionRunId = string.Empty;
+                // WPF cda1c3b07f: the failed-task snapshot lives for exactly one run.
+                ClearFailedTasks();
                 _taskQueueRunActive = true;
                 Interlocked.Exchange(ref _stopScriptLaunched, 0);
                 StartOrResetStallReminder();
@@ -5014,6 +5049,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 CurrentSessionState = Runtime.SessionService.CurrentState;
                 _currentRunId = Guid.NewGuid().ToString("N");
                 _lastPostActionRunId = string.Empty;
+                // WPF cda1c3b07f: the failed-task snapshot lives for exactly one run.
+                ClearFailedTasks();
                 _taskQueueRunActive = true;
                 Interlocked.Exchange(ref _stopScriptLaunched, 0);
                 StartOrResetStallReminder();
@@ -6270,7 +6307,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
 
         LogCards.Clear();
         OverlayLogs.Clear();
-        _notificationHistory.Clear();
+        NotificationDispatch.ClearHistory();
         DownloadLogEntry = new TaskQueueLogEntryViewModel(string.Empty, string.Empty, "INFO");
         LastRuntimeStatus = null;
     }
@@ -6324,7 +6361,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         bool notifyActivity = true,
         string? color = null,
         string weight = "Regular",
-        LogCardSplitMode splitMode = LogCardSplitMode.None)
+        LogCardSplitMode splitMode = LogCardSplitMode.None,
+        bool publishNotification = true)
     {
         if (notifyActivity)
         {
@@ -6358,11 +6396,19 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             card = CreateLogCardIfNeeded();
             card.Append(entry);
             OverlayLogs.Add(entry);
-            _notificationHistory.Add(new NotificationLogRecord(
-                timestamp,
-                entry.Color ?? MapExternalLogColor(level),
-                content));
-            TryQueueLogTriggeredExternalNotification(content);
+            if (publishNotification)
+            {
+                // WPF f9c14e0be1: every displayed line is published through
+                // NotificationService.PublishLog, which owns the history and the log-count /
+                // content-match delivery trigger. Event lines pass publishNotification: false
+                // and are published once by the event dispatcher instead, so the same line can
+                // never produce two deliveries.
+                NotificationDispatch.PublishLog(
+                    NotificationSource.TaskQueue,
+                    content,
+                    entry.Color ?? MapExternalLogColor(level),
+                    timestamp);
+            }
         }
 
         if (updateThumbnail)
@@ -6646,7 +6692,22 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    private void AppendWpfCallbackLog(CoreCallbackEvent callback, CallbackPayload payload, int? taskIndex)
+    /// <summary>
+    /// Renders the Core callback log line.
+    /// </summary>
+    /// <param name="callback">Core callback.</param>
+    /// <param name="payload">Parsed callback payload.</param>
+    /// <param name="taskIndex">Resolved queue index.</param>
+    /// <param name="publishNotification">
+    /// False for lines that are also published as a notification event: the event dispatcher
+    /// owns history and the delivery trigger, so the line must not enter the log pipeline twice
+    /// (WPF f9c14e0be1 keeps <c>DisplayLog</c> presentation-only).
+    /// </param>
+    private void AppendWpfCallbackLog(
+        CoreCallbackEvent callback,
+        CallbackPayload payload,
+        int? taskIndex,
+        bool publishNotification = true)
     {
         if (IsSuppressedWpfTaskChainLog(callback.MsgName, payload.TaskChain))
         {
@@ -6663,7 +6724,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             "SubTaskStart" => BuildSubTaskStartLog(payload),
             "SubTaskCompleted" => BuildSubTaskCompletedLog(payload, taskIndex),
             "SubTaskExtraInfo" => BuildSubTaskExtraInfoLog(payload, taskIndex),
-            "AllTasksCompleted" => BuildAllTasksCompletedLog(callback.Timestamp),
             _ => null,
         };
 
@@ -6686,7 +6746,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             forceScreenshot: value.ForceScreenshot,
             color: value.Color,
             weight: value.Weight,
-            splitMode: value.SplitMode);
+            splitMode: value.SplitMode,
+            publishNotification: publishNotification);
     }
 
     private static bool IsSuppressedWpfTaskChainLog(string? msgName, string? taskChain)
@@ -6832,23 +6893,98 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    private TaskQueueCallbackUserLog BuildAllTasksCompletedLog(DateTimeOffset timestamp)
+    /// <summary>
+    /// WPF parity (cda1c3b07f AddTaskCompletionLog): when the run had errors the headline is red
+    /// and stands alone, while the sanity report stays in the following card so the whole card
+    /// does not turn red. Both lines are presentation-only; the completion event publishes once.
+    /// </summary>
+    private void AppendTaskCompletionLog(DateTimeOffset timestamp, bool hasTaskErrors)
     {
-        var content = BuildAllTasksCompletedTitle(timestamp);
+        var content = BuildAllTasksCompletedLogText(timestamp, hasTaskErrors);
+        if (!hasTaskErrors)
+        {
+            AppendLogEntry(
+                timestamp,
+                content,
+                "INFO",
+                updateThumbnail: false,
+                splitMode: LogCardSplitMode.Both,
+                publishNotification: false);
+            return;
+        }
+
+        var (headline, extraContent) = SplitTaskCompletionLog(content);
+        AppendLogEntry(
+            timestamp,
+            headline,
+            "ERROR",
+            updateThumbnail: false,
+            splitMode: string.IsNullOrWhiteSpace(extraContent) ? LogCardSplitMode.Both : LogCardSplitMode.Before,
+            publishNotification: false);
+        if (!string.IsNullOrWhiteSpace(extraContent))
+        {
+            AppendLogEntry(
+                timestamp,
+                extraContent,
+                "INFO",
+                updateThumbnail: false,
+                splitMode: LogCardSplitMode.After,
+                publishNotification: false);
+        }
+    }
+
+    private static (string Headline, string ExtraContent) SplitTaskCompletionLog(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return (string.Empty, string.Empty);
+        }
+
+        var firstLineEnd = content.IndexOf('\n');
+        if (firstLineEnd < 0)
+        {
+            return (content, string.Empty);
+        }
+
+        var headline = content[..firstLineEnd].TrimEnd('\r');
+        var extraContent = content[(firstLineEnd + 1)..].TrimStart('\r', '\n');
+        return (headline, extraContent);
+    }
+
+    /// <summary>
+    /// WPF parity (cda1c3b07f BuildTaskErrorSummaryLog): the failed task names snapshot reused by
+    /// the completion log and the external notification body.
+    /// </summary>
+    private string BuildTaskErrorSummaryLog(IReadOnlyList<string> failedTaskNames)
+    {
+        if (failedTaskNames.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(GetRootText("TaskErrorSummaryTitle", "Errors occurred in this run:"));
+        foreach (var taskName in failedTaskNames)
+        {
+            builder.AppendLine();
+            builder.AppendFormat(GetRootText("TaskErrorSummaryItem", "{0}"), taskName);
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private string BuildAllTasksCompletedLogText(DateTimeOffset timestamp, bool hasTaskErrors)
+    {
+        var content = BuildAllTasksCompletedTitle(timestamp, hasTaskErrors);
         var sanityReport = BuildSanityRecoveryReport(timestamp);
         if (!string.IsNullOrWhiteSpace(sanityReport))
         {
             content += Environment.NewLine + sanityReport;
         }
 
-        // WPF logs AllTasksCompleted with the default trace color, split on both
-        // sides, and does not refresh the card screenshot.
-        return new(
-            Content: content,
-            SplitMode: LogCardSplitMode.Both);
+        return content;
     }
 
-    private string BuildAllTasksCompletedTitle(DateTimeOffset timestamp)
+    private string BuildAllTasksCompletedTitle(DateTimeOffset timestamp, bool hasTaskErrors)
     {
         var startedAt = _runStartedAt ?? timestamp;
         var duration = timestamp.ToLocalTime() - startedAt.ToLocalTime();
@@ -6857,12 +6993,15 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             duration = TimeSpan.Zero;
         }
 
+        // WPF cda1c3b07f: a run that had failed tasks reports the completion with a warning title.
         return string.Format(
-            GetRootText("AllTasksComplete", "All task(s) completed!\n(in {0})"),
+            hasTaskErrors
+                ? GetRootText("TaskCompletedWithErrors", "All task(s) completed with errors!\n(in {0})")
+                : GetRootText("AllTasksComplete", "All task(s) completed!\n(in {0})"),
             duration.ToString(@"h\h\ m\m\ s\s"));
     }
 
-    private string BuildAllTasksCompletedExternalMessage(DateTimeOffset timestamp)
+    private string BuildAllTasksCompletedMessage(DateTimeOffset timestamp)
     {
         var startedAt = _runStartedAt ?? timestamp;
         var duration = timestamp.ToLocalTime() - startedAt.ToLocalTime();
@@ -6871,17 +7010,30 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             duration = TimeSpan.Zero;
         }
 
-        var message = GetRootText(
+        return GetRootText(
                 "AllTaskCompleteContent",
                 "MAA has completed all tasks under the {Preset} configuration on {DateTime} (in {TimeDiff})")
             .Replace("{DateTime}", timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"), StringComparison.Ordinal)
             .Replace("{Preset}", Runtime.ConfigurationService.CurrentConfig.CurrentProfile, StringComparison.Ordinal)
             .Replace("{TimeDiff}", duration.ToString(@"h\h\ m\m\ s\s"), StringComparison.Ordinal);
+    }
+
+    private string BuildAllTasksCompletedExternalMessage(
+        DateTimeOffset timestamp,
+        bool hasTaskErrors,
+        IReadOnlyList<string> failedTaskNames)
+    {
+        var message = BuildAllTasksCompletedMessage(timestamp);
+        if (hasTaskErrors)
+        {
+            // WPF cda1c3b07f: keep the completion context (time/profile) and append the error
+            // list so the external body does not end up being only the failure names.
+            message += Environment.NewLine + BuildTaskErrorSummaryLog(failedTaskNames);
+        }
 
         // WPF f9c14e0be1: the delivery section decides how many earlier log lines travel with
         // the notification; the legacy ｢include details｣ flag maps to IncludePreviousLogs with
         // a 100-line cap (ExternalNotificationDeliveryPolicy.FromConfig).
-        var policy = ExternalNotificationDeliveryPolicy.FromConfig(Runtime.ConfigurationService.CurrentConfig);
         var sanityReport = BuildSanityRecoveryReport(timestamp);
         var body = new StringBuilder(message);
         if (!string.IsNullOrWhiteSpace(sanityReport))
@@ -6890,7 +7042,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             body.Append(sanityReport);
         }
 
-        return _notificationHistory.Bundle(body.ToString(), policy, timestamp);
+        return NotificationDispatch.BundleHistory(body.ToString(), timestamp);
     }
 
     private TaskQueueCallbackUserLog? BuildSubTaskErrorLog(CallbackPayload payload, int? taskIndex)
@@ -7003,39 +7155,111 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         if (string.Equals(callback.MsgName, "TaskChainError", StringComparison.Ordinal)
             && string.Equals(TaskModuleTypes.Normalize(payload.TaskChain), TaskModuleTypes.Recruit, StringComparison.OrdinalIgnoreCase))
         {
+            // WPF f9c14e0be1 keeps the recruit recognition tips on the toast channel only; they
+            // never select an external delivery switch.
             var recognitionError = NormalizeNotificationText(
                 GetRootText("IdentifyTheMistakes", "Recognition error"),
                 "Recognition error");
-            QueueAutomaticSystemNotification(new TaskQueueSystemNotification(
+            QueueSystemNotificationOnly(new TaskQueueSystemNotification(
                 recognitionError,
                 string.Empty,
                 "TaskQueue.Notification.RecruitRecognitionError",
-                "recruit recognition failure"),
-                _useSystemNotifications);
+                "recruit recognition failure"));
         }
 
-        var request = TryBuildAutomaticSystemNotification(callback, payload, runId);
-        if (!request.HasValue)
+        switch (callback.MsgName)
         {
-            return;
+            case "AllTasksCompleted":
+                DispatchCompletionNotification(callback, runId);
+                break;
+            case "TaskChainError":
+                DispatchTaskChainErrorNotification(callback, payload);
+                break;
         }
+    }
 
-        var notification = request.Value;
-        QueueAutomaticSystemNotification(notification, _useSystemNotifications);
-        QueueAutomaticExternalNotification(callback.MsgName, notification);
+    /// <summary>
+    /// WPF parity (AsstProxy.AllTasksCompleted + NotificationService.Notify): the completion event
+    /// is published once per run, carries the pre-bundled completion body plus the error summary,
+    /// and is the only owner of the completion toast/external delivery.
+    /// </summary>
+    private void DispatchCompletionNotification(CoreCallbackEvent callback, string runId)
+    {
+        var failedTaskNames = GetFailedTaskNames();
+        var hasTaskErrors = failedTaskNames.Length > 0;
+        var title = BuildAllTasksCompletedTitle(callback.Timestamp, hasTaskErrors);
+
+        QueueEventNotification(
+            new TaskQueueSystemNotification(
+                NormalizeNotificationText(title, "All tasks completed"),
+                BuildSanityRecoveryReport(callback.Timestamp) ?? string.Empty,
+                "TaskQueue.Notification.Complete",
+                "task completion",
+                BuildAllTasksCompletedExternalMessage(callback.Timestamp, hasTaskErrors, failedTaskNames),
+                NotificationKind.TaskComplete),
+            BuildAllTasksCompletedLogText(callback.Timestamp, hasTaskErrors),
+            callback.Timestamp,
+            $"TaskQueue.AllTasksCompleted:{runId}",
+            recordHistory: true,
+            sendExternal: true);
+    }
+
+    /// <summary>
+    /// WPF parity (f9c14e0be1 AsstProxy.TaskChainError): a task-queue chain error is a TaskError
+    /// event, so the error switch and the system notification both fire from the same publish.
+    /// </summary>
+    private void DispatchTaskChainErrorNotification(CoreCallbackEvent callback, CallbackPayload payload)
+    {
+        var taskFailureLog = BuildTaskChainErrorLog(payload);
+        var content = NormalizeNotificationText(taskFailureLog.Content, "Task failed");
+        QueueEventNotification(
+            new TaskQueueSystemNotification(
+                content,
+                string.Empty,
+                "TaskQueue.Notification.Error",
+                "task failure",
+                content,
+                NotificationKind.TaskError,
+                "ERROR"),
+            taskFailureLog.Content,
+            callback.Timestamp,
+            dedupeKey: null,
+            recordHistory: true,
+            sendExternal: true);
     }
 
     private void QueueSpecialCallbackNotification(string callbackName, CallbackPayload payload)
     {
         TaskQueueSystemNotification? notification = null;
+        var sendExternal = false;
+        string? displayContent = null;
+        var logLevel = "INFO";
         if (string.Equals(callbackName, "SubTaskStart", StringComparison.Ordinal)
             && string.Equals(payload.SubTask, "ProcessTask", StringComparison.OrdinalIgnoreCase))
         {
             var task = GetStringValue(payload.Details, "task");
             if (string.Equals(task, "FightMissionFailedAndStop", StringComparison.Ordinal))
             {
+                // WPF f9c14e0be1: fight failure is a TaskError event and feeds the error switch.
                 var text = GetRootText("FightMissionFailedAndStop", "Proxy failed too many times, task stopped");
-                notification = new(text, string.Empty, "TaskQueue.Notification.FightStopped", "fight mission failure");
+                notification = new(text, string.Empty, "TaskQueue.Notification.FightStopped", "fight mission failure", text, NotificationKind.TaskError, "ERROR");
+                sendExternal = true;
+            }
+            else if (string.Equals(task, "CheckEncounter-Uncollected", StringComparison.Ordinal))
+            {
+                // WPF f9c14e0be1: the interactive-exhibition prompt is a TaskComplete event; the
+                // display callback writes the warning line (this pipeline task has no log of its
+                // own), so the completion switch sends a notification as a side effect.
+                var title = GetRootText(
+                    "Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Title",
+                    "Interactive Exhibition: Unrecorded Wonder Found");
+                var content = GetRootText(
+                    "Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Content",
+                    "MAA has stopped exploring. Return to the game and complete the battle manually.");
+                notification = new(title, content, "TaskQueue.Notification.Uncollected", "interactive exhibition uncollected", content, NotificationKind.TaskComplete, "WARN");
+                sendExternal = true;
+                displayContent = content;
+                logLevel = "WARN";
             }
             else if (IsOfflineConfirmTask(task) && !IsStartUpTaskChain(payload.TaskChain))
             {
@@ -7043,7 +7267,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 // queue; the removed restart-on-drop switch no longer gates the stop. StartUp
                 // is exempt because it reconnects as part of its launch flow.
                 var text = GetRootText("GameDrop", "Game disconnected, stopping tasks");
-                notification = new(text, string.Empty, "TaskQueue.Notification.Offline", "game disconnect");
+                notification = new(text, string.Empty, "TaskQueue.Notification.Offline", "game disconnect", text, NotificationKind.TaskError, "ERROR");
+                sendExternal = true;
                 _ = StopAsync(userInitiated: false);
             }
         }
@@ -7095,17 +7320,40 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             }
         }
 
-        if (notification.HasValue)
+        if (!notification.HasValue)
         {
-            QueueAutomaticSystemNotification(notification.Value, _useSystemNotifications);
+            return;
         }
+
+        var value = notification.Value;
+        if (displayContent is not null)
+        {
+            // The pipeline task itself logs nothing; the display callback owns the warning line
+            // while the dispatcher owns history and delivery for the same publication.
+            QueueEventNotification(
+                value,
+                value.Message,
+                timestamp: null,
+                dedupeKey: null,
+                recordHistory: true,
+                sendExternal: sendExternal,
+                display: () => AppendLogEntry(
+                    DateTimeOffset.Now,
+                    displayContent,
+                    logLevel,
+                    updateThumbnail: true,
+                    publishNotification: false));
+            return;
+        }
+
+        if (sendExternal)
+        {
+            QueueEventNotification(value, value.ExternalMessage ?? value.Message, timestamp: null, dedupeKey: null, recordHistory: true, sendExternal: true);
+            return;
+        }
+
+        QueueSystemNotificationOnly(value);
     }
-
-
-
-
-
-
 
     /// <summary>
     /// WPF parity (RunningState.NotifyOutputActivity / ResetStallTimer, 24639a0fdd): every log
@@ -7178,18 +7426,30 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 {
                     // A stalled notification is not output activity; re-arming would turn the
                     // reminder interval back into the full stall timeout.
-                    AppendLogEntry(DateTimeOffset.Now, message, "WARN", updateThumbnail: false, notifyActivity: false);
-                    var systemNotification = new TaskQueueSystemNotification(
+                    var timestamp = DateTimeOffset.Now;
+                    AppendLogEntry(
+                        timestamp,
                         message,
-                        string.Empty,
-                        "TaskQueue.Notification.Stalled",
-                        "task output stalled",
-                        _notificationHistory.Bundle(
+                        "WARN",
+                        updateThumbnail: false,
+                        notifyActivity: false,
+                        publishNotification: false);
+                    // WPF f9c14e0be1: the stall reminder travels through both the system toast and
+                    // the external channels; the dispatcher owns the single publication.
+                    QueueEventNotification(
+                        new TaskQueueSystemNotification(
+                            message,
                             string.Empty,
-                            ExternalNotificationDeliveryPolicy.FromConfig(Runtime.ConfigurationService.CurrentConfig),
-                            DateTimeOffset.Now));
-                    QueueAutomaticSystemNotification(systemNotification, _useSystemNotifications);
-                    QueueAutomaticExternalNotification("TaskStalled", systemNotification);
+                            "TaskQueue.Notification.Stalled",
+                            "task output stalled",
+                            NotificationDispatch.BundleHistory(string.Empty, timestamp),
+                            NotificationKind.Stalled,
+                            "WARN"),
+                        message,
+                        timestamp,
+                        dedupeKey: null,
+                        recordHistory: true,
+                        sendExternal: true);
                 });
                 _ = Runtime.AchievementTrackerService.Unlock("LongTaskTimeout");
 
@@ -7281,13 +7541,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                     "Run duration limit of {0} minutes reached, stopping the tasks."),
                 limitMinutes);
             AppendLogEntry(DateTimeOffset.Now, message, "WARN", updateThumbnail: false);
-            QueueAutomaticSystemNotification(
+            QueueSystemNotificationOnly(
                 new TaskQueueSystemNotification(
                     message,
                     string.Empty,
                     "TaskQueue.Notification.RunDurationLimit",
-                    "run duration limit reached"),
-                _useSystemNotifications);
+                    "run duration limit reached"));
 
             await StopAsync(userInitiated: true);
             if (!executePostActions
@@ -7408,9 +7667,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             var report = BuildSanityRecoveryReport(DateTimeOffset.Now);
             if (!string.IsNullOrWhiteSpace(report))
             {
-                QueueAutomaticSystemNotification(
-                    new TaskQueueSystemNotification(report, string.Empty, "TaskQueue.Notification.Sanity", "sanity recovery"),
-                    _useSystemNotifications);
+                QueueSystemNotificationOnly(
+                    new TaskQueueSystemNotification(report, string.Empty, "TaskQueue.Notification.Sanity", "sanity recovery"));
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -7418,116 +7676,177 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    private void QueueAutomaticSystemNotification(
+    private void QueueSystemNotificationOnly(TaskQueueSystemNotification notification)
+    {
+        // WPF parity (NotificationService.ProcessLog): an event notification still shows the
+        // system toast when the kind has no external switch, without touching the delivery
+        // trigger. Recruit tips/reminders keep their legacy toast-only behaviour.
+        NotificationDispatch.Notify(
+            NotificationSource.TaskQueue,
+            new NotificationMessage(NotificationKind.TaskComplete, notification.Title, notification.Message),
+            new NotificationDispatchOptions
+            {
+                Scope = notification.Scope,
+                Reason = notification.Reason,
+                ShowSystemNotification = true,
+                SendExternal = false,
+            });
+    }
+
+    private void QueueEventNotification(
         TaskQueueSystemNotification notification,
-        bool useSystemNotification)
+        string? logContent,
+        DateTimeOffset? timestamp = null,
+        string? dedupeKey = null,
+        bool recordHistory = true,
+        bool sendExternal = true,
+        Action? display = null)
     {
-        _ = Task.Run(async () =>
-        {
-            try
+        NotificationDispatch.Notify(
+            NotificationSource.TaskQueue,
+            new NotificationMessage(notification.Kind, notification.Title, notification.Message),
+            new NotificationDispatchOptions
             {
-                await Runtime.PlatformCapabilityService.SendSystemNotificationAsync(
-                    new SystemNotificationRequest(
-                        notification.Title,
-                        notification.Message,
-                        [],
-                        UseSystemNotification: useSystemNotification));
-            }
-            catch (Exception ex)
-            {
-                await RecordErrorAsync(
-                    notification.Scope,
-                    $"Failed to dispatch automatic system notification for {notification.Reason}.",
-                    ex);
-            }
-        });
+                Scope = notification.Scope,
+                Reason = notification.Reason,
+                ExternalMessage = notification.ExternalMessage,
+                LogContent = logContent,
+                Color = MapExternalLogColor(notification.LogLevel),
+                RecordHistory = recordHistory,
+                SendExternal = sendExternal,
+                Timestamp = timestamp,
+                DedupeKey = dedupeKey,
+                Display = display,
+            });
     }
 
-    private void QueueAutomaticExternalNotification(
-        string callbackName,
-        TaskQueueSystemNotification notification)
+    private async Task HandleSystemNotificationFailureAsync(string scope, string message, Exception? exception)
     {
-        var requests = BuildAutomaticExternalNotificationRequests(
-            callbackName,
-            notification,
-            Runtime.ConfigurationService.CurrentConfig);
-        DispatchAutomaticExternalNotifications(requests, notification.Scope);
+        await RecordErrorAsync(scope, message, exception);
     }
 
-    // WPF f9c14e0be1 NotificationTrigger: Delivery.SendAfterLogCount / SendWhenContentMatches can
-    // make any log line a delivery trigger. Dispatch reuses the callback notification path; the
-    // line itself is the title and body, matching NotificationService.ProcessLog.
-    private void TryQueueLogTriggeredExternalNotification(string content)
+    private async Task HandleExternalNotificationFailureAsync(string scope, string message, Exception? exception)
     {
-        var config = Runtime.ConfigurationService.CurrentConfig;
-        var policy = ExternalNotificationDeliveryPolicy.FromConfig(config);
-        if (!policy.SendAfterLogCount && !policy.SendWhenContentMatches)
+        if (exception is null)
         {
-            _externalNotificationTrigger.Reset();
-            return;
+            await RecordErrorAsync(scope, message);
+        }
+        else
+        {
+            await RecordErrorAsync(scope, message, exception);
         }
 
-        var channels = ExternalNotificationChannels.ResolveEnabled(config);
-        if (!_externalNotificationTrigger.ShouldSend(policy, content, null, channels.Count > 0))
-        {
-            return;
-        }
-
-        _externalNotificationTrigger.Reset();
-        var body = _notificationHistory.Bundle(content, policy, DateTimeOffset.Now, skipNewest: 1);
-        var requests = channels
-            .Select(channel => new NotificationProviderTestRequest(
-                channel.Provider,
-                ExternalNotificationChannels.BuildParameterText(channel),
-                content,
-                body))
-            .ToList();
-        DispatchAutomaticExternalNotifications(requests, "TaskQueue.Notification.LogTrigger");
+        await Runtime.DialogFeatureService.ReportErrorAsync(
+            scope,
+            UiOperationResult.Fail(UiErrorCode.NotificationProviderFailed, message));
     }
 
-    private void DispatchAutomaticExternalNotifications(
-        IReadOnlyList<NotificationProviderTestRequest> requests,
-        string scope)
+    /// <summary>
+    /// Records one failed main-queue task for the current run.
+    /// <para>
+    /// Only TaskQueue-owned runs are recorded: WPF cda1c3b07f filters on
+    /// <c>RunOwner.TaskQueue</c> so Copilot/Toolbox failures never block the post actions. The page
+    /// handler already drops callbacks while another owner holds the run; remote-control starts do
+    /// not claim page ownership yet, so an unclaimed owner is attributed to the task queue.
+    /// </para>
+    /// </summary>
+    private void RecordFailedTaskSnapshot(
+        RunOwnershipLease? callbackRunLease,
+        int? coreTaskId,
+        int? taskIndex,
+        string? taskChain)
     {
-        if (requests.Count == 0)
+        var isTaskQueueOwned = _taskQueueRunActive
+            || (callbackRunLease is { } lease
+                && string.Equals(lease.Owner, TaskQueueRunOwner, StringComparison.Ordinal))
+            || string.IsNullOrWhiteSpace(Runtime.SessionService.CurrentRunOwner);
+        if (!isTaskQueueOwned)
         {
             return;
         }
 
-        _ = Task.Run(async () =>
+        var name = ResolveTaskLogName(taskIndex, taskChain)
+            + BuildMultiChainTaskNameSuffix(taskIndex, taskChain);
+        var key = coreTaskId ?? (taskIndex.HasValue ? -(taskIndex.Value + 1) : -1);
+        lock (_failedTasksGate)
         {
-            foreach (var request in requests)
+            if (!_failedTasks.ContainsKey(key))
             {
-                try
-                {
-                    var result = await Runtime.NotificationProviderFeatureService.SendTestAsync(request);
-                    if (!result.Success)
-                    {
-                        await RecordErrorAsync(
-                            scope,
-                            $"Failed to dispatch automatic external notification via {request.Provider}: {result.Message}");
-                        await Runtime.DialogFeatureService.ReportErrorAsync(
-                            scope,
-                            UiOperationResult.Fail(
-                                result.Error?.Code ?? UiErrorCode.NotificationProviderFailed,
-                                $"External notification via {request.Provider} failed: {result.Message}",
-                                result.Error?.Details));
-                    }
-                }
-                catch (Exception ex)
-                {
-                    await RecordErrorAsync(
-                        scope,
-                        $"Failed to dispatch automatic external notification via {request.Provider}.",
-                        ex);
-                    await Runtime.DialogFeatureService.ReportErrorAsync(
-                        scope,
-                        UiOperationResult.Fail(
-                            UiErrorCode.NotificationProviderFailed,
-                            $"External notification via {request.Provider} failed."));
-                }
+                _failedTaskOrder.Add(key);
             }
-        });
+
+            // A later error for the same Core task only refreshes the display name; the snapshot
+            // stays unique per task id.
+            _failedTasks[key] = name;
+        }
+    }
+
+    internal string[] GetFailedTaskNames()
+    {
+        lock (_failedTasksGate)
+        {
+            return _failedTaskOrder
+                .Where(_failedTasks.ContainsKey)
+                .Select(key => _failedTasks[key])
+                .ToArray();
+        }
+    }
+
+    private void ClearFailedTasks()
+    {
+        lock (_failedTasksGate)
+        {
+            _failedTasks.Clear();
+            _failedTaskOrder.Clear();
+        }
+    }
+
+    /// <summary>
+    /// WPF cda1c3b07f <c>GetMultiChainTaskNameSuffix</c>: a UserDataUpdate entry expands into the
+    /// OperBox/Depot chains, so the failure snapshot must say which chain failed.
+    /// </summary>
+    private string BuildMultiChainTaskNameSuffix(int? taskIndex, string? taskChain)
+    {
+        if (!IsValidTaskIndex(taskIndex, Tasks.Count)
+            || !string.Equals(
+                TaskModuleTypes.Normalize(Tasks[taskIndex!.Value].Type),
+                TaskModuleTypes.UserDataUpdate,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        return TaskModuleTypes.Normalize(taskChain) switch
+        {
+            "OperBox" => $" ({GetRootText("Toolbox.Tab.OperBox", "Operator recognition")})",
+            "Depot" => $" ({GetRootText("Toolbox.Tab.Depot", "Depot recognition")})",
+            _ => string.Empty,
+        };
+    }
+
+    /// <summary>
+    /// True when a ProcessTask start node is also published as a notification event, so its log
+    /// line must not enter the delivery pipeline a second time.
+    /// </summary>
+    private bool HasSubTaskStartNotificationEvent(CallbackPayload payload)
+    {
+        if (!string.Equals(payload.SubTask, "ProcessTask", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var task = GetStringValue(payload.Details, "task");
+        if (string.Equals(task, "FightMissionFailedAndStop", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (string.Equals(task, "CheckEncounter-Uncollected", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return IsOfflineConfirmTask(task) && !IsStartUpTaskChain(payload.TaskChain);
     }
 
     internal static IReadOnlyList<NotificationProviderTestRequest> BuildAutomaticExternalNotificationRequests(
@@ -7536,42 +7855,19 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         UnifiedConfig config)
     {
         // WPF f9c14e0be1 migration: the removed ｢Discord Webhook｣ channel becomes a Custom
-        // Webhook channel with the saved URL and a {"content": "{content}"} body.
-        var channels = ExternalNotificationChannels.ResolveEnabled(config);
-        if (channels.Count == 0)
+        // Webhook channel with the saved URL and a {"content": "{content}"} body. The request
+        // shape stays identical to the pre-unification helper.
+        var kind = NotificationDispatchService.KindFromCallbackName(callbackName);
+        if (kind is null)
         {
             return [];
         }
 
-        var shouldSend = callbackName switch
-        {
-            "AllTasksCompleted" => TryReadProfileBool(
-                config,
-                ConfigurationKeys.ExternalNotificationSendWhenComplete,
-                true),
-            "TaskChainError" => TryReadProfileBool(
-                config,
-                ConfigurationKeys.ExternalNotificationSendWhenError,
-                true),
-            "TaskStalled" => ReadStalledExternalNotificationEnabled(config),
-            _ => false,
-        };
-        if (!shouldSend)
-        {
-            return [];
-        }
-
-        var requests = new List<NotificationProviderTestRequest>();
-        foreach (var channel in channels)
-        {
-            requests.Add(new NotificationProviderTestRequest(
-                channel.Provider,
-                ExternalNotificationChannels.BuildParameterText(channel),
-                notification.Title,
-                NormalizeExternalNotificationMessage(notification)));
-        }
-
-        return requests;
+        return NotificationDispatchService.BuildExternalRequests(
+            kind.Value,
+            notification.Title,
+            NormalizeExternalNotificationMessage(notification),
+            config);
     }
 
     private static string NormalizeExternalNotificationMessage(TaskQueueSystemNotification notification)
@@ -7601,51 +7897,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             "TRACE" => "TraceLogBrush",
             _ => "MessageLogBrush",
         };
-    }
-
-    private static bool ReadStalledExternalNotificationEnabled(UnifiedConfig config)
-    {
-        if (config.Profiles.TryGetValue(config.CurrentProfile, out var profile)
-            && profile.Values.ContainsKey(ConfigurationKeys.ExternalNotificationSendWhenStalled))
-        {
-            return TryReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenStalled, true);
-        }
-
-        return TryReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true);
-    }
-
-    private TaskQueueSystemNotification? TryBuildAutomaticSystemNotification(
-        CoreCallbackEvent callback,
-        CallbackPayload payload,
-        string runId)
-    {
-        switch (callback.MsgName)
-        {
-            case "AllTasksCompleted":
-                if (string.Equals(_lastCompletionNotificationRunId, runId, StringComparison.Ordinal))
-                {
-                    return null;
-                }
-
-                _lastCompletionNotificationRunId = runId;
-                var completionTitle = BuildAllTasksCompletedTitle(callback.Timestamp);
-                return new TaskQueueSystemNotification(
-                    NormalizeNotificationText(completionTitle, "All tasks completed"),
-                    BuildSanityRecoveryReport(callback.Timestamp) ?? string.Empty,
-                    "TaskQueue.Notification.Complete",
-                    "task completion",
-                    BuildAllTasksCompletedExternalMessage(callback.Timestamp));
-            case "TaskChainError":
-                var taskFailureLog = BuildTaskChainErrorLog(payload);
-                return new TaskQueueSystemNotification(
-                    NormalizeNotificationText(taskFailureLog.Content, "Task failed"),
-                    string.Empty,
-                    "TaskQueue.Notification.Error",
-                    "task failure",
-                    taskFailureLog.Content);
-            default:
-                return null;
-        }
     }
 
     private static string NormalizeNotificationText(string? text, string fallback)
@@ -8543,7 +8794,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             case "SubTaskStart":
                 UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Running);
                 StatusMessage = $"{taskChain ?? "Task"}::{metadata.SubTask ?? "SubTask"} running.";
-                AppendWpfCallbackLog(callback, metadata, taskIndex);
+                // Event-bearing pipeline tasks publish through the notification dispatcher; their
+                // log line is presentation-only so the same publication cannot trigger twice.
+                AppendWpfCallbackLog(
+                    callback,
+                    metadata,
+                    taskIndex,
+                    publishNotification: !HasSubTaskStartNotificationEvent(metadata));
                 QueueSpecialCallbackNotification(callback.MsgName, metadata);
                 await RecordRuntimeStatusAsync(
                     runId,
@@ -8610,7 +8867,8 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 UpdateTaskStatus(taskIndex, taskChain, TaskQueueItemStatus.Error);
                 ClearRoguelikeCombatStateIfTaskCompleted(taskChain);
                 LastErrorMessage = $"{callback.MsgName}: {callback.PayloadJson}";
-                AppendWpfCallbackLog(callback, metadata, taskIndex);
+                AppendWpfCallbackLog(callback, metadata, taskIndex, publishNotification: false);
+                RecordFailedTaskSnapshot(callbackRunLease, metadata.TaskId, taskIndex, taskChain);
                 await RecordRuntimeStatusAsync(
                     runId,
                     taskIndex,
@@ -8705,13 +8963,34 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 CompleteTaskQueueRunOwnership(callbackRunLease);
                 if (isTaskQueueOwnedRun)
                 {
-                    AppendWpfCallbackLog(callback, metadata, taskIndex);
+                    // WPF cda1c3b07f: snapshot the failed task names before the completion is
+                    // reported. They drive the warning title, the summary log and the external
+                    // body, and decide whether the post actions are skipped.
+                    var failedTaskNames = GetFailedTaskNames();
+                    var hasTaskErrors = failedTaskNames.Length > 0;
+                    AppendTaskCompletionLog(callback.Timestamp, hasTaskErrors);
                     QueueAutomaticNotifications(callback, metadata, taskIndex, runId);
+                    if (hasTaskErrors)
+                    {
+                        AppendLogEntry(
+                            callback.Timestamp,
+                            BuildTaskErrorSummaryLog(failedTaskNames),
+                            "ERROR",
+                            updateThumbnail: false,
+                            notifyActivity: false,
+                            splitMode: LogCardSplitMode.Both);
+                    }
+
                     ScheduleSanityRecoveryReminder(callback.Timestamp);
                     if (!string.Equals(_lastPostActionRunId, runId, StringComparison.Ordinal))
                     {
                         _lastPostActionRunId = runId;
-                        await ExecutePostActionAfterCompletionAsync(callback, runId, taskIndex);
+                        await ExecutePostActionAfterCompletionAsync(
+                            callback,
+                            runId,
+                            taskIndex,
+                            hasTaskErrors,
+                            failedTaskNames);
                     }
 
                     // WPF AsstProxy unlocks LogSupervisor when the main task queue finishes while
@@ -9356,7 +9635,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
-    private async Task ExecutePostActionAfterCompletionAsync(CoreCallbackEvent callback, string runId, int? taskIndex)
+    private async Task ExecutePostActionAfterCompletionAsync(
+        CoreCallbackEvent callback,
+        string runId,
+        int? taskIndex,
+        bool hasTaskErrors,
+        IReadOnlyList<string> failedTaskNames)
     {
         var once = PostActionModule.Once;
         try
@@ -9365,13 +9649,32 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             // natural completion shares the per-run launch slot with the manual stop path.
             await RunStopScriptOnceAsync(manualStop: false);
 
+            var config = PostActionModule.BuildRuntimeConfig();
+            if (config.SkipOnError && hasTaskErrors)
+            {
+                // WPF cda1c3b07f: skip every action but still restore the ｢this run only｣
+                // checkbox. The restore lives in the finally so the early return cannot skip it.
+                var failedTasksText = string.Join(", ", failedTaskNames);
+                AppendLogEntry(
+                    callback.Timestamp,
+                    string.Format(
+                        GetRootText("PostAction.SkippedDueToError", "Post actions skipped, failed task(s): {0}"),
+                        failedTasksText),
+                    "WARN",
+                    updateThumbnail: false);
+                await RecordEventAsync(
+                    "PostAction.SkipOnError",
+                    $"Skipped post actions because the run failed: {failedTasksText}");
+                return;
+            }
+
             var result = await Runtime.PostActionFeatureService.ExecuteAfterCompletionAsync(
                 new PostActionExecutionContext(
                     callback.MsgName,
-                    WasSuccessfulTaskChain: true,
+                    WasSuccessfulTaskChain: !hasTaskErrors,
                     RunId: runId,
                     TaskIndex: taskIndex),
-                PostActionModule.BuildRuntimeConfig());
+                config);
 
             if (!result.Success)
             {
@@ -9498,7 +9801,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         string Message,
         string Scope,
         string Reason,
-        string? ExternalMessage = null);
+        string? ExternalMessage = null,
+        NotificationKind Kind = NotificationKind.TaskComplete,
+        string LogLevel = "INFO");
 
     private string ResolveRunId(string? callbackRunId)
     {

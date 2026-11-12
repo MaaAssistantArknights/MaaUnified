@@ -192,6 +192,7 @@ internal static class PostActionLegacyMigration
             Shutdown = flags.HasFlag(LegacyPostActionFlags.Shutdown),
             Sleep = flags.HasFlag(LegacyPostActionFlags.Sleep),
             IfNoOtherMaa = flags.HasFlag(LegacyPostActionFlags.IfNoOtherMaa),
+            SkipOnError = flags.HasFlag(LegacyPostActionFlags.SkipOnError),
         };
     }
 
@@ -396,6 +397,9 @@ internal static class PostActionLegacyMigration
         Hibernate = 1 << 5,
         Shutdown = 1 << 6,
         Sleep = 1 << 7,
+
+        // WPF cda1c3b07f: post actions are skipped when the run had a failed main-queue task.
+        SkipOnError = 1 << 8,
     }
 
     private enum LegacyCompletionAction

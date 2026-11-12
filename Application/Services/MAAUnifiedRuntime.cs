@@ -1,8 +1,10 @@
 using MAAUnified.Application.Configuration;
+using MAAUnified.Application.Models;
 using MAAUnified.Application.Orchestration;
 using MAAUnified.Application.Security;
 using MAAUnified.Application.Services.Features;
 using MAAUnified.Application.Services.Localization;
+using MAAUnified.Application.Services.Notifications;
 using MAAUnified.Application.Services.ThirdParty;
 using MAAUnified.Compat.Runtime;
 using MAAUnified.CoreBridge;
@@ -48,6 +50,14 @@ public sealed class MAAUnifiedRuntime : IAsyncDisposable
     public required IOverlayFeatureService OverlayFeatureService { get; init; }
 
     public required INotificationProviderFeatureService NotificationProviderFeatureService { get; init; }
+
+    /// <summary>
+    /// Gets the shared notification routing entry point. WPF f9c14e0be1 keeps one
+    /// <c>NotificationService</c> for the whole app so the delivery trigger and history are
+    /// shared between producers. Test hosts that do not need it may leave it null: the pages
+    /// then create a page-local instance over the same transports.
+    /// </summary>
+    public INotificationDispatchService? NotificationDispatchService { get; init; }
 
     public required ISettingsFeatureService SettingsFeatureService { get; init; }
 
@@ -365,6 +375,33 @@ public static class MAAUnifiedRuntimeFactory
             appLifecycleService,
             bridge);
         var dialogFeatureService = new DialogFeatureService(diagnosticsService);
+        var notificationDispatchService = new NotificationDispatchService(
+            configService,
+            platformCapabilityService,
+            notificationProviderFeatureService,
+            new NotificationLogHistory(),
+            new ExternalNotificationTrigger(),
+            async (scope, message, exception) =>
+            {
+                if (exception is not null)
+                {
+                    await diagnosticsService.RecordErrorAsync(scope, message, exception).ConfigureAwait(false);
+                }
+                else
+                {
+                    await diagnosticsService.RecordEventAsync(scope, message).ConfigureAwait(false);
+                }
+
+                // Preserve the pre-unification feedback: a failed automatic external delivery
+                // surfaces an error dialog instead of leaving a diagnostics line only.
+                await dialogFeatureService.ReportErrorAsync(
+                    scope,
+                    UiOperationResult.Fail(UiErrorCode.NotificationProviderFailed, message)).ConfigureAwait(false);
+            },
+            async (scope, message, exception) =>
+            {
+                await diagnosticsService.RecordErrorAsync(scope, message, exception).ConfigureAwait(false);
+            });
         var postActionFeatureService = new PostActionFeatureService(
             configService,
             diagnosticsService,
@@ -394,6 +431,7 @@ public static class MAAUnifiedRuntimeFactory
             PlatformCapabilityService = platformCapabilityService,
             OverlayFeatureService = overlayFeatureService,
             NotificationProviderFeatureService = notificationProviderFeatureService,
+            NotificationDispatchService = notificationDispatchService,
             SettingsFeatureService = settingsFeatureService,
             UiLanguageCoordinator = uiLanguageCoordinator,
             ConfigurationProfileFeatureService = configurationProfileFeatureService,

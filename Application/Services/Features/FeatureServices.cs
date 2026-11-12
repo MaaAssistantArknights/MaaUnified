@@ -5433,6 +5433,20 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
 
         config = NormalizeForRuntime(config, out _);
 
+        if (config.ShouldSkipOnError(!context.WasSuccessfulTaskChain))
+        {
+            // WPF cda1c3b07f: the view model early-returns before executing anything, keeping
+            // the ｢this run only｣ restore in its finally block. Guard here as well so any direct
+            // caller (remote control, duration limit) honours the same config bit.
+            await RecordEventAsync(
+                context,
+                "SkipOnError",
+                UiErrorCode.PostActionSkippedOnError,
+                "Post actions skipped because the run had failed tasks.",
+                cancellationToken);
+            return UiOperationResult.Ok("Post actions skipped, due to error tasks.");
+        }
+
         if (!config.HasAnyAction())
         {
             return UiOperationResult.Ok("No post actions selected.");
@@ -5995,6 +6009,7 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
             Hibernate = flags.HasFlag(LegacyPostActionFlags.Hibernate),
             Shutdown = flags.HasFlag(LegacyPostActionFlags.Shutdown),
             Sleep = flags.HasFlag(LegacyPostActionFlags.Sleep),
+            SkipOnError = flags.HasFlag(LegacyPostActionFlags.SkipOnError),
         };
     }
 
@@ -6202,6 +6217,7 @@ public sealed class PostActionFeatureService : IPostActionFeatureService
         Hibernate = 1 << 5,
         Shutdown = 1 << 6,
         Sleep = 1 << 7,
+        SkipOnError = 1 << 8,
     }
 
     private enum LegacyCompletionAction

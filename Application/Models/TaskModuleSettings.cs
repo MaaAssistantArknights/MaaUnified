@@ -933,6 +933,12 @@ public sealed class PostActionConfig
 
     public bool Sleep { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether every post action is skipped when the run had a
+    /// failed main-queue task. WPF cda1c3b07f (<c>PostActions.SkipOnError = 1 &lt;&lt; 8</c>).
+    /// </summary>
+    public bool SkipOnError { get; set; }
+
     public PostActionCommandConfig Commands { get; set; } = PostActionCommandConfig.Default;
 
     public static PostActionConfig Default => new();
@@ -955,6 +961,7 @@ public sealed class PostActionConfig
             Hibernate = ReadBool(obj, false, "hibernate", "Hibernate"),
             Shutdown = ReadBool(obj, false, "shutdown", "Shutdown"),
             Sleep = ReadBool(obj, false, "sleep", "Sleep"),
+            SkipOnError = ReadBool(obj, false, "skip_on_error", "SkipOnError"),
             Commands = PostActionCommandConfig.FromJson(FindNode(obj, "commands", "Commands")),
         };
     }
@@ -972,6 +979,7 @@ public sealed class PostActionConfig
             ["hibernate"] = Hibernate,
             ["shutdown"] = Shutdown,
             ["sleep"] = Sleep,
+            ["skip_on_error"] = SkipOnError,
             ["commands"] = Commands.ToJson(),
         };
     }
@@ -980,6 +988,14 @@ public sealed class PostActionConfig
     {
         return ExitArknights || BackToAndroidHome || ExitEmulator || ExitSelf || Hibernate || Shutdown || Sleep;
     }
+
+    /// <summary>
+    /// Gets a value indicating whether the post actions must be skipped for a run with failed
+    /// tasks. WPF cda1c3b07f gates the skip on both the checkbox and the run outcome.
+    /// </summary>
+    /// <param name="hasTaskErrors">True when the run recorded at least one failed task.</param>
+    /// <returns>True when the post actions must be skipped.</returns>
+    public bool ShouldSkipOnError(bool hasTaskErrors) => SkipOnError && hasTaskErrors;
 
     public PostActionConfig Clone()
     {
@@ -994,6 +1010,7 @@ public sealed class PostActionConfig
             Hibernate = Hibernate,
             Shutdown = Shutdown,
             Sleep = Sleep,
+            SkipOnError = SkipOnError,
             Commands = Commands.Clone(),
         };
     }

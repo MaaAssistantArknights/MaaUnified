@@ -26,6 +26,8 @@ internal sealed class NotificationTrackingPlatformCapabilityService : IPlatformC
 
     public SystemNotificationRequest? LastNotification { get; private set; }
 
+    public List<SystemNotificationRequest> Notifications { get; } = [];
+
     public event EventHandler<TrayCommandEvent>? TrayCommandInvoked
     {
         add => _inner.TrayCommandInvoked += value;
@@ -80,6 +82,7 @@ internal sealed class NotificationTrackingPlatformCapabilityService : IPlatformC
         LastTitle = title;
         LastMessage = message;
         LastNotification = new SystemNotificationRequest(title, message);
+        Notifications.Add(LastNotification);
         return _inner.SendSystemNotificationAsync(title, message, cancellationToken);
     }
 
@@ -97,6 +100,7 @@ internal sealed class NotificationTrackingPlatformCapabilityService : IPlatformC
         LastTitle = notification.Title;
         LastMessage = notification.Message;
         LastNotification = notification;
+        Notifications.Add(notification);
         return _inner.SendSystemNotificationAsync(notification, cancellationToken);
     }
 

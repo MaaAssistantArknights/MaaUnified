@@ -1114,6 +1114,16 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="PostAction.Title" xml:space="preserve">
     <value>완료 후</value>
   </data>
+  <data name="PostAction.SkipOnError" xml:space="preserve">
+    <value>작업 실패 시 건너뛰기</value>
+  </data>
+  <data name="PostAction.SkipOnErrorTip" xml:space="preserve">
+    <value>선택하면 작업 목록의 작업이 하나 이상 실패한 경우 위의 모든 동작을 건너뜁니다.
+왼쪽 작업 목록의 작업만 집계되며, Copilot와 도구 모음의 오류는 포함되지 않습니다.</value>
+  </data>
+  <data name="PostAction.SkippedDueToError" xml:space="preserve">
+    <value>작업이 실패하여 완료 후 동작을 건너뛰었습니다: {0}</value>
+  </data>
   <data name="PostAction.Unsupported" xml:space="preserve">
     <value>이 동작은 현재 플랫폼에서 지원되지 않아 로그 기록으로 대체됩니다.</value>
   </data>
@@ -3880,6 +3890,12 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   <data name="Toolbox.MiniGame.EventPriority" xml:space="preserve">
     <value>우선 이벤트</value>
   </data>
+  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Title" xml:space="preserve">
+    <value>기상 순회전: 미수록 기상 발견</value>
+  </data>
+  <data name="Toolbox.MiniGame.InteractiveExhibition.UncollectedNotification.Content" xml:space="preserve">
+    <value>MAA가 자동 탐색을 중지했습니다. 게임으로 돌아가 전투를 수동으로 완료하세요.</value>
+  </data>
   <data name="Toolbox.MiniGame.Name" xml:space="preserve">
     <value>미니게임 이름</value>
   </data>
@@ -4736,6 +4752,16 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   </data>
   <data name="TacticalRangedOperative" xml:space="preserve">
     <value>원거리 전술 분대</value>
+  </data>
+  <data name="TaskCompletedWithErrors" xml:space="preserve">
+    <value>모든 작업이 완료되었지만 오류가 발생했습니다!
+(소요 시간: {0})</value>
+  </data>
+  <data name="TaskErrorSummaryTitle" xml:space="preserve">
+    <value>이번 실행에서 다음 오류가 발생했습니다:</value>
+  </data>
+  <data name="TaskErrorSummaryItem" xml:space="preserve">
+    <value>{0}</value>
   </data>
   <data name="TaskError" xml:space="preserve">
     <value>작업 오류: </value>

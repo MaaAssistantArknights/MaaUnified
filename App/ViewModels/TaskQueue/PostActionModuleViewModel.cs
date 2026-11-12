@@ -20,6 +20,7 @@ public sealed class PostActionModuleViewModel : ObservableObject
     private bool _hibernate;
     private bool _shutdown;
     private bool _sleep;
+    private bool _skipOnError;
     private string _exitArknightsCommand = string.Empty;
     private string _backToAndroidHomeCommand = string.Empty;
     private string _exitEmulatorCommand = string.Empty;
@@ -273,6 +274,24 @@ public sealed class PostActionModuleViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether every post action is skipped when the run had a
+    /// failed main-queue task. WPF cda1c3b07f (<c>PostActions.SkipOnError = 1 &lt;&lt; 8</c>).
+    /// </summary>
+    public bool SkipOnError
+    {
+        get => _skipOnError;
+        set
+        {
+            if (!SetProperty(ref _skipOnError, value))
+            {
+                return;
+            }
+
+            QueuePersist();
+        }
+    }
+
     public string ExitArknightsCommand
     {
         get => _exitArknightsCommand;
@@ -395,6 +414,7 @@ public sealed class PostActionModuleViewModel : ObservableObject
             Hibernate = hibernate,
             Shutdown = Shutdown,
             Sleep = Sleep,
+            SkipOnError = SkipOnError,
             Commands = new PostActionCommandConfig
             {
                 ExitArknights = ExitArknightsCommand.Trim(),
@@ -415,6 +435,7 @@ public sealed class PostActionModuleViewModel : ObservableObject
         Hibernate = false;
         Shutdown = false;
         Sleep = false;
+        SkipOnError = false;
         Once = false;
         QueuePersist();
     }
@@ -437,6 +458,7 @@ public sealed class PostActionModuleViewModel : ObservableObject
         Hibernate = false;
         Shutdown = false;
         Sleep = false;
+        SkipOnError = false;
     }
 
     private bool GetActionValue(string actionName)
@@ -646,6 +668,7 @@ public sealed class PostActionModuleViewModel : ObservableObject
             persistent.Hibernate = hibernate;
             persistent.Shutdown = Shutdown;
             persistent.Sleep = Sleep;
+            persistent.SkipOnError = SkipOnError;
         }
 
         persistent.Once = false;
@@ -672,6 +695,7 @@ public sealed class PostActionModuleViewModel : ObservableObject
         Hibernate = _persistentConfig.Hibernate;
         Shutdown = _persistentConfig.Shutdown;
         Sleep = _persistentConfig.Sleep;
+        SkipOnError = _persistentConfig.SkipOnError;
         IfNoOtherMaa = _persistentConfig.IfNoOtherMaa;
         ExitArknightsCommand = _persistentConfig.Commands.ExitArknights;
         BackToAndroidHomeCommand = _persistentConfig.Commands.BackToAndroidHome;
