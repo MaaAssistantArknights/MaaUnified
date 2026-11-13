@@ -33,3 +33,6 @@ jobs:
 
       - name: Run tests
         run: dotnet test Tests/MAAUnified.Tests.csproj -c Release --no-build --logger "console;verbosity=minimal"
+
+      - name: Run desktop session shutdown regression tests
+        run: dotnet test Build/SessionShutdownRegression/SessionShutdownRegression.csproj -c Release --logger "console;verbosity=minimal"

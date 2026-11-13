@@ -275,6 +275,12 @@ dotnet test src/MAAUnified/Tests/MAAUnified.Tests.csproj -c Release --no-build -
 
 不要靠提高并行度处理卡住问题；切稳定模式即可。
 
+桌面注销、关机和关闭事件回归使用独立的 Headless 测试进程，以隔离 UI dispatcher 和静态运行时；无需图形会话或 MaaCore：
+
+```bash
+dotnet test src/MAAUnified/Build/SessionShutdownRegression/SessionShutdownRegression.csproj -c Release --logger "console;verbosity=minimal"
+```
+
 按变更选测试范围：
 
 - ViewModel、功能服务：相关测试类，提交前跑一次完整测试。
