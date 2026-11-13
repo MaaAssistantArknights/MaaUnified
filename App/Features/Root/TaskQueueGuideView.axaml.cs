@@ -82,11 +82,11 @@ public partial class TaskQueueGuideView : UserControl
         }
     }
 
-    private void OnGuideDemoActionClick(object? sender, RoutedEventArgs e)
+    private async void OnGuideDemoActionClick(object? sender, RoutedEventArgs e)
     {
         if (VM is { } vm && sender is Button { Tag: SettingsGuideDemoAction action })
         {
-            vm.CompleteGuideDemoAction(action);
+            await vm.ExecuteGuideDemoActionAsync(action);
         }
     }
 }

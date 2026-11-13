@@ -1690,6 +1690,71 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     /// Marks one simulated task-settings demo action complete. The demo is locked until the user
     /// agreement is confirmed, which is the second half of the agreement/demo interlock.
     /// </summary>
+    /// <summary>
+    /// 引导任务演示：先在真实任务队列上执行对应操作，再标记该 gate 完成，避免纯按钮演示。
+    /// 操作失败（例如启动闸门拦截）仍允许标记完成，引导不应把用户卡死。
+    /// </summary>
+    /// <param name="action">演示动作。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>是否标记成功。</returns>
+    public async Task<bool> ExecuteGuideDemoActionAsync(
+        SettingsGuideDemoAction action,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            switch (action)
+            {
+                case SettingsGuideDemoAction.AddStartUp:
+                    await AddTaskAsync(TaskModuleTypes.StartUp, cancellationToken);
+                    break;
+                case SettingsGuideDemoAction.AddFight:
+                    await AddTaskAsync(TaskModuleTypes.Fight, cancellationToken);
+                    break;
+                case SettingsGuideDemoAction.RenameFight:
+                    RenameTargetName = RootTexts.GetOrDefault("TaskQueue.Guide.Demo.FightName", "Guide Fight");
+                    await RenameSelectedTaskAsync(cancellationToken);
+                    break;
+                case SettingsGuideDemoAction.SelectStage:
+                    FightModule.Stage = "1-7";
+                    break;
+                case SettingsGuideDemoAction.ReorderFight:
+                    await MoveSelectedTaskToAsync(0, cancellationToken);
+                    break;
+                case SettingsGuideDemoAction.EnableWeekly:
+                    FightModule.UseWeeklySchedule = true;
+                    break;
+                case SettingsGuideDemoAction.AddSwitchTheme:
+                    await AddTaskAsync(TaskModuleTypes.SwitchTheme, cancellationToken);
+                    SwitchThemeModule.ThemesText = "night";
+                    break;
+                case SettingsGuideDemoAction.ReorderTheme:
+                    await MoveSelectedTaskToAsync(Tasks.Count - 1, cancellationToken);
+                    break;
+                case SettingsGuideDemoAction.AddNightTheme:
+                    SwitchThemeModule.ThemesText = AppendTheme(SwitchThemeModule.ThemesText, "night");
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            await RecordErrorAsync("TaskQueue.Guide.DemoAction", "Guide demo action failed.", ex);
+        }
+
+        return CompleteGuideDemoAction(action);
+    }
+
+    private static string AppendTheme(string text, string theme)
+    {
+        var themes = text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        if (!themes.Contains(theme, StringComparer.OrdinalIgnoreCase))
+        {
+            themes.Add(theme);
+        }
+
+        return string.Join(Environment.NewLine, themes);
+    }
+
     public bool CompleteGuideDemoAction(SettingsGuideDemoAction action)
     {
         if (!_guideState.CompleteDemoAction(action))

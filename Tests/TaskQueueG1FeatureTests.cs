@@ -224,6 +224,36 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
+    public async Task TaskQueueGuide_DemoActionShouldOperateOnRealQueue()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("5");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepOrderVersion] = JsonValue.Create(2);
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.ReloadTasksAsync();
+        for (var step = 5; step > 1; step--)
+        {
+            Assert.True(await vm.PreviousGuideStepAsync());
+        }
+
+        Assert.True(await vm.ConfirmGuideAgreementAsync());
+        for (var step = 1; step < 5; step++)
+        {
+            Assert.True(await vm.NextGuideStepAsync());
+        }
+
+        Assert.True(vm.IsGuideTaskDemoStep);
+        Assert.True(await vm.ExecuteGuideDemoActionAsync(SettingsGuideDemoAction.AddStartUp));
+        var before = vm.Tasks.Count;
+
+        Assert.True(await vm.ExecuteGuideDemoActionAsync(SettingsGuideDemoAction.AddFight));
+
+        Assert.Equal(before + 1, vm.Tasks.Count);
+        Assert.Contains(vm.Tasks, task => task.Type == TaskModuleTypes.Fight);
+        Assert.True(vm.GuideDemoSteps.Single(step => step.Action == SettingsGuideDemoAction.AddFight).IsCompleted);
+    }
+
+    [Fact]
     public async Task TaskQueueGuide_SkipShouldRecordStepAndPersistCompletion()
     {
         await using var fixture = await TestFixture.CreateAsync();

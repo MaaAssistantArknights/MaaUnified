@@ -354,3 +354,5 @@ P1-07 渠道实例化仍未做：WPF dev-v2 的 `ExternalNotification.Configs` �
 - `.github/workflows/ci-avalonia.yml` 增加 `macos-latest` job，运行全量 MAAUnified 测试；Linux 继续跑格式门与 baseline gate，Windows 保留平台能力门。
 
 - P1-34 收尾：发送系统/外部通知前把标题、正文（截断 2000 字）与外部消息长度写入 `debug/avalonia-ui-events.log`，交付包可直接还原用户看到的通知内容。
+
+- P1-33 收尾：任务设置演示按钮不再只标记状态，改为在真实任务队列上执行操作（添加开始唤醒/作战/换主题、重命名、选关 1-7、上移排序、启用周常、追加 night 主题），操作失败仍允许继续以免卡住引导。
