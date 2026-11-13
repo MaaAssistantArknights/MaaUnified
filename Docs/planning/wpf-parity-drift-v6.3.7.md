@@ -322,3 +322,10 @@ P1-07 渠道实例化仍未做：WPF dev-v2 的 `ExternalNotification.Configs` �
 - 故障修复：MuMu/LDPlayer 自动探测测试改用 `MAAUNIFIED_USER_PROFILE_ROOT` 临时目录；macOS 无交互钥匙串时系统存储测试接受已知错误码优雅退出；`LinkStart` 停止竞态测试改为等待连接层 Stop 计数，消除全量并行下的偶发失败。
 - P2：任务完成日志追加用时（`TaskQueue.TaskTime` 五语言）；停止按钮 tooltip 标出当前运行归属；Tooltip 最大宽度 340→500；zh-CN 补齐 en-US 独有的 7 个 Toolbox key；更新下载补 429/503 `Retry-After` 单次重试与读流空闲超时（60 s，可测试覆盖）。
 - 仍待办：成就 id 88→112（23 条定义与触发点）、页签过渡动画、资源素材清单、GameAudioMuteManager；P1-07 的 provider 字段化编辑与 WPF 写回互操作；README 截图未重拍。
+
+## 第七轮（2026-11-13，告警与并行稳定性）
+
+- 编译告警 272 → 24（仅剩离线环境的 NU1900 漏洞库不可达）：清除 30 条 resx 重复 key（`RecruitingTips`/`RecruitmentOfStar`/`TaskStallWarning`）、全部 xUnit 规则告警、nullable 系列；测试替身 CS0067 与 Tmds.DBus `Variant` 过时按项目注释抑制。
+- Copilot/GameSettings 迁移到 Avalonia 新剪贴板（`TryGetTextAsync`）与 `DragEventArgs.DataTransfer`/`TryGetFile`，不再使用过时 `GetTextAsync`/`IDataObject`。
+- 修复两个全量并行 flake：托盘停止通知等待通知到达；LinkStart 停止测试允许“连接先被取消、无需 Core Stop”的调度路径。
+- 仍待办：成就 88→112（23 条定义与触发点）、页签过渡动画、资源素材清单、GameAudioMuteManager；P1-07 provider 字段化编辑与 WPF 写回互操作；README 截图。
