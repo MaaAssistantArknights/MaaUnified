@@ -316,3 +316,9 @@ P1-07 渠道实例化仍未做：WPF dev-v2 的 `ExternalNotification.Configs` �
 
 - P1-07 写侧完成：外部通知设置新增"渠道实例"区块，可添加/删除实例、编辑 `key=value` 参数；配置数组只写 `$type` 与 `Id`，参数值写入动态注册的敏感键（`ExternalNotification.Instance.<id>.<param>`，随 `SensitiveSettingKeyRegistry` 提取进敏感存储）；保存后重载可恢复，旧扁平键与 `Enabled` CSV 继续双写，单实例链路不变。
 - 至此 P1 执行清单中 P1-07 读、写两侧均闭环；仅剩平台/环境性限制（Windows 真实 updater 端到端、macOS 锁屏依赖系统 CGSession、WPF 加密凭据在非 Windows 无法解密）。
+
+## 第六轮（2026-11-13，故障修复与 P2）
+
+- 故障修复：MuMu/LDPlayer 自动探测测试改用 `MAAUNIFIED_USER_PROFILE_ROOT` 临时目录；macOS 无交互钥匙串时系统存储测试接受已知错误码优雅退出；`LinkStart` 停止竞态测试改为等待连接层 Stop 计数，消除全量并行下的偶发失败。
+- P2：任务完成日志追加用时（`TaskQueue.TaskTime` 五语言）；停止按钮 tooltip 标出当前运行归属；Tooltip 最大宽度 340→500；zh-CN 补齐 en-US 独有的 7 个 Toolbox key；更新下载补 429/503 `Retry-After` 单次重试与读流空闲超时（60 s，可测试覆盖）。
+- 仍待办：成就 id 88→112（23 条定义与触发点）、页签过渡动画、资源素材清单、GameAudioMuteManager；P1-07 的 provider 字段化编辑与 WPF 写回互操作；README 截图未重拍。

@@ -334,8 +334,10 @@ public sealed class SessionStateUiProjectionTests
         Assert.False(settings.IsSessionIdle);
 
         var stopClickTask = vm.ToggleRunAsync();
-        await stopClickTask.WaitAsync(TimeSpan.FromSeconds(2));
-        await startTask.WaitAsync(TimeSpan.FromSeconds(2));
+        await stopClickTask.WaitAsync(TimeSpan.FromSeconds(10));
+        await startTask.WaitAsync(TimeSpan.FromSeconds(10));
+        // 停止请求先更新 UI 状态、再落到连接层；并行跑全量时调度更慢，等 Stop 真正到达。
+        await WaitUntilAsync(() => bridge.StopCallCount == 1, retry: 200, delayMs: 25);
 
         Assert.Equal(1, bridge.StopCallCount);
         Assert.False(vm.IsStartRequestActive);

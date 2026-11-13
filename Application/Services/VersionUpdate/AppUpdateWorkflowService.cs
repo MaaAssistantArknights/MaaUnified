@@ -1,3 +1,4 @@
+using MAAUnified.Application.Services.VersionUpdate;
 using System;
 using System.IO;
 using System.Linq;
@@ -276,7 +277,8 @@ public sealed class AppUpdateWorkflowService
     {
         if (progress is null)
         {
-            await sourceStream.CopyToAsync(destinationStream, cancellationToken).ConfigureAwait(false);
+            await HttpDownloadSupport.CopyToAsync(sourceStream, destinationStream, progress: null, cancellationToken)
+                .ConfigureAwait(false);
             return;
         }
 
@@ -287,7 +289,11 @@ public sealed class AppUpdateWorkflowService
 
         while (true)
         {
-            var bytesRead = await sourceStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            var bytesRead = await sourceStream
+                .ReadAsync(buffer, cancellationToken)
+                .AsTask()
+                .WaitAsync(HttpDownloadSupport.IdleTimeout, cancellationToken)
+                .ConfigureAwait(false);
             if (bytesRead <= 0)
             {
                 break;
@@ -1389,17 +1395,18 @@ public sealed class AppUpdateWorkflowService
     {
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, candidate);
-            using var response = await httpClient.SendAsync(
-                request,
-                HttpCompletionOption.ResponseHeadersRead,
-                cancellationToken).ConfigureAwait(false);
+            using var response = await HttpDownloadSupport
+                .GetWithRetryAfterAsync(httpClient, candidate.ToString(), cancellationToken)
+                .ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
+                var retryHint = response.Headers.RetryAfter?.Delta is { } retryAfter
+                    ? $" Retry-After: {retryAfter.TotalSeconds:0} s."
+                    : string.Empty;
                 return UiOperationResult<string>.Fail(
                     UiErrorCode.UiOperationFailed,
-                    $"Package download failed with HTTP {(int)response.StatusCode}.");
+                    $"Package download failed with HTTP {(int)response.StatusCode}.{retryHint}");
             }
 
             await using var sourceStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);

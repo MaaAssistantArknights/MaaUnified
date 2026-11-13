@@ -17,6 +17,15 @@
 
 ![MAAUnified 设置页](./Docs/zh-cn/assets/screenshots/settings.png)
 
+## 功能概览
+
+- 任务队列：运行时长上限（三态，右键半选仅本次）、日志停滞检测、逐任务用时输出、出错后跳过完成后动作。
+- 定时执行：平台支持的唤醒注册与开始前通知；不支持的系统会显式禁用开关。
+- 工具箱：自动像素画、干员识别（技能专精/模组徽标、多格式导出）、仓库识别空库存保护、小游戏分类与自动升级潜能。
+- 外部通知：按 `key=value` 编辑的多渠道实例，参数写入敏感存储；可读取 WPF dev-v2 的 `ExternalNotification.Configs` 多实例数组。
+- 设置：本地更新包导入、macOS 锁屏（`CGSession`）、BlackFlow 肉鸽主题（非官服/B 服标注未适配）。
+- 引导：9 个任务设置演示 gate 与协议确认。
+
 ## 从现有 Windows 版迁移配置
 
 优先推荐在 `MAAUnified` 设置页使用“导入配置”按钮迁移旧版 Windows GUI 配置。

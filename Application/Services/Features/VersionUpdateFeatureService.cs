@@ -1226,55 +1226,50 @@ public sealed class VersionUpdateFeatureService : IVersionUpdateFeatureService
         IProgress<VersionUpdateProgressInfo>? progress,
         CancellationToken cancellationToken)
     {
-        using var response = await httpClient.GetAsync(
-            url,
-            HttpCompletionOption.ResponseHeadersRead,
-            cancellationToken).ConfigureAwait(false);
+        using var response = await HttpDownloadSupport
+            .GetWithRetryAfterAsync(httpClient, url, cancellationToken)
+            .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         await using var file = File.Create(destinationPath);
         if (progress is null)
         {
-            await stream.CopyToAsync(file, cancellationToken).ConfigureAwait(false);
+            await HttpDownloadSupport.CopyToAsync(stream, file, progress: null, cancellationToken).ConfigureAwait(false);
             return;
         }
 
-        byte[] buffer = new byte[81920];
         long bytesTransferred = 0;
         long bytesSinceLastReport = 0;
         var totalBytes = response.Content.Headers.ContentLength ?? 0;
         var lastReportAt = DateTime.UtcNow;
-
-        while (true)
-        {
-            var bytesRead = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-            if (bytesRead <= 0)
+        await HttpDownloadSupport.CopyToAsync(
+            stream,
+            file,
+            bytes =>
             {
-                break;
-            }
+                var delta = bytes - bytesTransferred;
+                bytesTransferred = bytes;
+                bytesSinceLastReport += delta;
 
-            await file.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
-            bytesTransferred += bytesRead;
-            bytesSinceLastReport += bytesRead;
+                var now = DateTime.UtcNow;
+                var elapsed = (now - lastReportAt).TotalSeconds;
+                if (elapsed < 1 && (totalBytes <= 0 || bytesTransferred < totalBytes))
+                {
+                    return;
+                }
 
-            var now = DateTime.UtcNow;
-            var elapsed = (now - lastReportAt).TotalSeconds;
-            if (elapsed < 1 && (totalBytes <= 0 || bytesTransferred < totalBytes))
-            {
-                continue;
-            }
-
-            progress.Report(new VersionUpdateProgressInfo(
-                operation,
-                VersionUpdateProgressStage.Downloading,
-                source,
-                BytesTransferred: bytesTransferred,
-                TotalBytes: totalBytes,
-                BytesPerSecond: bytesSinceLastReport / Math.Max(elapsed, 0.001d)));
-            lastReportAt = now;
-            bytesSinceLastReport = 0;
-        }
+                progress.Report(new VersionUpdateProgressInfo(
+                    operation,
+                    VersionUpdateProgressStage.Downloading,
+                    source,
+                    BytesTransferred: bytesTransferred,
+                    TotalBytes: totalBytes,
+                    BytesPerSecond: bytesSinceLastReport / Math.Max(elapsed, 0.001d)));
+                lastReportAt = now;
+                bytesSinceLastReport = 0;
+            },
+            cancellationToken).ConfigureAwait(false);
 
         if (bytesTransferred > 0 && bytesSinceLastReport > 0)
         {
