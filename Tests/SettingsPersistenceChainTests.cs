@@ -185,11 +185,17 @@ public sealed class SettingsPersistenceChainTests
         Assert.True(SensitiveSettingKeyRegistry.TryGet(ConfigurationKeys.MirrorChyanCdk, out var mirrorChyan));
         Assert.Equal(SensitiveSettingScope.Global, mirrorChyan.Scope);
 
-        Assert.Equal(2, SensitiveSettingKeyRegistry.Definitions.Count(value => value.Scope == SensitiveSettingScope.Global));
-        Assert.Equal(32, SensitiveSettingKeyRegistry.Definitions.Count);
+        // 多实例通知键（ExternalNotification.Instance.*）是运行时动态注册的，不计入冻结凭据集合。
+        var definitions = SensitiveSettingKeyRegistry.Definitions
+            .Where(definition => !definition.Key.StartsWith(
+                SensitiveSettingKeyRegistry.ExternalNotificationInstanceKeyPrefix,
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        Assert.Equal(2, definitions.Count(value => value.Scope == SensitiveSettingScope.Global));
+        Assert.Equal(32, definitions.Count);
         Assert.Equal(
             32,
-            SensitiveSettingKeyRegistry.Definitions.Select(value => value.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            definitions.Select(value => value.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
 
     [Fact]

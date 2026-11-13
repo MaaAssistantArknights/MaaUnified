@@ -157,6 +157,9 @@
   <data name="Common.NotAdapted" xml:space="preserve">
     <value>未適配</value>
   </data>
+  <data name="Common.Stop.CurrentTaskFormat" xml:space="preserve">
+    <value>停止目前執行的 {0}</value>
+  </data>
   <data name="Common.ValidationIssues" xml:space="preserve">
     <value>校驗資訊</value>
   </data>
@@ -5025,6 +5028,9 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   </data>
   <data name="TaskQueue.Status.ValidationPassed" xml:space="preserve">
     <value>任務 `{0}` 驗證通過。</value>
+  </data>
+  <data name="TaskQueue.TaskTime" xml:space="preserve">
+    <value>(耗時 {0})</value>
   </data>
   <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
     <value>每天一次</value>

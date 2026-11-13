@@ -33,7 +33,7 @@
     </Style>
 
     <Style Selector="Border.tooltip-hint-card">
-      <Setter Property="MaxWidth" Value="340" />
+      <Setter Property="MaxWidth" Value="500" />
       <Setter Property="Padding" Value="12,9" />
       <Setter Property="Background" Value="{DynamicResource MAA.Brush.Dialog.CardSurface}" />
       <Setter Property="BorderBrush" Value="Transparent" />
@@ -63,7 +63,7 @@
           ClipToBounds="False">
       <Border Classes="tooltip-hint-card">
         <TextBlock Classes="long-wrap"
-                   MaxWidth="316"
+                   MaxWidth="476"
                    Foreground="{DynamicResource MAA.Brush.Text.Primary}"
                    Text="{Binding Tip, ElementName=Root}"
                    TextWrapping="Wrap" />

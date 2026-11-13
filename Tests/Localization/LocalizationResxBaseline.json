@@ -217,15 +217,6 @@
     "Waiting"
   ],
   "allowedMissingKeys": {
-    "zh-cn": [
-      "Toolbox.Action.LinkStart",
-      "Toolbox.Action.PeepStart",
-      "Toolbox.Action.PeepStop",
-      "Toolbox.Action.PeepStopStrong",
-      "Toolbox.Recruit.ResultLine",
-      "Toolbox.Recruit.Suffix.Max",
-      "Toolbox.Recruit.Suffix.New"
-    ],
     "zh-tw": [
       "AllTasksComplete",
       "Copilot.Button.Edit",

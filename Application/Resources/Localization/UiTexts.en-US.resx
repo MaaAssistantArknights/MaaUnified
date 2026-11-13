@@ -161,6 +161,9 @@ By pressing ｢Confirm｣, you understand and accept the possible risks.</value>
   <data name="Common.NotAdapted" xml:space="preserve">
     <value>Not yet adapted</value>
   </data>
+  <data name="Common.Stop.CurrentTaskFormat" xml:space="preserve">
+    <value>Stop the running {0}</value>
+  </data>
   <data name="Common.ValidationIssues" xml:space="preserve">
     <value>Validation Issues</value>
   </data>
@@ -5797,6 +5800,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="TaskQueue.Status.ValidationPassed" xml:space="preserve">
     <value>Task `{0}` passed validation.</value>
+  </data>
+  <data name="TaskQueue.TaskTime" xml:space="preserve">
+    <value>(in {0})</value>
   </data>
   <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
     <value>Daily</value>

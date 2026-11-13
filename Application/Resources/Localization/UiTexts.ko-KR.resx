@@ -157,6 +157,9 @@
   <data name="Common.NotAdapted" xml:space="preserve">
     <value>미지원</value>
   </data>
+  <data name="Common.Stop.CurrentTaskFormat" xml:space="preserve">
+    <value>실행 중인 {0} 중지</value>
+  </data>
   <data name="Common.ValidationIssues" xml:space="preserve">
     <value>검증 메시지</value>
   </data>
@@ -5023,6 +5026,9 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   </data>
   <data name="TaskQueue.Status.ValidationPassed" xml:space="preserve">
     <value>작업 `{0}` 검증을 통과했습니다.</value>
+  </data>
+  <data name="TaskQueue.TaskTime" xml:space="preserve">
+    <value>(소요 시간: {0})</value>
   </data>
   <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
     <value>매일</value>

@@ -379,8 +379,9 @@ public sealed class SettingsModuleAK1FeatureTests
             ConnectConfig = "MuMuEmulator12",
         };
 
-        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var autoDetectedPath = Path.Combine(userProfile, "Netease", "MuMuPlayerGlobal-12.0");
+        var profileRoot = Directory.CreateTempSubdirectory("maa-unified-mumu-");
+        Environment.SetEnvironmentVariable("MAAUNIFIED_USER_PROFILE_ROOT", profileRoot.FullName);
+        var autoDetectedPath = Path.Combine(profileRoot.FullName, "Netease", "MuMuPlayerGlobal-12.0");
         var rendererDirectory = Path.Combine(autoDetectedPath, "shell", "sdk");
         var rendererPath = Path.Combine(rendererDirectory, "external_renderer_ipc.dll");
         var createdDirectory = !Directory.Exists(autoDetectedPath);
@@ -411,6 +412,9 @@ public sealed class SettingsModuleAK1FeatureTests
             {
                 Directory.Delete(autoDetectedPath, recursive: true);
             }
+
+            Environment.SetEnvironmentVariable("MAAUNIFIED_USER_PROFILE_ROOT", null);
+            profileRoot.Delete(recursive: true);
         }
     }
 
@@ -422,8 +426,9 @@ public sealed class SettingsModuleAK1FeatureTests
             ConnectConfig = "LDPlayer",
         };
 
-        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var autoDetectedPath = Path.Combine(userProfile, "leidian", "LDPlayer9");
+        var profileRoot = Directory.CreateTempSubdirectory("maa-unified-ld-");
+        Environment.SetEnvironmentVariable("MAAUNIFIED_USER_PROFILE_ROOT", profileRoot.FullName);
+        var autoDetectedPath = Path.Combine(profileRoot.FullName, "leidian", "LDPlayer9");
         var openGlLibraryPath = Path.Combine(autoDetectedPath, "ldopengl64.dll");
         var createdDirectory = !Directory.Exists(autoDetectedPath);
         Directory.CreateDirectory(autoDetectedPath);
@@ -453,6 +458,9 @@ public sealed class SettingsModuleAK1FeatureTests
             {
                 Directory.Delete(autoDetectedPath, recursive: true);
             }
+
+            Environment.SetEnvironmentVariable("MAAUNIFIED_USER_PROFILE_ROOT", null);
+            profileRoot.Delete(recursive: true);
         }
     }
 

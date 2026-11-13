@@ -1689,8 +1689,8 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             Path.Combine(GetProgramFilesX86(), "Netease", "MuMuPlayerGlobal-12.0"),
             Path.Combine(GetProgramFiles(), "Netease", "YXArkNights-12.0"),
             Path.Combine(GetProgramFilesX86(), "Netease", "YXArkNights-12.0"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Netease", "MuMuPlayer-12.0"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Netease", "MuMuPlayerGlobal-12.0"),
+            Path.Combine(GetUserProfileRoot(), "Netease", "MuMuPlayer-12.0"),
+            Path.Combine(GetUserProfileRoot(), "Netease", "MuMuPlayerGlobal-12.0"),
         ]);
         return candidates;
     }
@@ -1709,8 +1709,8 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
             Path.Combine(GetProgramFilesX86(), "leidian", "LDPlayer4.0"),
             Path.Combine(GetProgramFiles(), "LDPlayer"),
             Path.Combine(GetProgramFilesX86(), "LDPlayer"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "leidian", "LDPlayer9"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "leidian", "LDPlayer4.0"),
+            Path.Combine(GetUserProfileRoot(), "leidian", "LDPlayer9"),
+            Path.Combine(GetUserProfileRoot(), "leidian", "LDPlayer4.0"),
         ]);
         return candidates;
     }
@@ -1780,6 +1780,15 @@ public sealed class ConnectionGameSharedStateViewModel : ObservableObject
 
         return paths.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
+
+    /// <summary>
+    /// 用户主目录。测试通过 MAAUNIFIED_USER_PROFILE_ROOT 指向临时目录，避免在沙箱/CI
+    /// 里写真实 ~/Netease、~/leidian。
+    /// </summary>
+    private static string GetUserProfileRoot()
+        => Environment.GetEnvironmentVariable("MAAUNIFIED_USER_PROFILE_ROOT") is { Length: > 0 } root
+            ? root
+            : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     private static string GetProgramFiles()
     {

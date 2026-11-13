@@ -386,6 +386,9 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private OverlayRuntimeMode _overlayMode = OverlayRuntimeMode.Hidden;
     private string _currentRunId = "-";
     private DateTime? _runStartTime;
+
+    // 每个队列任务的开始时间戳（Stopwatch），完成时在日志里追加用时（WPF 8a347797a9）。
+    private readonly Dictionary<int, long> _taskChainStartedAt = [];
     private string _lastPostActionRunId = string.Empty;
     private string _selectedTaskValidationSummary = string.Empty;
     private bool _selectedTaskHasBlockingValidationIssues;
@@ -957,6 +960,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 OnPropertyChanged(nameof(CanEdit));
                 OnPropertyChanged(nameof(CanEditSelectedTaskSettings));
                 OnPropertyChanged(nameof(RunButtonText));
+                OnPropertyChanged(nameof(RunButtonToolTip));
                 OnPropertyChanged(nameof(IsRunOwnedByAnotherFeature));
                 OnPropertyChanged(nameof(IsOwnRunActive));
                 OnPropertyChanged(nameof(CanToggleRun));
@@ -1001,6 +1005,36 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             }
 
             return RootTexts.GetOrDefault("TaskQueue.Root.LinkStart", "Link Start!");
+        }
+    }
+
+    /// <summary>
+    /// Gets 停止按钮的提示：标出当前运行的所属功能，避免在别的页面停止时不知道停的是谁。
+    /// </summary>
+    public string? RunButtonToolTip
+    {
+        get
+        {
+            if (!IsOwnRunActive && !IsExternalSessionActivityActive)
+            {
+                return null;
+            }
+
+            var owner = Runtime.SessionService.CurrentRunOwner;
+            if (string.IsNullOrWhiteSpace(owner))
+            {
+                return null;
+            }
+
+            var ownerName = ResolveRunOwnerBlockedDialogOwnerName(
+                RootTexts,
+                owner,
+                Runtime.SessionService.CurrentRunOwnerDisplayName);
+            return ownerName is null
+                ? null
+                : string.Format(
+                    GetRootText("Common.Stop.CurrentTaskFormat", "Stop the running {0}"),
+                    ownerName);
         }
     }
 
@@ -7056,6 +7090,14 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 _fightSanityMax.Value);
         }
 
+        if (taskIndex is int index
+            && _taskChainStartedAt.Remove(index, out var startedAt))
+        {
+            content += Environment.NewLine + string.Format(
+                GetRootText("TaskTime", "(in {0})"),
+                Stopwatch.GetElapsedTime(startedAt).ToString(@"h\h\ m\m\ s\s"));
+        }
+
         // WPF logs TaskChainCompleted with the default trace color and does not
         // refresh the card screenshot (AsstProxy.ProcTaskChainMsg); AddLog is called
         // without a split so the completion line stays on the task-start card.
@@ -9131,6 +9173,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         {
             case "TaskChainStart":
                 _currentRunId = runId;
+                if (taskIndex is int startedIndex && startedIndex >= 0)
+                {
+                    _taskChainStartedAt[startedIndex] = Stopwatch.GetTimestamp();
+                }
+
                 UpdateTaskStatus(taskIndex, metadata.TaskId, taskChain, TaskQueueItemStatus.Running);
                 AppendWpfCallbackLog(callback, metadata, taskIndex);
                 await RecordRuntimeStatusAsync(
@@ -10895,6 +10942,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             {
                 _isRunButtonStopHovered = false;
                 OnPropertyChanged(nameof(RunButtonText));
+                OnPropertyChanged(nameof(RunButtonToolTip));
             }
 
             if (changedState is SessionState.Running or SessionState.Stopping)

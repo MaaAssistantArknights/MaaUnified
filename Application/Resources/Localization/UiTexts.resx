@@ -161,6 +161,9 @@
   <data name="Common.NotAdapted" xml:space="preserve">
     <value>未适配</value>
   </data>
+  <data name="Common.Stop.CurrentTaskFormat" xml:space="preserve">
+    <value>停止当前运行的 {0}</value>
+  </data>
   <data name="Common.ValidationIssues" xml:space="preserve">
     <value>校验信息</value>
   </data>
@@ -5799,6 +5802,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TaskQueue.Status.ValidationPassed" xml:space="preserve">
     <value>任务 `{0}` 校验通过。</value>
   </data>
+  <data name="TaskQueue.TaskTime" xml:space="preserve">
+    <value>(用时 {0})</value>
+  </data>
   <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
     <value>每天一次</value>
   </data>
@@ -5862,8 +5868,20 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Timer.Schedule.ProfileMismatchWarning" xml:space="preserve">
     <value>定时启动已跳过：当前配置与定时配置不一致。</value>
   </data>
+  <data name="Toolbox.Action.LinkStart" xml:space="preserve">
+    <value>Link Start!</value>
+  </data>
+  <data name="Toolbox.Action.PeepStart" xml:space="preserve">
+    <value>Peep!</value>
+  </data>
   <data name="Toolbox.Action.PeepStarting" xml:space="preserve">
     <value>启动中...</value>
+  </data>
+  <data name="Toolbox.Action.PeepStop" xml:space="preserve">
+    <value>停止！</value>
+  </data>
+  <data name="Toolbox.Action.PeepStopStrong" xml:space="preserve">
+    <value>停止！！！！！</value>
   </data>
   <data name="Toolbox.Action.PeepStopping" xml:space="preserve">
     <value>停止中...</value>
@@ -6486,8 +6504,17 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="Toolbox.Recruit.FixedSixStar" xml:space="preserve">
     <value>固定 09:00（六星必出）</value>
   </data>
+  <data name="Toolbox.Recruit.ResultLine" xml:space="preserve">
+    <value>{0}★ 标签：{1}</value>
+  </data>
   <data name="Toolbox.Recruit.ShowPotential" xml:space="preserve">
     <value>显示干员潜能（4/5/6★ Tags）</value>
+  </data>
+  <data name="Toolbox.Recruit.Suffix.Max" xml:space="preserve">
+    <value>（满）</value>
+  </data>
+  <data name="Toolbox.Recruit.Suffix.New" xml:space="preserve">
+    <value>（新）</value>
   </data>
   <data name="Toolbox.Recruit.TagsDetected" xml:space="preserve">
     <value>已识别招募标签。</value>

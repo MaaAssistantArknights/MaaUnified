@@ -157,6 +157,9 @@
   <data name="Common.NotAdapted" xml:space="preserve">
     <value>未対応</value>
   </data>
+  <data name="Common.Stop.CurrentTaskFormat" xml:space="preserve">
+    <value>実行中の{0}を停止</value>
+  </data>
   <data name="Common.ValidationIssues" xml:space="preserve">
     <value>検証メッセージ</value>
   </data>
@@ -5022,6 +5025,9 @@ DEBUGディレクトリに保存される画像には数量制限があり、超
   </data>
   <data name="TaskQueue.Status.ValidationPassed" xml:space="preserve">
     <value>タスク `{0}` は検証に成功しました。</value>
+  </data>
+  <data name="TaskQueue.TaskTime" xml:space="preserve">
+    <value>(所要時間: {0})</value>
   </data>
   <data name="TaskQueue.UserDataUpdate.Trigger.Daily" xml:space="preserve">
     <value>毎日</value>

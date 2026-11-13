@@ -1634,6 +1634,34 @@ public sealed class TaskModuleBFeatureTests
     }
 
     [Fact]
+    public async Task TaskQueuePage_TaskChainCompleted_ShouldAppendElapsedTimeToLog()
+    {
+        await using var fixture = await TestFixture.CreateAsync("en-us");
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+        await vm.InitializeAsync();
+
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(
+                10002,
+                "TaskChainStart",
+                """{"task_chain":"Fight","run_id":"run-time-1","task_index":0}""",
+                DateTimeOffset.UtcNow));
+        await InvokeCallbackAsync(
+            vm,
+            new CoreCallbackEvent(
+                10002,
+                "TaskChainCompleted",
+                """{"task_chain":"Fight","run_id":"run-time-1","task_index":0}""",
+                DateTimeOffset.UtcNow));
+
+        Assert.Contains(
+            vm.OverlayLogs,
+            log => log.Content.Contains("(in ", StringComparison.Ordinal)
+                   && log.Content.Contains("Complete task", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task TaskQueuePage_InfrastCompleted_AdvancesCustomPlanAndPersistsUiState()
     {
         await using var fixture = await TestFixture.CreateAsync("en-us");

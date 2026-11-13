@@ -796,6 +796,7 @@
                       Content="{Binding RunButtonText}"
                       IsVisible="{Binding IsRunButtonVisible}"
                       IsEnabled="{Binding CanToggleRun}"
+                      ToolTip.Tip="{Binding RunButtonToolTip}"
                       PointerEntered="OnRunButtonPointerEntered"
                       PointerExited="OnRunButtonPointerExited"
                       Click="OnToggleRunClick" />
