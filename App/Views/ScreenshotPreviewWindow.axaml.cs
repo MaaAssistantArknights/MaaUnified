@@ -13,6 +13,7 @@ public partial class ScreenshotPreviewWindow : Window
     {
         InitializeComponent();
         WindowVisuals.ApplyDefaultIcon(this);
+        PreviewImage.PointerPressed += OnPreviewImagePressed;
         Closed += OnClosed;
     }
 
@@ -45,6 +46,15 @@ public partial class ScreenshotPreviewWindow : Window
         {
             CloseActionButton.Content = closeText;
         }
+    }
+
+    /// <summary>用户点击预览图时触发（WPF OneMoreLook：再看一眼会重测）。</summary>
+    public event EventHandler? PreviewClicked;
+
+    private void OnPreviewImagePressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        PreviewClicked?.Invoke(this, EventArgs.Empty);
+        e.Handled = true;
     }
 
     private void OnCloseClick(object? sender, RoutedEventArgs e)

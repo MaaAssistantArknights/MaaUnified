@@ -201,14 +201,23 @@
                             Content="{Binding DataContext.RootTexts[Settings.ExternalNotification.Instances.Remove], RelativeSource={RelativeSource AncestorType=UserControl}}"
                             Tag="{Binding}"
                             Click="OnRemoveNotificationChannelInstanceClick" />
-                    <TextBox Grid.Row="2"
-                             Grid.ColumnSpan="2"
-                             Classes="settings-input settings-input-block"
-                             Height="64"
-                             AcceptsReturn="True"
-                             TextWrapping="Wrap"
-                             Watermark="{Binding DataContext.RootTexts[Settings.ExternalNotification.Instances.Parameters], RelativeSource={RelativeSource AncestorType=UserControl}}"
-                             Text="{Binding ParametersText, UpdateSourceTrigger=PropertyChanged}" />
+                    <ItemsControl Grid.Row="2"
+                                  Grid.ColumnSpan="2"
+                                  ItemsSource="{Binding ParameterFields}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Grid Margin="0,2"
+                                ColumnDefinitions="130,*">
+                            <TextBlock Classes="app-caption"
+                                       Text="{Binding Key}"
+                                       VerticalAlignment="Center" />
+                            <TextBox Grid.Column="1"
+                                     Classes="settings-input"
+                                     Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                   </Grid>
                 </Border>
               </DataTemplate>

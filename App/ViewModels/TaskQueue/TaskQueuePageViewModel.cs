@@ -9241,6 +9241,13 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 break;
             case "TaskChainCompleted":
                 UpdateTaskStatus(taskIndex, metadata.TaskId, taskChain, TaskQueueItemStatus.Success);
+                if (string.Equals(TaskModuleTypes.Normalize(taskChain), TaskModuleTypes.UserDataUpdate, StringComparison.OrdinalIgnoreCase)
+                    && UserDataUpdateModule.UpdateOperBox
+                    && UserDataUpdateModule.UpdateDepot)
+                {
+                    _ = Runtime.AchievementTrackerService.Unlock("DoubleSync");
+                }
+
                 // WPF parity (AsstProxy TaskChainCompleted -> UpdateMainTasksProgress).
                 if (IsMainTaskChainForProgress(taskChain))
                 {

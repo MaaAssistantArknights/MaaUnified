@@ -11,16 +11,34 @@ namespace MAAUnified.App.ViewModels.Settings;
 /// 一个外部通知渠道实例（WPF dev-v2 <c>Gui.ExternalNotification.Configs</c> 的数组元素）。
 /// 参数值存放在敏感存储的实例键里，数组本身只保存 Id 与 provider，避免凭据进入 config JSON。
 /// </summary>
+public sealed class NotificationChannelParameterFieldViewModel(string key) : Infrastructure.ObservableObject
+{
+    private string _value = string.Empty;
+
+    public string Key { get; } = key;
+
+    public string Value
+    {
+        get => _value;
+        set => SetProperty(ref _value, value);
+    }
+}
+
 public sealed class NotificationChannelInstanceViewModel : Infrastructure.ObservableObject
 {
-    private string _parametersText;
+    private readonly Dictionary<string, string> _extraParameters = new(StringComparer.OrdinalIgnoreCase);
 
     public NotificationChannelInstanceViewModel(string id, string provider, string displayName, string parametersText)
     {
         Id = id;
         Provider = provider;
         DisplayName = displayName;
-        _parametersText = parametersText;
+        foreach (var key in Application.Services.Notifications.ExternalNotificationChannels.ProviderParameterKeys(provider))
+        {
+            ParameterFields.Add(new NotificationChannelParameterFieldViewModel(key));
+        }
+
+        SetParametersText(parametersText);
     }
 
     public string Id { get; }
@@ -29,10 +47,83 @@ public sealed class NotificationChannelInstanceViewModel : Infrastructure.Observ
 
     public string DisplayName { get; }
 
+    /// <summary>Gets 当前 provider 的字段化参数编辑项。</summary>
+    public ObservableCollection<NotificationChannelParameterFieldViewModel> ParameterFields { get; } = [];
+
+    /// <summary>Gets 原始 key=value 文本（保留未知参数，供高级编辑/兼容旧调用）。</summary>
     public string ParametersText
     {
-        get => _parametersText;
-        set => SetProperty(ref _parametersText, value);
+        get
+        {
+            var lines = ParameterFields
+                .Where(item => !string.IsNullOrWhiteSpace(item.Value))
+                .Select(item => $"{item.Key}={item.Value}")
+                .Concat(_extraParameters.Select(pair => $"{pair.Key}={pair.Value}"));
+            return string.Join(Environment.NewLine, lines);
+        }
+        set => SetParametersText(value);
+    }
+
+    /// <summary>把 key=value 文本填入字段；未知 key 保留在 extra 中。</summary>
+    /// <param name="text">参数文本。</param>
+    public void SetParametersText(string text)
+    {
+        foreach (var field in ParameterFields)
+        {
+            field.Value = string.Empty;
+        }
+
+        _extraParameters.Clear();
+        foreach (var (key, value) in ParseLines(text))
+        {
+            var field = ParameterFields.FirstOrDefault(candidate =>
+                string.Equals(candidate.Key, key, StringComparison.OrdinalIgnoreCase));
+            if (field is null)
+            {
+                _extraParameters[key] = value;
+            }
+            else
+            {
+                field.Value = value;
+            }
+        }
+
+        OnPropertyChanged(nameof(ParametersText));
+    }
+
+    /// <summary>Gets 当前字段 + 未知参数合并后的参数表。</summary>
+    /// <returns>参数表。</returns>
+    public Dictionary<string, string> BuildParameters()
+    {
+        var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var field in ParameterFields)
+        {
+            if (!string.IsNullOrWhiteSpace(field.Value))
+            {
+                parameters[field.Key] = field.Value;
+            }
+        }
+
+        foreach (var (key, value) in _extraParameters)
+        {
+            parameters[key] = value;
+        }
+
+        return parameters;
+    }
+
+    private static IEnumerable<(string Key, string Value)> ParseLines(string text)
+    {
+        foreach (var line in text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var index = line.IndexOf('=');
+            if (index <= 0)
+            {
+                continue;
+            }
+
+            yield return (line[..index].Trim(), line[(index + 1)..]);
+        }
     }
 }
 
@@ -148,7 +239,7 @@ public sealed partial class SettingsPageViewModel
             });
             firstByProvider.TryAdd(instance.Provider, instance);
 
-            foreach (var (key, value) in ParseNotificationParameterLines(instance.ParametersText))
+            foreach (var (key, value) in instance.BuildParameters())
             {
                 var sensitiveKey = SensitiveSettingKeyRegistry.BuildExternalNotificationInstanceKey(instance.Id, key);
                 definitions.Add(new SensitiveSettingDefinition(
@@ -172,7 +263,7 @@ public sealed partial class SettingsPageViewModel
         // 回写每个 provider 的第一个实例到旧扁平键，保证旧版本/单实例读取仍可用。
         foreach (var (provider, instance) in firstByProvider)
         {
-            foreach (var (key, value) in ParseNotificationParameterLines(instance.ParametersText))
+            foreach (var (key, value) in instance.BuildParameters())
             {
                 if (TryResolveProviderConfigKey(provider, key, out var flatKey))
                 {

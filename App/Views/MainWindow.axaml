@@ -543,19 +543,35 @@
                     Classes="app-surface app-section main-shell-content-surface"
                     Classes.settings-root-content-surface="{Binding IsSettingsRootTabSelected}">
               <Grid>
-                <ContentControl x:Name="TaskQueueRootHost"
+                <TransitioningContentControl x:Name="TaskQueueRootHost"
                                 Content="{Binding TaskQueueRootPage.PageContent}"
-                                IsVisible="{Binding IsTaskQueueRootTabSelected}" />
-                <ContentControl x:Name="CopilotRootHost"
+                                IsVisible="{Binding IsTaskQueueRootTabSelected}" >
+                  <TransitioningContentControl.PageTransition>
+                    <CrossFade Duration="0:0:0.18" />
+                  </TransitioningContentControl.PageTransition>
+                </TransitioningContentControl>
+                <TransitioningContentControl x:Name="CopilotRootHost"
                                 Content="{Binding CopilotRootPage.PageContent}"
-                                IsVisible="{Binding IsCopilotRootTabSelected}" />
-                <ContentControl x:Name="ToolboxRootHost"
+                                IsVisible="{Binding IsCopilotRootTabSelected}" >
+                  <TransitioningContentControl.PageTransition>
+                    <CrossFade Duration="0:0:0.18" />
+                  </TransitioningContentControl.PageTransition>
+                </TransitioningContentControl>
+                <TransitioningContentControl x:Name="ToolboxRootHost"
                                 Content="{Binding ToolboxRootPage.PageContent}"
-                                IsVisible="{Binding IsToolboxRootTabSelected}" />
-                <ContentControl x:Name="SettingsRootHost"
+                                IsVisible="{Binding IsToolboxRootTabSelected}" >
+                  <TransitioningContentControl.PageTransition>
+                    <CrossFade Duration="0:0:0.18" />
+                  </TransitioningContentControl.PageTransition>
+                </TransitioningContentControl>
+                <TransitioningContentControl x:Name="SettingsRootHost"
                                 Content="{Binding SettingsRootPage.PageContent}"
                                 Classes="settings-root-host"
-                                Classes.settings-root-host-selected="{Binding IsSettingsRootTabSelected}" />
+                                Classes.settings-root-host-selected="{Binding IsSettingsRootTabSelected}" >
+                  <TransitioningContentControl.PageTransition>
+                    <CrossFade Duration="0:0:0.18" />
+                  </TransitioningContentControl.PageTransition>
+                </TransitioningContentControl>
 
               </Grid>
             </Border>

@@ -214,6 +214,7 @@ public partial class ConnectSettingsView : UserControl
 
             vm.FastestScreencapMethod = testResult.FastestScreencapMethod ?? string.Empty;
 
+            _ = App.Runtime.AchievementTrackerService.Unlock("ConnectionTester");
             var elapsedSamples = testResult.Screenshot?.SampleMilliseconds ?? [];
             for (var i = 0; i < elapsedSamples.Count; i++)
             {
@@ -593,6 +594,7 @@ public partial class ConnectSettingsView : UserControl
         }
 
         var window = new ScreenshotPreviewWindow();
+        window.PreviewClicked += OnScreenshotPreviewClicked;
 
         window.Closed += (_, _) =>
         {
@@ -607,6 +609,13 @@ public partial class ConnectSettingsView : UserControl
         App.Runtime.UiLanguageCoordinator.LanguageChanged -= OnUiLanguageChanged;
         CloseScreenshotPreviewWindow();
         base.OnDetachedFromVisualTree(e);
+    }
+
+    private async void OnScreenshotPreviewClicked(object? sender, EventArgs e)
+    {
+        _ = App.Runtime.AchievementTrackerService.Unlock("OneMoreLook");
+        OnScreenshotTestClick(this, new RoutedEventArgs());
+        await Task.CompletedTask;
     }
 
     private void OnUiLanguageChanged(object? sender, UiLanguageChangedEventArgs e)

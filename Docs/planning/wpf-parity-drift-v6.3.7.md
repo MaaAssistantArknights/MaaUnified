@@ -335,3 +335,10 @@ P1-07 渠道实例化仍未做：WPF dev-v2 的 `ExternalNotification.Configs` �
 - 成就目录 88 → 111：补 WPF dev-v2 第三批 23 条（TimeManagementMaster、DoubleSync、ResumeRecord、QueueExpansion、QueueSimplifier、SortingMaster、AchievementObserver、DisappearTrick、TitleTweaker、AllChannelBroadcast、ConnectionTester、MasterDirector、PrivateDormManager、OperatorRoster、ChangelogReader、LatestVersionInspector、TimeMachine、LoadLastSave、PallasStarter、PallasCheers、OneMoreLook、SlackingOff、BackstageExplorer），五语言标题/描述/条件均已有文本。
 - 已接触发点：任务增删（QueueExpansion/QueueSimplifier）、自定义任务（MasterDirector）、任务排序（SortingMaster）、成就列表（AchievementObserver）、成就备份/恢复（TimeMachine/LoadLastSave）、版本已最新（LatestVersionInspector）、更新日志（ChangelogReader）、打开 debug 目录（BackstageExplorer）、最小化到托盘（DisappearTrick）、全部通知渠道启用（AllChannelBroadcast）、干员识别导出（OperatorRoster）、识别间隔超 7 天（ResumeRecord）、基建自定义计划（PrivateDormManager）、Pallas 酒（PallasCheers）。
 - 仍未接触发点：ConnectionTester、DoubleSync、OneMoreLook、PallasStarter、SlackingOff、TimeManagementMaster（对应交互在 MAAUnified 尚无同形入口，后续按可用入口补）。
+
+## 第九轮（2026-11-13，P1-07 字段化与 P2 收尾）
+
+- P1-07 provider 字段化编辑：渠道实例按 provider 支持的参数生成逐字段输入框（`sendKey`/`server`/`botToken` 等），未知参数保留在原始 key=value 附加表，保存仍写入实例敏感键；旧文本接口保留兼容。
+- P2 页签过渡：主界面四个根页面 ContentControl 换为 `TransitioningContentControl` + 180 ms `CrossFade`。
+- P2 成就触发补充：截图测试（ConnectionTester）、点击预览图重测（OneMoreLook）、用户数据更新同时勾选干员与仓库（DoubleSync）。
+- 仍未接触发点：PallasStarter、SlackingOff、TimeManagementMaster（MAAUnified 无同形入口）；GameAudioMuteManager 属 Windows PC 端低频项，不移植。
