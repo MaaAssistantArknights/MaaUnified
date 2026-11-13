@@ -651,6 +651,11 @@ public sealed class SettingsModuleCM1FeatureTests
         var tracker = MAAUnified.App.Services.ConfigurationSaveTracker.Instance;
         try
         {
+            // The tracker is process-wide and other settings tests may leave the same scope
+            // pending; start from a clean marker before observing this edit.
+            tracker.ClearPending(scope);
+            tracker.ClearFailure(scope);
+
             vm.ConnectionGameSharedState.ConnectAddress = "10.8.0.7:5555";
             Assert.True(tracker.IsPendingOrFailed(scope));
 
