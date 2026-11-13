@@ -309,9 +309,13 @@ public sealed class ConfigurationSaveTracker
         CancellationToken cancellationToken = default,
         UiDiagnosticsService? diagnosticsService = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var entries = SnapshotRetryEntries(keyPredicate, diagnosticsService);
         foreach (var entry in entries)
         {
+            // A save may return after the session shutdown deadline. Do not let
+            // that late completion start another save with a canceled token.
+            cancellationToken.ThrowIfCancellationRequested();
             if (entry.RetryAsync is null || entry.DiagnosticsService is null)
             {
                 MarkFailed(entry.Key, entry.DisplayName);
@@ -325,6 +329,7 @@ public sealed class ConfigurationSaveTracker
                 entry.DiagnosticsService,
                 entry.RetryAsync,
                 cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         return SnapshotNames(pair =>

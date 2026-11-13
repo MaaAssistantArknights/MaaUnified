@@ -55,23 +55,56 @@ public sealed class SessionShutdownTests
     [InlineData(WindowCloseReason.OSShutdown)]
     public async Task SystemShutdown_DoesNotVetoLogoutWhenConfigurationSaveFails(WindowCloseReason reason)
     {
-        await WithWindowAsync((window, _, _) =>
+        await WithWindowAsync((window, runtime, _) =>
         {
-            var key = "session-shutdown-save-failure";
+            var key = $"session-shutdown-save-failure-{Guid.NewGuid():N}";
             var tracker = ConfigurationSaveTracker.Instance;
-            tracker.MarkFailed(key, "Failed configuration");
+            var attempted = false;
+            var failureReached = false;
+            tracker.MarkPending(key, "Failed configuration", key, runtime.DiagnosticsService, async _ =>
+            {
+                attempted = true;
+                await Task.Yield();
+                Dispatcher.UIThread.VerifyAccess();
+                failureReached = true;
+                throw new IOException("Injected close-time save failure.");
+            });
             try
             {
                 var args = ClosingArgs(reason, isProgrammatic: false);
                 RaiseClosing(window, args);
+                Assert.True(attempted);
+                Assert.True(failureReached);
                 Assert.False(args.Cancel);
                 Assert.False(window.IsEnabled);
                 Assert.Contains("Failed configuration", tracker.FailedDisplayNames);
+                Assert.Contains("Injected close-time save failure.",
+                    File.ReadAllText(runtime.DiagnosticsService.ErrorLogPath));
             }
             finally
             {
+                tracker.ClearPending(key);
                 tracker.ClearFailure(key);
             }
+        });
+    }
+
+    [AvaloniaTheory]
+    [InlineData(WindowCloseReason.ApplicationShutdown)]
+    [InlineData(WindowCloseReason.OSShutdown)]
+    public async Task SystemShutdown_ClosesWindowBeforeReturningToPlatform(WindowCloseReason reason)
+    {
+        await WithWindowAsync((window, _, _) =>
+        {
+            var closed = false;
+            window.Closed += (_, _) => closed = true;
+
+            // Use Avalonia's real close path, not just the cancellable event.
+            // X11's desktop lifetime closes the window before replying to XSMP.
+            typeof(Window).GetMethod("CloseCore", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(window, new object[] { reason, false, false });
+
+            Assert.True(closed);
         });
     }
 
@@ -143,6 +176,95 @@ public sealed class SessionShutdownTests
         Assert.True(token.IsCancellationRequested);
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3));
         pending.SetException(new IOException("late save error"));
+    }
+
+    [AvaloniaFact]
+    public async Task Preparation_DoesNotStartMoreSavesAfterTimedOutSaveCompletes()
+    {
+        await WithWindowAsync((_, runtime, _) =>
+        {
+            var tracker = ConfigurationSaveTracker.Instance;
+            var prefix = $"session-shutdown-late-{Guid.NewGuid():N}";
+            var pending = new TaskCompletionSource<bool>();
+            var firstStarted = false;
+            var nextStarted = false;
+            Task<bool>? preparation = null;
+            tracker.MarkPending(prefix + ".first", "First save", prefix, runtime.DiagnosticsService, _ =>
+            {
+                firstStarted = true;
+                return pending.Task; // Deliberately ignore cancellation until released.
+            });
+            tracker.MarkPending(prefix + ".next", "Next save", prefix, runtime.DiagnosticsService, _ =>
+            {
+                nextStarted = true;
+                return Task.FromResult(true);
+            });
+            try
+            {
+                Assert.Throws<TimeoutException>(() => SessionShutdownPreparation.Run(token =>
+                {
+                    preparation = RetryAsync(token);
+                    return preparation;
+                }, TimeSpan.FromMilliseconds(80)));
+                Assert.True(firstStarted);
+                Assert.False(nextStarted);
+
+                pending.SetResult(true);
+                var lateError = Record.Exception(() =>
+                    SessionShutdownPreparation.Run(_ => preparation!, TimeSpan.FromSeconds(3)));
+                Assert.False(nextStarted, "A second save started after the session shutdown timeout.");
+                Assert.IsAssignableFrom<OperationCanceledException>(lateError);
+            }
+            finally
+            {
+                pending.TrySetResult(true);
+                foreach (var key in new[] { prefix + ".first", prefix + ".next" })
+                {
+                    tracker.ClearPending(key);
+                    tracker.ClearFailure(key);
+                }
+            }
+
+            async Task<bool> RetryAsync(CancellationToken token)
+            {
+                await tracker.RetryPendingOrFailedAsync(
+                    key => key.StartsWith(prefix, StringComparison.Ordinal), token, runtime.DiagnosticsService);
+                return true;
+            }
+        });
+    }
+
+    [AvaloniaFact]
+    public async Task Preparation_DoesNotStartRetryWithAlreadyCanceledToken()
+    {
+        await WithWindowAsync((_, runtime, _) =>
+        {
+            var tracker = ConfigurationSaveTracker.Instance;
+            var key = $"session-shutdown-canceled-{Guid.NewGuid():N}";
+            var started = false;
+            tracker.MarkPending(key, "Canceled save", key, runtime.DiagnosticsService, _ =>
+            {
+                started = true;
+                return Task.FromResult(true);
+            });
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+            try
+            {
+                Assert.ThrowsAny<OperationCanceledException>(() => SessionShutdownPreparation.Run(async _ =>
+                {
+                    await tracker.RetryPendingOrFailedAsync(candidate => candidate == key, cts.Token,
+                        runtime.DiagnosticsService);
+                    return true;
+                }, TimeSpan.FromSeconds(3)));
+                Assert.False(started);
+            }
+            finally
+            {
+                tracker.ClearPending(key);
+                tracker.ClearFailure(key);
+            }
+        });
     }
 
     private static async Task WithWindowAsync(Action<MainWindow, MAAUnifiedRuntime, string> test)
