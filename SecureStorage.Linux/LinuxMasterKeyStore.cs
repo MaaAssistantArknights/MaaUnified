@@ -63,7 +63,7 @@ public sealed class LinuxMasterKeyStore
         var existingHandle = TryOpenExistingKey(parentHandle);
         if (existingHandle is not null)
         {
-            await using var stream = new FileStream(existingHandle, FileAccess.Read, KeyLength + 1, isAsync: true);
+            await using var stream = new FileStream(existingHandle, FileAccess.Read, KeyLength + 1, isAsync: false);
             return await ReadAndValidateKeyAsync(stream, cancellationToken).ConfigureAwait(false);
         }
 
@@ -89,7 +89,7 @@ public sealed class LinuxMasterKeyStore
                 new SafeFileHandle((nint)fileDescriptor, ownsHandle: true),
                 FileAccess.Write,
                 4096,
-                isAsync: true);
+                isAsync: false);
             ValidateKeyHandle(stream.SafeFileHandle, expectedLength: 0);
             await stream.WriteAsync(key, cancellationToken).ConfigureAwait(false);
             await stream.FlushAsync(cancellationToken).ConfigureAwait(false);

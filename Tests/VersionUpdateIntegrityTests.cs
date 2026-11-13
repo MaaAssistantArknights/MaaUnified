@@ -190,7 +190,7 @@ public sealed class VersionUpdateIntegrityTests
 
         var result = PendingAppUpdateService.TryApplyPendingUpdatePackage(root.Path);
 
-        Assert.Equal(PendingAppUpdateStatus.Applied, result.Status);
+        Assert.True(result.Status == PendingAppUpdateStatus.Applied, result.Message);
         Assert.Null(PendingUpdateFailureState.TryRead(root.Path));
     }
 
@@ -634,7 +634,7 @@ public sealed class VersionUpdateIntegrityTests
             mutexName: "MAAUnified.Package.Test",
             relaunchExecutablePath: "/install/MAAUnified.exe");
 
-        Assert.Equal(PendingAppUpdateStatus.Delegated, result.Status);
+        Assert.True(result.Status == PendingAppUpdateStatus.Delegated, result.Message);
         Assert.Equal(1, launcher.CallCount);
         var spec = Assert.Single(launcher.Specs);
         Assert.Equal("MAAUnified.Package.Test", spec.MutexName);
@@ -671,7 +671,7 @@ public sealed class VersionUpdateIntegrityTests
             new UpdateApplyCapabilities(true, UpdateApplyPlatform.ExternalUpdaterExecutableName, true, true, string.Empty),
             launcher);
 
-        Assert.Equal(PendingAppUpdateStatus.Applied, result.Status);
+        Assert.True(result.Status == PendingAppUpdateStatus.Applied, result.Message);
         Assert.Equal(1, launcher.CallCount);
         Assert.Equal("new", await File.ReadAllTextAsync(Path.Combine(root.Path, "app.txt")));
         Assert.False(File.Exists(packagePath));
@@ -695,7 +695,7 @@ public sealed class VersionUpdateIntegrityTests
             new UpdateApplyCapabilities(false, UpdateApplyPlatform.ExternalUpdaterExecutableName, false, true, "Windows-only; applying in-process."),
             launcher);
 
-        Assert.Equal(PendingAppUpdateStatus.Applied, result.Status);
+        Assert.True(result.Status == PendingAppUpdateStatus.Applied, result.Message);
         Assert.Equal(0, launcher.CallCount);
         Assert.Equal("new", await File.ReadAllTextAsync(Path.Combine(root.Path, "app.txt")));
     }

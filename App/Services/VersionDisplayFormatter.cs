@@ -13,8 +13,24 @@ internal static class VersionDisplayFormatter
 {
     public static string FormatVersion(string version, DateTime dateTime, string? customCulture)
     {
-        var culture = ResolveCulture(customCulture);
         var localDateTime = dateTime.ToLocalTime();
+
+        // Fixed UI cultures keep their WPF display order even when the runtime runs in
+        // invariant globalization mode (Linux CI / minimal containers), where
+        // CultureInfo.GetCultures only exposes the invariant culture.
+        switch (customCulture?.Trim().ToLowerInvariant())
+        {
+            case "zh-cn" or "zh-tw":
+                return string.Concat(version, localDateTime.ToString("'#'MMdd", CultureInfo.InvariantCulture));
+            case "en-us":
+                return string.Concat(localDateTime.ToString("dd'/'MM", CultureInfo.InvariantCulture), " ", version);
+            case "ja-jp":
+                return string.Concat(localDateTime.ToString("MM'/'dd", CultureInfo.InvariantCulture), " ", version);
+            case "ko-kr":
+                return string.Concat(localDateTime.ToString("M'. 'd'.'", CultureInfo.InvariantCulture), " ", version);
+        }
+
+        var culture = ResolveCulture(customCulture);
         return culture.Name.ToLowerInvariant() switch
         {
             "zh-cn" or "zh-tw" => string.Concat(version, localDateTime.ToString("'#'MMdd", CultureInfo.InvariantCulture)),

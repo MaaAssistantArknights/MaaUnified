@@ -935,12 +935,15 @@ public sealed class ConnectionLifecycleRegressionTests
         Assert.True(fixture.Config.TryGetCurrentProfile(out var profile));
         profile.Values["AutoDetect"] = JsonValue.Create(true);
         profile.Values["AlwaysAutoDetect"] = JsonValue.Create(false);
-        var connect = new ConnectFeatureService(fixture.Session, fixture.Config);
+        var connect = new ConnectFeatureService(
+            fixture.Session,
+            fixture.Config,
+            enableQuickConnectionPrecheck: false);
 
         var result = await connect.ConnectCandidatesAsync(
             [new CoreConnectionInfo("127.0.0.1:5555", "General", null, Timeout: TimeSpan.FromSeconds(5))]);
 
-        Assert.True(result.Success);
+        Assert.True(result.Success, result.Result.Message);
         Assert.False(profile.Values["AutoDetect"]?.GetValue<bool>());
         Assert.False(profile.Values["AlwaysAutoDetect"]?.GetValue<bool>());
     }
@@ -954,12 +957,16 @@ public sealed class ConnectionLifecycleRegressionTests
         profile.Values["AutoDetect"] = JsonValue.Create(true);
         profile.Values["AlwaysAutoDetect"] = JsonValue.Create(false);
         fixture.ConfigStore.FailSaves = true;
-        var connect = new ConnectFeatureService(fixture.Session, fixture.Config, fixture.Log);
+        var connect = new ConnectFeatureService(
+            fixture.Session,
+            fixture.Config,
+            fixture.Log,
+            enableQuickConnectionPrecheck: false);
 
         var result = await connect.ConnectCandidatesAsync(
             [new CoreConnectionInfo("127.0.0.1:5555", "General", null, Timeout: TimeSpan.FromSeconds(5))]);
 
-        Assert.True(result.Success);
+        Assert.True(result.Success, result.Result.Message);
         Assert.Equal(SessionState.Connected, fixture.Session.CurrentState);
         Assert.False(profile.Values["AutoDetect"]?.GetValue<bool>());
         Assert.Contains(
