@@ -931,6 +931,16 @@ public sealed class RoguelikeModuleViewModel : TypedTaskModuleViewModelBase<Rogu
         ClearUnavailableCollectibleRewards();
     }
 
+    /// <summary>Gets 当前开局干员是否包含 Pallas（WPF PallasStarter 触发条件）。</summary>
+    public bool HasPallasStartingOper()
+    {
+        var dto = BuildDto();
+        return dto.CoreCharList?.Any(oper =>
+            !string.IsNullOrWhiteSpace(oper.Name)
+            && (oper.Name.Contains("pallas", StringComparison.OrdinalIgnoreCase)
+                || oper.Name.Contains("帕拉斯", StringComparison.Ordinal))) == true;
+    }
+
     private List<RoguelikeStartingOperDto> BuildStartingOperList(string normalizedCoreChar)
     {
         var opers = _startingOpers

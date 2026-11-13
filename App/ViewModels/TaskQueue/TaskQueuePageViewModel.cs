@@ -9188,6 +9188,12 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         {
             case "TaskChainStart":
                 _currentRunId = runId;
+                if (string.Equals(TaskModuleTypes.Normalize(taskChain), TaskModuleTypes.Roguelike, StringComparison.OrdinalIgnoreCase)
+                    && RoguelikeModule.HasPallasStartingOper())
+                {
+                    _ = Runtime.AchievementTrackerService.Unlock("PallasStarter");
+                }
+
                 if (taskIndex is int startedIndex && startedIndex >= 0)
                 {
                     _taskChainStartedAt[startedIndex] = Stopwatch.GetTimestamp();

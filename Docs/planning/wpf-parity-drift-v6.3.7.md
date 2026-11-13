@@ -347,3 +347,8 @@ P1-07 渠道实例化仍未做：WPF dev-v2 的 `ExternalNotification.Configs` �
 
 - 对 Tests/App/Application/Platform/Compat 执行 `dotnet format` 仅空白修正（17 文件，无逻辑变化），五个工程 `--verify-no-changes` 全部为 0。
 - `.github/workflows/ci-avalonia.yml` 增加 Linux 格式门：逐工程跑 `dotnet format --verify-no-changes --no-restore`，防止格式回退。
+
+## 第十一轮（2026-11-13，成就触发闭环与 macOS CI）
+
+- 剩余 3 条成就触发补齐：Roguelike 开局干员含 Pallas（PallasStarter，TaskChainStart 校验）、小游戏启动（SlackingOff）、全部定时器启用（TimeManagementMaster）；至此 23 条第三批成就均有触发入口。
+- `.github/workflows/ci-avalonia.yml` 增加 `macos-latest` job，运行全量 MAAUnified 测试；Linux 继续跑格式门与 baseline gate，Windows 保留平台能力门。

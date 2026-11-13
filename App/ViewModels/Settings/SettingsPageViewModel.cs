@@ -7256,6 +7256,13 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         }
 
         if (e.PropertyName == nameof(TimerSlotViewModel.Enabled)
+            && Timers.Count > 0
+            && Timers.All(timer => timer.Enabled == true))
+        {
+            _ = Runtime.AchievementTrackerService.Unlock("TimeManagementMaster");
+        }
+
+        if (e.PropertyName == nameof(TimerSlotViewModel.Enabled)
             || e.PropertyName == nameof(TimerSlotViewModel.Time)
             || e.PropertyName == nameof(TimerSlotViewModel.Hour)
             || e.PropertyName == nameof(TimerSlotViewModel.Minute)

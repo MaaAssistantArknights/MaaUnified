@@ -2155,6 +2155,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             BuildMiniGameDispatchRequest(),
             PrepareMiniGameForStart,
             cancellationToken);
+        _ = Runtime.AchievementTrackerService.Unlock("SlackingOff");
     }
 
     /// <summary>
