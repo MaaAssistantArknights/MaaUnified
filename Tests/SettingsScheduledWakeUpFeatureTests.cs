@@ -148,11 +148,14 @@ public sealed class SettingsScheduledWakeUpFeatureTests
     [Fact]
     public async Task Coordinator_SyncNow_ShouldReportFailureToSubscribers()
     {
-        var registrar = new RecordingScheduledWakeUpRegistrar { Result = PlatformOperation.Failed(
+        var registrar = new RecordingScheduledWakeUpRegistrar
+        {
+            Result = PlatformOperation.Failed(
             "test",
             "boom",
             PlatformErrorCodes.ScheduledWakeUpRegisterFailed,
-            "scheduledWakeUp.sync") };
+            "scheduledWakeUp.sync")
+        };
         using var coordinator = new ScheduledWakeUpCoordinator(registrar, TimeSpan.FromMilliseconds(10));
         var reported = new TaskCompletionSource<ScheduledWakeUpSyncResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         coordinator.SyncCompleted += (_, result) => reported.TrySetResult(result);

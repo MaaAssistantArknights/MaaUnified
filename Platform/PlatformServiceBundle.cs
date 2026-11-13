@@ -227,7 +227,8 @@ public static class PlatformServicesFactory
             scheduledWakeUpRegistrar = new UnsupportedScheduledWakeUpRegistrar();
         }
 
-        return new PlatformServiceBundle {
+        return new PlatformServiceBundle
+        {
             TrayService = trayService,
             NotificationService = notificationService,
             HotkeyService = hotkeyService,

@@ -1757,11 +1757,11 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
                 await StartDepotAsync(cancellationToken);
                 break;
             case ToolboxToolKind.Gacha:
-            {
-                var once = string.Equals(NormalizeToken(GachaDrawCountInput), "1", StringComparison.Ordinal);
-                await StartGachaAsync(once, cancellationToken);
-                break;
-            }
+                {
+                    var once = string.Equals(NormalizeToken(GachaDrawCountInput), "1", StringComparison.Ordinal);
+                    await StartGachaAsync(once, cancellationToken);
+                    break;
+                }
             case ToolboxToolKind.VideoRecognition:
                 await TogglePeepAsync(cancellationToken);
                 break;
@@ -3429,16 +3429,16 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         switch (what)
         {
             case "RecruitTagsDetected":
-            {
-                var tags = ReadStringArray(details["tags"]);
-                RecruitInfo = tags.Count == 0
-                    ? T("Toolbox.Recruit.TagsDetected", "Recruit tags detected.")
-                    : string.Format(
-                        CultureInfo.InvariantCulture,
-                        T("Toolbox.Recruit.TagsDetectedWithList", "Tags detected: {0}"),
-                        string.Join(" / ", tags));
-                break;
-            }
+                {
+                    var tags = ReadStringArray(details["tags"]);
+                    RecruitInfo = tags.Count == 0
+                        ? T("Toolbox.Recruit.TagsDetected", "Recruit tags detected.")
+                        : string.Format(
+                            CultureInfo.InvariantCulture,
+                            T("Toolbox.Recruit.TagsDetectedWithList", "Tags detected: {0}"),
+                            string.Join(" / ", tags));
+                    break;
+                }
             case "RecruitResult":
                 ApplyRecruitResult(details["result"] as JsonArray);
                 break;

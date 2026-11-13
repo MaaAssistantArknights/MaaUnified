@@ -297,26 +297,26 @@ public static class PixelPaintConverter
                 mapH = srcH;
                 break;
             case PixelPaintFitMode.Contain:
-            {
-                // 外接矩形包含整张源图（Max），等比装入目标并留白
-                var scale = Math.Max(srcW / grid, srcH / grid);
-                mapW = grid * scale;
-                mapH = grid * scale;
-                mapX0 = srcX0 + ((srcW - mapW) / 2.0);
-                mapY0 = srcY0 + ((srcH - mapH) / 2.0);
-                break;
-            }
+                {
+                    // 外接矩形包含整张源图（Max），等比装入目标并留白
+                    var scale = Math.Max(srcW / grid, srcH / grid);
+                    mapW = grid * scale;
+                    mapH = grid * scale;
+                    mapX0 = srcX0 + ((srcW - mapW) / 2.0);
+                    mapY0 = srcY0 + ((srcH - mapH) / 2.0);
+                    break;
+                }
 
             default: // Crop = cover
-            {
-                // 源图内最大的 1:1 采样矩形（Min），裁掉多余边并铺满
-                var scale = Math.Min(srcW / grid, srcH / grid);
-                mapW = grid * scale;
-                mapH = grid * scale;
-                mapX0 = srcX0 + ((srcW - mapW) / 2.0);
-                mapY0 = srcY0 + ((srcH - mapH) / 2.0);
-                break;
-            }
+                {
+                    // 源图内最大的 1:1 采样矩形（Min），裁掉多余边并铺满
+                    var scale = Math.Min(srcW / grid, srcH / grid);
+                    mapW = grid * scale;
+                    mapH = grid * scale;
+                    mapX0 = srcX0 + ((srcW - mapW) / 2.0);
+                    mapY0 = srcY0 + ((srcH - mapH) / 2.0);
+                    break;
+                }
         }
 
         // 格内子样数：按源图覆盖面积自适应，最多 4×4。格子像素数越大采样越密。

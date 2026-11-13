@@ -142,8 +142,7 @@ public sealed class DialogModuleP1FeatureTests
         Assert.Contains("ItemSpacing=\"10\"", errorDialogXaml, StringComparison.Ordinal);
         Assert.Contains("LineSpacing=\"10\"", errorDialogXaml, StringComparison.Ordinal);
         var actionsBlock = errorDialogXaml[
-            errorDialogXaml.IndexOf("<controls:AppWindowFrame.ActionsContent>", StringComparison.Ordinal)..
-            errorDialogXaml.IndexOf("</controls:AppWindowFrame.ActionsContent>", StringComparison.Ordinal)];
+            errorDialogXaml.IndexOf("<controls:AppWindowFrame.ActionsContent>", StringComparison.Ordinal)..errorDialogXaml.IndexOf("</controls:AppWindowFrame.ActionsContent>", StringComparison.Ordinal)];
         Assert.DoesNotContain("<StackPanel Orientation=\"Horizontal\"", actionsBlock, StringComparison.Ordinal);
     }
 

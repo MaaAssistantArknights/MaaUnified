@@ -1113,7 +1113,7 @@ public sealed class TaskQueueNotificationTests
                 await Task.CompletedTask;
                 yield break;
             }
- 
+
             public ValueTask DisposeAsync()
                 => ValueTask.CompletedTask;
         }

@@ -25,7 +25,7 @@ public partial class App : Avalonia.Application
     private static readonly TimeSpan UiLagProbeInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan UiLagLogMinInterval = TimeSpan.FromSeconds(5);
     internal static readonly TimeSpan RuntimeDisposeTimeout = TimeSpan.FromSeconds(12);
-    internal static readonly string[] LegacyLocalizationResourceKeys =    [
+    internal static readonly string[] LegacyLocalizationResourceKeys = [
         "AlwaysAutoDetectConnectionTip",
         "BadModules.UseSoftwareRenderingTip",
         "ExternalNotificationBarkSendKey",

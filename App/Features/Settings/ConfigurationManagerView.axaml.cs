@@ -235,43 +235,43 @@ public partial class ConfigurationManagerView : UserControl
                     continue;
 
                 case ConfigurationImportSelectionKind.LegacyPartial:
-                {
-                    var forceImport = await ShowWarningDialogAsync(
-                        language,
-                        text("Settings.ConfigurationManager.Dialog.ImportLegacyTitle"),
-                        analysis.Message,
-                        confirmText: text("Settings.Action.ImportAnyway"),
-                        cancelText: text("Settings.Action.ChooseAgain"),
-                        sourceScope: "Settings.ConfigurationManager.ImportLegacyPartial.Dialog");
-                    if (!forceImport)
                     {
+                        var forceImport = await ShowWarningDialogAsync(
+                            language,
+                            text("Settings.ConfigurationManager.Dialog.ImportLegacyTitle"),
+                            analysis.Message,
+                            confirmText: text("Settings.Action.ImportAnyway"),
+                            cancelText: text("Settings.Action.ChooseAgain"),
+                            sourceScope: "Settings.ConfigurationManager.ImportLegacyPartial.Dialog");
+                        if (!forceImport)
+                        {
+                            continue;
+                        }
+
+                        if (await TryRunLegacyImportAsync(vm, analysis, language, text, allowPartialImport: true))
+                        {
+                            return;
+                        }
+
                         continue;
                     }
-
-                    if (await TryRunLegacyImportAsync(vm, analysis, language, text, allowPartialImport: true))
-                    {
-                        return;
-                    }
-
-                    continue;
-                }
 
                 default:
-                {
-                    var close = await ShowWarningDialogAsync(
-                        language,
-                        text("Settings.ConfigurationManager.Dialog.ImportConfigTitle"),
-                        analysis.Message,
-                        confirmText: text("Settings.Action.Close"),
-                        cancelText: text("Settings.Action.ChooseAgain"),
-                        sourceScope: "Settings.ConfigurationManager.ImportSelection.Dialog");
-                    if (!close)
                     {
-                        continue;
-                    }
+                        var close = await ShowWarningDialogAsync(
+                            language,
+                            text("Settings.ConfigurationManager.Dialog.ImportConfigTitle"),
+                            analysis.Message,
+                            confirmText: text("Settings.Action.Close"),
+                            cancelText: text("Settings.Action.ChooseAgain"),
+                            sourceScope: "Settings.ConfigurationManager.ImportSelection.Dialog");
+                        if (!close)
+                        {
+                            continue;
+                        }
 
-                    return;
-                }
+                        return;
+                    }
             }
         }
     }

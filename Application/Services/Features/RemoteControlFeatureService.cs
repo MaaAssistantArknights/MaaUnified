@@ -305,12 +305,12 @@ public sealed class RemoteControlFeatureService : IRemoteControlFeatureService, 
             switch (RemoteControlCommandDispatcher.Classify(request.RawCommand))
             {
                 case RemoteControlCommandKind.Instant:
-                {
-                    var dispatcher = CreateDispatcher();
-                    var execution = await dispatcher.DispatchAsync(request, cancellationToken);
-                    await ReportAsync(snapshot, request, execution, cancellationToken);
-                    break;
-                }
+                    {
+                        var dispatcher = CreateDispatcher();
+                        var execution = await dispatcher.DispatchAsync(request, cancellationToken);
+                        await ReportAsync(snapshot, request, execution, cancellationToken);
+                        break;
+                    }
 
                 case RemoteControlCommandKind.Sequential:
                     lock (_pollingGate)

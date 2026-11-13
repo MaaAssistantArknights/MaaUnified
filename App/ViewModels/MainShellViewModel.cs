@@ -4015,17 +4015,17 @@ public sealed class MainShellViewModel : ObservableObject
 
                 await TaskQueuePage.StartAsyncUnderExclusiveSessionOperationAsync(timerStartLease, scheduledStartToken);
                 CurrentSessionState = _runtime.SessionService.CurrentState;
-            if (CurrentSessionState == SessionState.Running)
-            {
-                _ = _runtime.AchievementTrackerService.AddProgressToGroup("ScheduleMaster");
-                await RecordEventAsync(
-                    sessionRunning || SettingsPage.ForceScheduledStart
-                        ? "Timer.Schedule.StopAndStart"
-                        : "Timer.Schedule.Start",
-                    $"slot={slot.Index}; profile={_runtime.ConfigurationService.CurrentConfig.CurrentProfile}",
-                    cancellationToken);
-                return;
-            }
+                if (CurrentSessionState == SessionState.Running)
+                {
+                    _ = _runtime.AchievementTrackerService.AddProgressToGroup("ScheduleMaster");
+                    await RecordEventAsync(
+                        sessionRunning || SettingsPage.ForceScheduledStart
+                            ? "Timer.Schedule.StopAndStart"
+                            : "Timer.Schedule.Start",
+                        $"slot={slot.Index}; profile={_runtime.ConfigurationService.CurrentConfig.CurrentProfile}",
+                        cancellationToken);
+                    return;
+                }
 
                 await RecordTimerScheduleErrorAsync(
                     sessionRunning
@@ -5109,25 +5109,25 @@ public sealed class MainShellViewModel : ObservableObject
         switch (host.LoadState)
         {
             case RootPageLoadState.NotStarted:
-            {
-                var (title, message) = GetRootPagePendingText(page);
-                host.MarkPending(title, message);
-                break;
-            }
+                {
+                    var (title, message) = GetRootPagePendingText(page);
+                    host.MarkPending(title, message);
+                    break;
+                }
 
             case RootPageLoadState.Loading:
-            {
-                var (title, message) = GetRootPageLoadingText(page);
-                host.MarkLoading(title, message);
-                break;
-            }
+                {
+                    var (title, message) = GetRootPageLoadingText(page);
+                    host.MarkLoading(title, message);
+                    break;
+                }
 
             case RootPageLoadState.Failed:
-            {
-                var (title, message) = GetRootPageFailedText(page);
-                host.MarkFailed(title, message, host.ErrorMessage);
-                break;
-            }
+                {
+                    var (title, message) = GetRootPageFailedText(page);
+                    host.MarkFailed(title, message, host.ErrorMessage);
+                    break;
+                }
         }
     }
 

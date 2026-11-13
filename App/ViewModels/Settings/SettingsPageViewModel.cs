@@ -7409,7 +7409,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                             stateResult.Message,
                             stateResult.Error?.Details),
                         cancellationToken);
-            }
+                }
 
                 if (updateStatus)
                 {
@@ -8771,275 +8771,275 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             var backgroundWarnings = new List<string>();
             var hotkeyWarnings = new List<string>();
 
-        var rawTheme = ReadThemeModeWithLegacyFallback(config);
-        var rawLanguage = ReadGlobalString(config, ConfigurationKeys.Localization, DefaultLanguage);
-        var rawBackgroundPath = ReadBackgroundImagePath(config);
-        var rawOpacity = ReadGlobalInt(config, ConfigurationKeys.BackgroundOpacity, _backgroundOpacity);
-        var rawBlur = ReadGlobalInt(config, ConfigurationKeys.BackgroundBlurEffectRadius, _backgroundBlur);
-        var rawStretchMode = ReadGlobalString(config, ConfigurationKeys.BackgroundImageStretchMode, DefaultBackgroundStretchMode);
-        var rawLogItemDateFormat = ReadGlobalString(config, ConfigurationKeys.LogItemDateFormat, DefaultLogItemDateFormat);
-        var rawOperNameLanguage = ReadGlobalString(config, ConfigurationKeys.OperNameLanguage, DefaultOperNameLanguage);
-        // WPF reads GUI.InverseClearMode via ConfigurationHelper.GetGlobalValue.
-        var rawInverseClearMode = ReadGlobalString(config, ConfigurationKeys.InverseClearMode, DefaultInverseClearMode);
-        var rawUseSoftwareRendering = ReadSoftwareRendering(config);
-        var rawHotkeys = ReadGlobalString(config, ConfigurationKeys.HotKeys, string.Empty);
-        var parsedHotkeys = HotkeyConfigurationCodec.Parse(rawHotkeys);
-        hotkeyWarnings.AddRange(parsedHotkeys.Warnings);
-        var loadedShowGui = parsedHotkeys.ShowGui;
-        var loadedLinkStart = parsedHotkeys.LinkStart;
+            var rawTheme = ReadThemeModeWithLegacyFallback(config);
+            var rawLanguage = ReadGlobalString(config, ConfigurationKeys.Localization, DefaultLanguage);
+            var rawBackgroundPath = ReadBackgroundImagePath(config);
+            var rawOpacity = ReadGlobalInt(config, ConfigurationKeys.BackgroundOpacity, _backgroundOpacity);
+            var rawBlur = ReadGlobalInt(config, ConfigurationKeys.BackgroundBlurEffectRadius, _backgroundBlur);
+            var rawStretchMode = ReadGlobalString(config, ConfigurationKeys.BackgroundImageStretchMode, DefaultBackgroundStretchMode);
+            var rawLogItemDateFormat = ReadGlobalString(config, ConfigurationKeys.LogItemDateFormat, DefaultLogItemDateFormat);
+            var rawOperNameLanguage = ReadGlobalString(config, ConfigurationKeys.OperNameLanguage, DefaultOperNameLanguage);
+            // WPF reads GUI.InverseClearMode via ConfigurationHelper.GetGlobalValue.
+            var rawInverseClearMode = ReadGlobalString(config, ConfigurationKeys.InverseClearMode, DefaultInverseClearMode);
+            var rawUseSoftwareRendering = ReadSoftwareRendering(config);
+            var rawHotkeys = ReadGlobalString(config, ConfigurationKeys.HotKeys, string.Empty);
+            var parsedHotkeys = HotkeyConfigurationCodec.Parse(rawHotkeys);
+            hotkeyWarnings.AddRange(parsedHotkeys.Warnings);
+            var loadedShowGui = parsedHotkeys.ShowGui;
+            var loadedLinkStart = parsedHotkeys.LinkStart;
 
-        var theme = NormalizeTheme(rawTheme);
-        if (!string.Equals(rawTheme, theme, StringComparison.Ordinal))
-        {
-            guiWarnings.Add($"Theme normalized to `{theme}` from `{rawTheme}`.");
-        }
+            var theme = NormalizeTheme(rawTheme);
+            if (!string.Equals(rawTheme, theme, StringComparison.Ordinal))
+            {
+                guiWarnings.Add($"Theme normalized to `{theme}` from `{rawTheme}`.");
+            }
 
-        var language = NormalizeLanguage(rawLanguage);
-        if (!string.Equals(rawLanguage, language, StringComparison.OrdinalIgnoreCase))
-        {
-            guiWarnings.Add($"Language normalized to `{language}` from `{rawLanguage}`.");
-        }
+            var language = NormalizeLanguage(rawLanguage);
+            if (!string.Equals(rawLanguage, language, StringComparison.OrdinalIgnoreCase))
+            {
+                guiWarnings.Add($"Language normalized to `{language}` from `{rawLanguage}`.");
+            }
 
-        var backgroundPath = NormalizeBackgroundPath(rawBackgroundPath);
-        // WPF parity (BackgroundSettingsUserControlModel.RefreshBackgroundImage): a missing file
-        // means "no background rendered"; the stored path itself is preserved, not reset. The
-        // conventional default path is expected to be absent on fresh installs, so it never warns.
-        if (!string.IsNullOrWhiteSpace(backgroundPath)
-            && !string.Equals(backgroundPath, StartupShellSnapshot.DefaultBackgroundImagePath, StringComparison.OrdinalIgnoreCase)
-            && !File.Exists(backgroundPath))
-        {
-            backgroundWarnings.Add($"Background path not found; rendering without background: {backgroundPath}");
-        }
+            var backgroundPath = NormalizeBackgroundPath(rawBackgroundPath);
+            // WPF parity (BackgroundSettingsUserControlModel.RefreshBackgroundImage): a missing file
+            // means "no background rendered"; the stored path itself is preserved, not reset. The
+            // conventional default path is expected to be absent on fresh installs, so it never warns.
+            if (!string.IsNullOrWhiteSpace(backgroundPath)
+                && !string.Equals(backgroundPath, StartupShellSnapshot.DefaultBackgroundImagePath, StringComparison.OrdinalIgnoreCase)
+                && !File.Exists(backgroundPath))
+            {
+                backgroundWarnings.Add($"Background path not found; rendering without background: {backgroundPath}");
+            }
 
-        var opacity = Math.Clamp(rawOpacity, BackgroundOpacityMin, BackgroundOpacityMax);
-        if (opacity != rawOpacity)
-        {
-            backgroundWarnings.Add($"Background opacity clamped to {opacity} from {rawOpacity}.");
-        }
+            var opacity = Math.Clamp(rawOpacity, BackgroundOpacityMin, BackgroundOpacityMax);
+            if (opacity != rawOpacity)
+            {
+                backgroundWarnings.Add($"Background opacity clamped to {opacity} from {rawOpacity}.");
+            }
 
-        var blur = Math.Clamp(rawBlur, BackgroundBlurMin, BackgroundBlurMax);
-        if (blur != rawBlur)
-        {
-            backgroundWarnings.Add($"Background blur clamped to {blur} from {rawBlur}.");
-        }
+            var blur = Math.Clamp(rawBlur, BackgroundBlurMin, BackgroundBlurMax);
+            if (blur != rawBlur)
+            {
+                backgroundWarnings.Add($"Background blur clamped to {blur} from {rawBlur}.");
+            }
 
-        var stretch = NormalizeBackgroundStretchMode(rawStretchMode);
-        if (!string.Equals(rawStretchMode, stretch, StringComparison.OrdinalIgnoreCase))
-        {
-            backgroundWarnings.Add($"Background stretch mode normalized to `{stretch}` from `{rawStretchMode}`.");
-        }
+            var stretch = NormalizeBackgroundStretchMode(rawStretchMode);
+            if (!string.Equals(rawStretchMode, stretch, StringComparison.OrdinalIgnoreCase))
+            {
+                backgroundWarnings.Add($"Background stretch mode normalized to `{stretch}` from `{rawStretchMode}`.");
+            }
 
-        var logItemDateFormat = NormalizeLogItemDateFormat(rawLogItemDateFormat);
-        if (!string.Equals(rawLogItemDateFormat, logItemDateFormat, StringComparison.Ordinal))
-        {
-            guiWarnings.Add(
-                $"Log item date format normalized to `{logItemDateFormat}` from `{rawLogItemDateFormat}`.");
-        }
+            var logItemDateFormat = NormalizeLogItemDateFormat(rawLogItemDateFormat);
+            if (!string.Equals(rawLogItemDateFormat, logItemDateFormat, StringComparison.Ordinal))
+            {
+                guiWarnings.Add(
+                    $"Log item date format normalized to `{logItemDateFormat}` from `{rawLogItemDateFormat}`.");
+            }
 
-        var operNameLanguage = NormalizeOperNameLanguage(rawOperNameLanguage);
-        if (!string.Equals(rawOperNameLanguage, operNameLanguage, StringComparison.OrdinalIgnoreCase))
-        {
-            guiWarnings.Add(
-                $"Oper name language normalized to `{operNameLanguage}` from `{rawOperNameLanguage}`.");
-        }
+            var operNameLanguage = NormalizeOperNameLanguage(rawOperNameLanguage);
+            if (!string.Equals(rawOperNameLanguage, operNameLanguage, StringComparison.OrdinalIgnoreCase))
+            {
+                guiWarnings.Add(
+                    $"Oper name language normalized to `{operNameLanguage}` from `{rawOperNameLanguage}`.");
+            }
 
-        var inverseClearMode = NormalizeInverseClearMode(rawInverseClearMode);
-        if (!string.Equals(rawInverseClearMode, inverseClearMode, StringComparison.OrdinalIgnoreCase))
-        {
-            guiWarnings.Add(
-                $"Inverse clear mode normalized to `{inverseClearMode}` from `{rawInverseClearMode}`.");
-        }
+            var inverseClearMode = NormalizeInverseClearMode(rawInverseClearMode);
+            if (!string.Equals(rawInverseClearMode, inverseClearMode, StringComparison.OrdinalIgnoreCase))
+            {
+                guiWarnings.Add(
+                    $"Inverse clear mode normalized to `{inverseClearMode}` from `{rawInverseClearMode}`.");
+            }
 
-        _suppressGuiAutoSave = true;
-        _suppressGuiPreview = true;
-        try
-        {
-            Theme = theme;
-            var previousSuppress = _suppressPageAutoSave;
-            _suppressPageAutoSave = true;
+            _suppressGuiAutoSave = true;
+            _suppressGuiPreview = true;
             try
             {
-                Language = language;
+                Theme = theme;
+                var previousSuppress = _suppressPageAutoSave;
+                _suppressPageAutoSave = true;
+                try
+                {
+                    Language = language;
+                }
+                finally
+                {
+                    _suppressPageAutoSave = previousSuppress;
+                }
+                UseTray = ReadGlobalBool(config, ConfigurationKeys.UseTray, true);
+                UseNotify = ReadGlobalBool(config, ConfigurationKeys.UseNotify, true);
+                MinimizeToTray = ReadGlobalBool(config, ConfigurationKeys.MinimizeToTray, false);
+                WindowTitleScrollable = ReadGlobalBool(config, ConfigurationKeys.WindowTitleScrollable, false);
+                HideCloseButton = ReadGlobalBool(config, ConfigurationKeys.HideCloseButton, false);
+                UseCardLog = ReadProfileBool(config, ConfigurationKeys.UseCardLog, true);
+                MainTasksInvertNullFunction = ReadGlobalBool(
+                    config,
+                    TaskQueueEnabledState.MainTasksInvertNullFunctionKey,
+                    false);
+                MaxNumberOfLogThumbnails = Math.Clamp(
+                    ReadProfileInt(config, ConfigurationKeys.MaxNumberOfLogThumbnails, DefaultMaxNumberOfLogThumbnails),
+                    MaxNumberOfLogThumbnailsMin,
+                    MaxNumberOfLogThumbnailsMax);
+                ApplyWindowTitleSelectShowList(
+                    ReadGlobalString(config, ConfigurationKeys.WindowTitleSelectShowList, DefaultWindowTitleSelectShowList));
+                UiScalePercent = ReadGlobalInt(config, ConfigurationKeys.UiScalePercent, DefaultUiScalePercent);
+                UseSoftwareRendering = rawUseSoftwareRendering;
+                DeveloperModeEnabled = ReadGlobalBool(config, DeveloperModeConfigKey, false);
+                LogItemDateFormatString = logItemDateFormat;
+                OperNameLanguage = operNameLanguage;
+                InverseClearMode = inverseClearMode;
+                BackgroundImagePath = backgroundPath;
+                BackgroundOpacity = opacity;
+                BackgroundBlur = blur;
+                BackgroundStretchMode = stretch;
+                RemoteGetTaskEndpoint = ReadProfileString(config, ConfigurationKeys.RemoteControlGetTaskEndpointUri, string.Empty);
+                RemoteReportEndpoint = ReadProfileString(config, ConfigurationKeys.RemoteControlReportStatusUri, string.Empty);
+                RemoteUserIdentity = ReadProfileString(config, ConfigurationKeys.RemoteControlUserIdentity, string.Empty).Trim();
+                RemoteDeviceIdentity = ReadProfileString(config, ConfigurationKeys.RemoteControlDeviceIdentity, string.Empty).Trim();
+                RemotePollInterval = ReadProfileInt(config, ConfigurationKeys.RemoteControlPollIntervalMs, DefaultRemotePollIntervalMs);
+                ExternalNotificationEnabled = false;
+                ExternalNotificationSendWhenComplete = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenComplete, true);
+                ExternalNotificationSendWhenError = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenError, true);
+                ExternalNotificationSendWhenStalled = ReadProfileBool(
+                    config,
+                    ConfigurationKeys.ExternalNotificationSendWhenStalled,
+                    ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true));
+                ExternalNotificationSendBeforeScheduledStart = ReadProfileBool(
+                    config,
+                    ConfigurationKeys.ExternalNotificationSendBeforeScheduledStart,
+                    false);
+                ExternalNotificationEnableDetails = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnableDetails, false);
+                var enableDetails = ExternalNotificationEnableDetails;
+                ExternalNotificationIncludePreviousLogs = ReadProfileBool(
+                    config,
+                    ConfigurationKeys.ExternalNotificationIncludePreviousLogs,
+                    enableDetails);
+                ExternalNotificationMaxEntries = Math.Clamp(
+                    ReadProfileInt(config, ConfigurationKeys.ExternalNotificationMaxEntries, enableDetails ? 100 : 2),
+                    1,
+                    10000);
+                ExternalNotificationTimeMinutes = Math.Clamp(
+                    ReadProfileInt(config, ConfigurationKeys.ExternalNotificationTimeMinutes, 0),
+                    0,
+                    1439);
+                ExternalNotificationFilterPreviousLogs = ReadProfileBool(
+                    config,
+                    ConfigurationKeys.ExternalNotificationFilterPreviousLogs,
+                    false);
+                ExternalNotificationSendAfterLogCount = ReadProfileBool(
+                    config,
+                    ConfigurationKeys.ExternalNotificationSendAfterLogCount,
+                    false);
+                ExternalNotificationNewLogCount = Math.Clamp(
+                    ReadProfileInt(config, ConfigurationKeys.ExternalNotificationNewLogCount, 10),
+                    1,
+                    10000);
+                ExternalNotificationSendWhenContentMatches = ReadProfileBool(
+                    config,
+                    ConfigurationKeys.ExternalNotificationSendWhenContentMatches,
+                    false);
+                ExternalNotificationWhitelist = ReadProfileString(config, ConfigurationKeys.ExternalNotificationWhitelist, string.Empty);
+                ExternalNotificationBlacklist = ReadProfileString(config, ConfigurationKeys.ExternalNotificationBlacklist, string.Empty);
+                HotkeyShowGui = loadedShowGui;
+                HotkeyLinkStart = loadedLinkStart;
+                _persistedHotkeyShowGui = loadedShowGui;
+                _persistedHotkeyLinkStart = loadedLinkStart;
+                LoadExternalNotificationProviderParametersFromConfig(config);
+                HasPendingGuiChanges = false;
             }
             finally
             {
-                _suppressPageAutoSave = previousSuppress;
+                _suppressGuiPreview = false;
+                _suppressGuiAutoSave = false;
             }
-            UseTray = ReadGlobalBool(config, ConfigurationKeys.UseTray, true);
-            UseNotify = ReadGlobalBool(config, ConfigurationKeys.UseNotify, true);
-            MinimizeToTray = ReadGlobalBool(config, ConfigurationKeys.MinimizeToTray, false);
-            WindowTitleScrollable = ReadGlobalBool(config, ConfigurationKeys.WindowTitleScrollable, false);
-            HideCloseButton = ReadGlobalBool(config, ConfigurationKeys.HideCloseButton, false);
-            UseCardLog = ReadProfileBool(config, ConfigurationKeys.UseCardLog, true);
-            MainTasksInvertNullFunction = ReadGlobalBool(
-                config,
-                TaskQueueEnabledState.MainTasksInvertNullFunctionKey,
-                false);
-            MaxNumberOfLogThumbnails = Math.Clamp(
-                ReadProfileInt(config, ConfigurationKeys.MaxNumberOfLogThumbnails, DefaultMaxNumberOfLogThumbnails),
-                MaxNumberOfLogThumbnailsMin,
-                MaxNumberOfLogThumbnailsMax);
-            ApplyWindowTitleSelectShowList(
-                ReadGlobalString(config, ConfigurationKeys.WindowTitleSelectShowList, DefaultWindowTitleSelectShowList));
-            UiScalePercent = ReadGlobalInt(config, ConfigurationKeys.UiScalePercent, DefaultUiScalePercent);
-            UseSoftwareRendering = rawUseSoftwareRendering;
-            DeveloperModeEnabled = ReadGlobalBool(config, DeveloperModeConfigKey, false);
-            LogItemDateFormatString = logItemDateFormat;
-            OperNameLanguage = operNameLanguage;
-            InverseClearMode = inverseClearMode;
-            BackgroundImagePath = backgroundPath;
-            BackgroundOpacity = opacity;
-            BackgroundBlur = blur;
-            BackgroundStretchMode = stretch;
-            RemoteGetTaskEndpoint = ReadProfileString(config, ConfigurationKeys.RemoteControlGetTaskEndpointUri, string.Empty);
-            RemoteReportEndpoint = ReadProfileString(config, ConfigurationKeys.RemoteControlReportStatusUri, string.Empty);
-            RemoteUserIdentity = ReadProfileString(config, ConfigurationKeys.RemoteControlUserIdentity, string.Empty).Trim();
-            RemoteDeviceIdentity = ReadProfileString(config, ConfigurationKeys.RemoteControlDeviceIdentity, string.Empty).Trim();
-            RemotePollInterval = ReadProfileInt(config, ConfigurationKeys.RemoteControlPollIntervalMs, DefaultRemotePollIntervalMs);
-            ExternalNotificationEnabled = false;
-            ExternalNotificationSendWhenComplete = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenComplete, true);
-            ExternalNotificationSendWhenError = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenError, true);
-            ExternalNotificationSendWhenStalled = ReadProfileBool(
-                config,
-                ConfigurationKeys.ExternalNotificationSendWhenStalled,
-                ReadProfileBool(config, ConfigurationKeys.ExternalNotificationSendWhenTimeout, true));
-            ExternalNotificationSendBeforeScheduledStart = ReadProfileBool(
-                config,
-                ConfigurationKeys.ExternalNotificationSendBeforeScheduledStart,
-                false);
-            ExternalNotificationEnableDetails = ReadProfileBool(config, ConfigurationKeys.ExternalNotificationEnableDetails, false);
-            var enableDetails = ExternalNotificationEnableDetails;
-            ExternalNotificationIncludePreviousLogs = ReadProfileBool(
-                config,
-                ConfigurationKeys.ExternalNotificationIncludePreviousLogs,
-                enableDetails);
-            ExternalNotificationMaxEntries = Math.Clamp(
-                ReadProfileInt(config, ConfigurationKeys.ExternalNotificationMaxEntries, enableDetails ? 100 : 2),
-                1,
-                10000);
-            ExternalNotificationTimeMinutes = Math.Clamp(
-                ReadProfileInt(config, ConfigurationKeys.ExternalNotificationTimeMinutes, 0),
-                0,
-                1439);
-            ExternalNotificationFilterPreviousLogs = ReadProfileBool(
-                config,
-                ConfigurationKeys.ExternalNotificationFilterPreviousLogs,
-                false);
-            ExternalNotificationSendAfterLogCount = ReadProfileBool(
-                config,
-                ConfigurationKeys.ExternalNotificationSendAfterLogCount,
-                false);
-            ExternalNotificationNewLogCount = Math.Clamp(
-                ReadProfileInt(config, ConfigurationKeys.ExternalNotificationNewLogCount, 10),
-                1,
-                10000);
-            ExternalNotificationSendWhenContentMatches = ReadProfileBool(
-                config,
-                ConfigurationKeys.ExternalNotificationSendWhenContentMatches,
-                false);
-            ExternalNotificationWhitelist = ReadProfileString(config, ConfigurationKeys.ExternalNotificationWhitelist, string.Empty);
-            ExternalNotificationBlacklist = ReadProfileString(config, ConfigurationKeys.ExternalNotificationBlacklist, string.Empty);
-            HotkeyShowGui = loadedShowGui;
-            HotkeyLinkStart = loadedLinkStart;
-            _persistedHotkeyShowGui = loadedShowGui;
-            _persistedHotkeyLinkStart = loadedLinkStart;
-            LoadExternalNotificationProviderParametersFromConfig(config);
-            HasPendingGuiChanges = false;
-        }
-        finally
-        {
-            _suppressGuiPreview = false;
-            _suppressGuiAutoSave = false;
-        }
 
-        var startPerformanceWarnings = new List<string>();
-        NormalizeUnsupportedGpuSettingsInConfig(config, startPerformanceWarnings);
-        var startPerformanceSnapshot = ReadStartPerformanceSnapshot(config, startPerformanceWarnings);
-        ApplyStartPerformanceSnapshotWithoutDirtyTracking(startPerformanceSnapshot, refreshGpuUi: false);
-        HasPendingStartPerformanceChanges = false;
+            var startPerformanceWarnings = new List<string>();
+            NormalizeUnsupportedGpuSettingsInConfig(config, startPerformanceWarnings);
+            var startPerformanceSnapshot = ReadStartPerformanceSnapshot(config, startPerformanceWarnings);
+            ApplyStartPerformanceSnapshotWithoutDirtyTracking(startPerformanceSnapshot, refreshGpuUi: false);
+            HasPendingStartPerformanceChanges = false;
 
-        var timerWarnings = new List<string>();
-        var timerSnapshot = ReadTimerSnapshot(config, timerWarnings);
-        ApplyTimerSnapshot(timerSnapshot);
-        HasPendingTimerChanges = false;
+            var timerWarnings = new List<string>();
+            var timerSnapshot = ReadTimerSnapshot(config, timerWarnings);
+            ApplyTimerSnapshot(timerSnapshot);
+            HasPendingTimerChanges = false;
 
-        var versionPolicyResult = await Runtime.VersionUpdateFeatureService.LoadPolicyAsync(cancellationToken);
-        if (versionPolicyResult.Success && versionPolicyResult.Value is not null)
-        {
-            ApplyVersionUpdatePolicy(versionPolicyResult.Value);
-            SyncVersionUpdateAvailabilityFromState();
-            SetPendingResourceUpdateState(null);
-            VersionUpdateErrorMessage = string.Empty;
-        }
-        else
-        {
-            SetPendingVersionUpdateAvailability(false);
-            SetPendingResourceUpdateState(null);
-            VersionUpdateErrorMessage = versionPolicyResult.Message;
-        }
+            var versionPolicyResult = await Runtime.VersionUpdateFeatureService.LoadPolicyAsync(cancellationToken);
+            if (versionPolicyResult.Success && versionPolicyResult.Value is not null)
+            {
+                ApplyVersionUpdatePolicy(versionPolicyResult.Value);
+                SyncVersionUpdateAvailabilityFromState();
+                SetPendingResourceUpdateState(null);
+                VersionUpdateErrorMessage = string.Empty;
+            }
+            else
+            {
+                SetPendingVersionUpdateAvailability(false);
+                SetPendingResourceUpdateState(null);
+                VersionUpdateErrorMessage = versionPolicyResult.Message;
+            }
 
-        UpdatePanelCoreVersion = ResolveCoreVersionOrUnknown();
+            UpdatePanelCoreVersion = ResolveCoreVersionOrUnknown();
 
-        await RefreshVersionUpdateResourceInfoAsync(cancellationToken);
+            await RefreshVersionUpdateResourceInfoAsync(cancellationToken);
 
-        var achievementPolicyResult = await Runtime.AchievementFeatureService.LoadPolicyAsync(cancellationToken);
-        if (achievementPolicyResult.Success && achievementPolicyResult.Value is not null)
-        {
-            ApplyAchievementPolicy(achievementPolicyResult.Value);
-            UpdateAchievementPolicySummary(achievementPolicyResult.Value);
-            AchievementErrorMessage = string.Empty;
-        }
-        else
-        {
-            UpdateAchievementPolicySummary(AchievementPolicy.Default);
-            AchievementErrorMessage = achievementPolicyResult.Message;
-        }
+            var achievementPolicyResult = await Runtime.AchievementFeatureService.LoadPolicyAsync(cancellationToken);
+            if (achievementPolicyResult.Success && achievementPolicyResult.Value is not null)
+            {
+                ApplyAchievementPolicy(achievementPolicyResult.Value);
+                UpdateAchievementPolicySummary(achievementPolicyResult.Value);
+                AchievementErrorMessage = string.Empty;
+            }
+            else
+            {
+                UpdateAchievementPolicySummary(AchievementPolicy.Default);
+                AchievementErrorMessage = achievementPolicyResult.Message;
+            }
 
-        _ = await RefreshAchievementSnapshotAsync("Settings.Achievement.Initialize", cancellationToken);
+            _ = await RefreshAchievementSnapshotAsync("Settings.Achievement.Initialize", cancellationToken);
 
-        var warnings = guiWarnings.Concat(backgroundWarnings).ToArray();
-        if (warnings.Length > 0)
-        {
-            GuiSectionValidationMessage = string.Join(" ", guiWarnings);
-            BackgroundValidationMessage = string.Join(" ", backgroundWarnings);
-            StatusMessage = GuiValidationMessage;
-            await RecordEventAsync(
-                "Settings.Gui.Normalize",
-                string.Join(" | ", warnings),
-                cancellationToken);
-        }
-        else
-        {
-            ClearGuiValidationMessages();
-        }
+            var warnings = guiWarnings.Concat(backgroundWarnings).ToArray();
+            if (warnings.Length > 0)
+            {
+                GuiSectionValidationMessage = string.Join(" ", guiWarnings);
+                BackgroundValidationMessage = string.Join(" ", backgroundWarnings);
+                StatusMessage = GuiValidationMessage;
+                await RecordEventAsync(
+                    "Settings.Gui.Normalize",
+                    string.Join(" | ", warnings),
+                    cancellationToken);
+            }
+            else
+            {
+                ClearGuiValidationMessages();
+            }
 
-        if (hotkeyWarnings.Count > 0)
-        {
-            HotkeyWarningMessage = string.Join(" ", hotkeyWarnings);
-            await RecordEventAsync(
-                "Settings.Hotkey.Normalize",
-                string.Join(" | ", hotkeyWarnings),
-                cancellationToken);
-        }
-        else
-        {
-            HotkeyWarningMessage = string.Empty;
-        }
+            if (hotkeyWarnings.Count > 0)
+            {
+                HotkeyWarningMessage = string.Join(" ", hotkeyWarnings);
+                await RecordEventAsync(
+                    "Settings.Hotkey.Normalize",
+                    string.Join(" | ", hotkeyWarnings),
+                    cancellationToken);
+            }
+            else
+            {
+                HotkeyWarningMessage = string.Empty;
+            }
 
-        await RefreshHotkeyRuntimeStateAsync(cancellationToken);
+            await RefreshHotkeyRuntimeStateAsync(cancellationToken);
 
-        if (startPerformanceWarnings.Count > 0)
-        {
-            StartPerformanceValidationMessage = string.Join(" ", startPerformanceWarnings);
-            await RecordEventAsync(
-                "Settings.StartPerformance.Normalize",
-                string.Join(" | ", startPerformanceWarnings),
-                cancellationToken);
-        }
-        else
-        {
-            StartPerformanceValidationMessage = string.Empty;
-        }
+            if (startPerformanceWarnings.Count > 0)
+            {
+                StartPerformanceValidationMessage = string.Join(" ", startPerformanceWarnings);
+                await RecordEventAsync(
+                    "Settings.StartPerformance.Normalize",
+                    string.Join(" | ", startPerformanceWarnings),
+                    cancellationToken);
+            }
+            else
+            {
+                StartPerformanceValidationMessage = string.Empty;
+            }
 
             if (timerWarnings.Count > 0)
             {
@@ -9596,18 +9596,18 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
                 UseTray = ReadGlobalBool(config, ConfigurationKeys.UseTray, true);
                 MinimizeToTray = ReadGlobalBool(config, ConfigurationKeys.MinimizeToTray, false);
                 WindowTitleScrollable = ReadGlobalBool(config, ConfigurationKeys.WindowTitleScrollable, false);
-            HideCloseButton = ReadGlobalBool(config, ConfigurationKeys.HideCloseButton, false);
-            UseCardLog = ReadProfileBool(config, ConfigurationKeys.UseCardLog, true);
-            MainTasksInvertNullFunction = ReadGlobalBool(
-                config,
-                TaskQueueEnabledState.MainTasksInvertNullFunctionKey,
-                false);
-            MaxNumberOfLogThumbnails = Math.Clamp(
-                ReadProfileInt(config, ConfigurationKeys.MaxNumberOfLogThumbnails, DefaultMaxNumberOfLogThumbnails),
-                MaxNumberOfLogThumbnailsMin,
-                MaxNumberOfLogThumbnailsMax);
-            ApplyWindowTitleSelectShowList(
-                ReadGlobalString(config, ConfigurationKeys.WindowTitleSelectShowList, DefaultWindowTitleSelectShowList));
+                HideCloseButton = ReadGlobalBool(config, ConfigurationKeys.HideCloseButton, false);
+                UseCardLog = ReadProfileBool(config, ConfigurationKeys.UseCardLog, true);
+                MainTasksInvertNullFunction = ReadGlobalBool(
+                    config,
+                    TaskQueueEnabledState.MainTasksInvertNullFunctionKey,
+                    false);
+                MaxNumberOfLogThumbnails = Math.Clamp(
+                    ReadProfileInt(config, ConfigurationKeys.MaxNumberOfLogThumbnails, DefaultMaxNumberOfLogThumbnails),
+                    MaxNumberOfLogThumbnailsMin,
+                    MaxNumberOfLogThumbnailsMax);
+                ApplyWindowTitleSelectShowList(
+                    ReadGlobalString(config, ConfigurationKeys.WindowTitleSelectShowList, DefaultWindowTitleSelectShowList));
                 UiScalePercent = ReadGlobalInt(config, ConfigurationKeys.UiScalePercent, DefaultUiScalePercent);
                 UseSoftwareRendering = rawUseSoftwareRendering;
                 DeveloperModeEnabled = ReadGlobalBool(config, DeveloperModeConfigKey, false);

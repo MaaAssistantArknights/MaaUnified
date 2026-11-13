@@ -4949,53 +4949,53 @@ public sealed class ToolboxFeatureService : IToolboxFeatureService
         switch (request.Tool)
         {
             case ToolboxToolKind.Recruit:
-            {
-                if (request.Recruit is null)
                 {
-                    error = (
-                        UiErrorCode.ToolboxInvalidParameters,
-                        "Recruit request is missing structured parameters.",
-                        null);
-                    return false;
-                }
-
-                var levels = request.Recruit.SelectLevels
-                    .Where(level => level is >= 3 and <= 6)
-                    .Distinct()
-                    .OrderBy(level => level)
-                    .ToArray();
-
-                var payload = new JsonObject
-                {
-                    ["refresh"] = false,
-                    ["force_refresh"] = false,
-                    ["select"] = new JsonArray(levels.Select(level => JsonValue.Create(level)).ToArray()),
-                    ["confirm"] = new JsonArray(JsonValue.Create(-1)),
-                    ["times"] = 0,
-                    ["set_time"] = request.Recruit.AutoSetTime,
-                    ["expedite"] = false,
-                    ["skip_robot"] = false,
-                    ["extra_tags_mode"] = 0,
-                    ["first_tags"] = new JsonArray(),
-                    ["recruitment_time"] = new JsonObject
+                    if (request.Recruit is null)
                     {
-                        ["3"] = request.Recruit.Level3Time,
-                        ["4"] = request.Recruit.Level4Time,
-                        ["5"] = request.Recruit.Level5Time,
-                    },
-                    ["report_to_penguin"] = false,
-                    ["report_to_yituliu"] = false,
-                    ["server"] = string.IsNullOrWhiteSpace(request.Recruit.ServerType)
-                        ? "CN"
-                        : request.Recruit.ServerType.Trim(),
-                };
+                        error = (
+                            UiErrorCode.ToolboxInvalidParameters,
+                            "Recruit request is missing structured parameters.",
+                            null);
+                        return false;
+                    }
 
-                taskType = TaskModuleTypes.Recruit;
-                parameterSummary = request.ParameterSummary
-                    ?? $"select={string.Join(',', levels)}; autoSetTime={request.Recruit.AutoSetTime.ToString().ToLowerInvariant()}; level3={request.Recruit.Level3Time}; level4={request.Recruit.Level4Time}; level5={request.Recruit.Level5Time}; server={payload["server"]}";
-                coreTask = new CoreTaskRequest(taskType, "Toolbox.Recruit", true, payload.ToJsonString());
-                return true;
-            }
+                    var levels = request.Recruit.SelectLevels
+                        .Where(level => level is >= 3 and <= 6)
+                        .Distinct()
+                        .OrderBy(level => level)
+                        .ToArray();
+
+                    var payload = new JsonObject
+                    {
+                        ["refresh"] = false,
+                        ["force_refresh"] = false,
+                        ["select"] = new JsonArray(levels.Select(level => JsonValue.Create(level)).ToArray()),
+                        ["confirm"] = new JsonArray(JsonValue.Create(-1)),
+                        ["times"] = 0,
+                        ["set_time"] = request.Recruit.AutoSetTime,
+                        ["expedite"] = false,
+                        ["skip_robot"] = false,
+                        ["extra_tags_mode"] = 0,
+                        ["first_tags"] = new JsonArray(),
+                        ["recruitment_time"] = new JsonObject
+                        {
+                            ["3"] = request.Recruit.Level3Time,
+                            ["4"] = request.Recruit.Level4Time,
+                            ["5"] = request.Recruit.Level5Time,
+                        },
+                        ["report_to_penguin"] = false,
+                        ["report_to_yituliu"] = false,
+                        ["server"] = string.IsNullOrWhiteSpace(request.Recruit.ServerType)
+                            ? "CN"
+                            : request.Recruit.ServerType.Trim(),
+                    };
+
+                    taskType = TaskModuleTypes.Recruit;
+                    parameterSummary = request.ParameterSummary
+                        ?? $"select={string.Join(',', levels)}; autoSetTime={request.Recruit.AutoSetTime.ToString().ToLowerInvariant()}; level3={request.Recruit.Level3Time}; level4={request.Recruit.Level4Time}; level5={request.Recruit.Level5Time}; server={payload["server"]}";
+                    coreTask = new CoreTaskRequest(taskType, "Toolbox.Recruit", true, payload.ToJsonString());
+                    return true;
+                }
             case ToolboxToolKind.OperBox:
                 taskType = "OperBox";
                 parameterSummary = request.ParameterSummary ?? "mode=owned";
@@ -5007,158 +5007,158 @@ public sealed class ToolboxFeatureService : IToolboxFeatureService
                 coreTask = new CoreTaskRequest(taskType, "Toolbox.Depot", true, "{}");
                 return true;
             case ToolboxToolKind.Gacha:
-            {
-                if (request.Gacha is null)
                 {
-                    error = (
-                        UiErrorCode.ToolboxInvalidParameters,
-                        "Gacha request is missing structured parameters.",
-                        null);
-                    return false;
-                }
-
-                var taskName = request.Gacha.Once ? "GachaOnce" : "GachaTenTimes";
-                var payload = new JsonObject
-                {
-                    ["task_names"] = new JsonArray(JsonValue.Create(taskName)),
-                };
-                taskType = TaskModuleTypes.Custom;
-                parameterSummary = request.ParameterSummary ?? $"drawCount={(request.Gacha.Once ? 1 : 10)}";
-                coreTask = new CoreTaskRequest(taskType, $"Toolbox.{taskName}", true, payload.ToJsonString());
-                return true;
-            }
-            case ToolboxToolKind.MiniGame:
-            {
-                // WPF dev-v2 (66e003377c / 8a6ca5f276 / 1bc83ba6e6): the mini-game page dispatches
-                // Reclamation, AutoRaisePotential and the EventShop blacklist before the generic
-                // Custom mini-game task.
-                if (request.Reclamation is not null)
-                {
-                    var parameters = request.Reclamation.Parameters;
-                    if (parameters is null)
+                    if (request.Gacha is null)
                     {
                         error = (
                             UiErrorCode.ToolboxInvalidParameters,
-                            "Reclamation request is missing parameters.",
+                            "Gacha request is missing structured parameters.",
                             null);
                         return false;
                     }
 
-                    var profile = _configService is not null && _configService.TryGetCurrentProfile(out var currentProfile)
-                        ? currentProfile
-                        : new UnifiedProfile();
-                    var config = _configService?.CurrentConfig ?? new UnifiedConfig();
-                    var compiled = TaskParamCompiler.CompileReclamation(parameters, profile, config);
-                    var reclamationPayload = compiled.Params.DeepClone() as JsonObject ?? [];
-                    taskType = compiled.NormalizedType;
-                    parameterSummary = request.ParameterSummary
-                        ?? $"theme={reclamationPayload["theme"]};mode={reclamationPayload["mode"]};incrementMode={reclamationPayload["increment_mode"]};maxCraftCountPerRound={reclamationPayload["num_craft_batches"]};clearStore={reclamationPayload["clear_store"]}";
-                    coreTask = new CoreTaskRequest(taskType, "Toolbox.Reclamation", true, reclamationPayload.ToJsonString());
+                    var taskName = request.Gacha.Once ? "GachaOnce" : "GachaTenTimes";
+                    var payload = new JsonObject
+                    {
+                        ["task_names"] = new JsonArray(JsonValue.Create(taskName)),
+                    };
+                    taskType = TaskModuleTypes.Custom;
+                    parameterSummary = request.ParameterSummary ?? $"drawCount={(request.Gacha.Once ? 1 : 10)}";
+                    coreTask = new CoreTaskRequest(taskType, $"Toolbox.{taskName}", true, payload.ToJsonString());
                     return true;
                 }
-
-                if (request.AutoRaisePotential is not null)
+            case ToolboxToolKind.MiniGame:
                 {
-                    var autoRaisePayload = new JsonObject
+                    // WPF dev-v2 (66e003377c / 8a6ca5f276 / 1bc83ba6e6): the mini-game page dispatches
+                    // Reclamation, AutoRaisePotential and the EventShop blacklist before the generic
+                    // Custom mini-game task.
+                    if (request.Reclamation is not null)
                     {
-                        ["task_names"] = new JsonArray(JsonValue.Create(AutoRaisePotentialTaskName)),
-                    };
-                    if (request.AutoRaisePotential.UseNormalToken)
-                    {
-                        autoRaisePayload["params"] = new JsonObject
+                        var parameters = request.Reclamation.Parameters;
+                        if (parameters is null)
                         {
-                            ["auto_raise_potential"] = new JsonObject
+                            error = (
+                                UiErrorCode.ToolboxInvalidParameters,
+                                "Reclamation request is missing parameters.",
+                                null);
+                            return false;
+                        }
+
+                        var profile = _configService is not null && _configService.TryGetCurrentProfile(out var currentProfile)
+                            ? currentProfile
+                            : new UnifiedProfile();
+                        var config = _configService?.CurrentConfig ?? new UnifiedConfig();
+                        var compiled = TaskParamCompiler.CompileReclamation(parameters, profile, config);
+                        var reclamationPayload = compiled.Params.DeepClone() as JsonObject ?? [];
+                        taskType = compiled.NormalizedType;
+                        parameterSummary = request.ParameterSummary
+                            ?? $"theme={reclamationPayload["theme"]};mode={reclamationPayload["mode"]};incrementMode={reclamationPayload["increment_mode"]};maxCraftCountPerRound={reclamationPayload["num_craft_batches"]};clearStore={reclamationPayload["clear_store"]}";
+                        coreTask = new CoreTaskRequest(taskType, "Toolbox.Reclamation", true, reclamationPayload.ToJsonString());
+                        return true;
+                    }
+
+                    if (request.AutoRaisePotential is not null)
+                    {
+                        var autoRaisePayload = new JsonObject
+                        {
+                            ["task_names"] = new JsonArray(JsonValue.Create(AutoRaisePotentialTaskName)),
+                        };
+                        if (request.AutoRaisePotential.UseNormalToken)
+                        {
+                            autoRaisePayload["params"] = new JsonObject
                             {
-                                ["use_normal_token"] = true,
+                                ["auto_raise_potential"] = new JsonObject
+                                {
+                                    ["use_normal_token"] = true,
+                                },
+                            };
+                        }
+
+                        taskType = TaskModuleTypes.Custom;
+                        parameterSummary = request.ParameterSummary
+                            ?? $"taskName={AutoRaisePotentialTaskName};useNormalToken={request.AutoRaisePotential.UseNormalToken.ToString().ToLowerInvariant()}";
+                        coreTask = new CoreTaskRequest(taskType, "Toolbox.AutoRaisePotential", true, autoRaisePayload.ToJsonString());
+                        return true;
+                    }
+
+                    if (request.MiniGame is null || string.IsNullOrWhiteSpace(request.MiniGame.TaskName))
+                    {
+                        error = (
+                            UiErrorCode.ToolboxInvalidParameters,
+                            "MiniGame request is missing task name.",
+                            null);
+                        return false;
+                    }
+
+                    var taskName = request.MiniGame.TaskName.Trim();
+                    var payload = new JsonObject
+                    {
+                        ["task_names"] = new JsonArray(JsonValue.Create(taskName)),
+                    };
+
+                    // Core dev-v2 EventShop reads params.event_shop.blacklist (CustomTask.cpp);
+                    // the blacklist is only meaningful for the event store entry.
+                    var isEventShop = string.Equals(taskName, EventShopTaskName, StringComparison.Ordinal);
+                    var eventShopBlackList = isEventShop
+                        ? request.MiniGame.EventShopBlackList?
+                            .Where(keyword => !string.IsNullOrWhiteSpace(keyword))
+                            .Select(keyword => keyword.Trim())
+                            .Distinct(StringComparer.Ordinal)
+                            .ToArray() ?? []
+                        : [];
+                    if (eventShopBlackList.Length > 0)
+                    {
+                        payload["params"] = new JsonObject
+                        {
+                            ["event_shop"] = new JsonObject
+                            {
+                                ["blacklist"] = new JsonArray(eventShopBlackList.Select(keyword => JsonValue.Create(keyword)).ToArray()),
                             },
                         };
                     }
 
                     taskType = TaskModuleTypes.Custom;
                     parameterSummary = request.ParameterSummary
-                        ?? $"taskName={AutoRaisePotentialTaskName};useNormalToken={request.AutoRaisePotential.UseNormalToken.ToString().ToLowerInvariant()}";
-                    coreTask = new CoreTaskRequest(taskType, "Toolbox.AutoRaisePotential", true, autoRaisePayload.ToJsonString());
+                        ?? (eventShopBlackList.Length > 0
+                            ? $"taskName={taskName};blacklist={string.Join('|', eventShopBlackList)}"
+                            : $"taskName={taskName}");
+                    coreTask = new CoreTaskRequest(taskType, "Toolbox.MiniGame", true, payload.ToJsonString());
                     return true;
                 }
-
-                if (request.MiniGame is null || string.IsNullOrWhiteSpace(request.MiniGame.TaskName))
-                {
-                    error = (
-                        UiErrorCode.ToolboxInvalidParameters,
-                        "MiniGame request is missing task name.",
-                        null);
-                    return false;
-                }
-
-                var taskName = request.MiniGame.TaskName.Trim();
-                var payload = new JsonObject
-                {
-                    ["task_names"] = new JsonArray(JsonValue.Create(taskName)),
-                };
-
-                // Core dev-v2 EventShop reads params.event_shop.blacklist (CustomTask.cpp);
-                // the blacklist is only meaningful for the event store entry.
-                var isEventShop = string.Equals(taskName, EventShopTaskName, StringComparison.Ordinal);
-                var eventShopBlackList = isEventShop
-                    ? request.MiniGame.EventShopBlackList?
-                        .Where(keyword => !string.IsNullOrWhiteSpace(keyword))
-                        .Select(keyword => keyword.Trim())
-                        .Distinct(StringComparer.Ordinal)
-                        .ToArray() ?? []
-                    : [];
-                if (eventShopBlackList.Length > 0)
-                {
-                    payload["params"] = new JsonObject
-                    {
-                        ["event_shop"] = new JsonObject
-                        {
-                            ["blacklist"] = new JsonArray(eventShopBlackList.Select(keyword => JsonValue.Create(keyword)).ToArray()),
-                        },
-                    };
-                }
-
-                taskType = TaskModuleTypes.Custom;
-                parameterSummary = request.ParameterSummary
-                    ?? (eventShopBlackList.Length > 0
-                        ? $"taskName={taskName};blacklist={string.Join('|', eventShopBlackList)}"
-                        : $"taskName={taskName}");
-                coreTask = new CoreTaskRequest(taskType, "Toolbox.MiniGame", true, payload.ToJsonString());
-                return true;
-            }
             case ToolboxToolKind.PixelPaint:
-            {
-                if (request.PixelPaint is null)
                 {
-                    error = (
-                        UiErrorCode.ToolboxInvalidParameters,
-                        "Pixel paint request is missing groups.",
-                        null);
-                    return false;
-                }
+                    if (request.PixelPaint is null)
+                    {
+                        error = (
+                            UiErrorCode.ToolboxInvalidParameters,
+                            "Pixel paint request is missing groups.",
+                            null);
+                        return false;
+                    }
 
-                var issue = PixelPaintTaskPayload.Validate(request.PixelPaint.Groups, request.PixelPaint.GridDelay);
-                if (issue != PixelPaintPayloadIssue.None)
-                {
-                    error = (
-                        UiErrorCode.ToolboxInvalidParameters,
-                        $"Pixel paint parameters are invalid: {issue}.",
-                        null);
-                    return false;
-                }
+                    var issue = PixelPaintTaskPayload.Validate(request.PixelPaint.Groups, request.PixelPaint.GridDelay);
+                    if (issue != PixelPaintPayloadIssue.None)
+                    {
+                        error = (
+                            UiErrorCode.ToolboxInvalidParameters,
+                            $"Pixel paint parameters are invalid: {issue}.",
+                            null);
+                        return false;
+                    }
 
-                var payload = PixelPaintTaskPayload.Build(
-                    request.PixelPaint.Groups,
-                    request.PixelPaint.SwipeEnabled,
-                    request.PixelPaint.GridDelay);
-                taskType = TaskModuleTypes.Custom;
-                parameterSummary = request.ParameterSummary
-                    ?? PixelPaintTaskPayload.BuildParameterSummary(
+                    var payload = PixelPaintTaskPayload.Build(
                         request.PixelPaint.Groups,
                         request.PixelPaint.SwipeEnabled,
                         request.PixelPaint.GridDelay);
-                coreTask = new CoreTaskRequest(taskType, "Toolbox.PixelPaint", true, payload.ToJsonString());
-                return true;
-            }
+                    taskType = TaskModuleTypes.Custom;
+                    parameterSummary = request.ParameterSummary
+                        ?? PixelPaintTaskPayload.BuildParameterSummary(
+                            request.PixelPaint.Groups,
+                            request.PixelPaint.SwipeEnabled,
+                            request.PixelPaint.GridDelay);
+                    coreTask = new CoreTaskRequest(taskType, "Toolbox.PixelPaint", true, payload.ToJsonString());
+                    return true;
+                }
             case ToolboxToolKind.VideoRecognition:
                 error = (
                     UiErrorCode.ToolNotSupported,

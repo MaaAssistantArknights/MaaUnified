@@ -24,9 +24,9 @@ public static class ConfigurationKeys
     public const string GlobalConfiguration = "Global";
     public const string ConfigurationMap = "Configurations";
 
-        public const string ConfigurationData = "Data";
+    public const string ConfigurationData = "Data";
 
-        public const string ConfigurationCron = "Cron";
+    public const string ConfigurationCron = "Cron";
 
     public const string Localization = "GUI.Localization";
     public const string OperNameLanguage = "GUI.OperNameLanguage";
@@ -254,7 +254,7 @@ public static class ConfigurationKeys
     public const string HasAcknowledgedNightlyWarning = "VersionUpdate.HasAcknowledgedNightlyWarning";
 
     // 这个已经废弃了，还要留着吗？
-        public const string UseAria2 = "VersionUpdate.UseAria2";
+    public const string UseAria2 = "VersionUpdate.UseAria2";
 
     public const string AutoDownloadUpdatePackage = "VersionUpdate.AutoDownloadUpdatePackage";
     public const string AutoInstallUpdatePackage = "VersionUpdate.AutoInstallUpdatePackage";

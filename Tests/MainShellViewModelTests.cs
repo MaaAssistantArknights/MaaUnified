@@ -4184,7 +4184,7 @@ public sealed class MainShellViewModelTests
         }
     }
 
-        private sealed class TrackingNotificationService : INotificationService
+    private sealed class TrackingNotificationService : INotificationService
     {
         public List<string> Titles { get; } = new();
 
@@ -4197,7 +4197,7 @@ public sealed class MainShellViewModelTests
         }
     }
 
-private sealed class CapturingTrayService : ITrayService
+    private sealed class CapturingTrayService : ITrayService
     {
         public PlatformCapabilityStatus Capability { get; } = new(
             Supported: true,

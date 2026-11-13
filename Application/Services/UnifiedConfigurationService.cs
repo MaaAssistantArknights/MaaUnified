@@ -458,7 +458,8 @@ public sealed class UnifiedConfigurationService
                     legacyConversionReport.FinishedAt = DateTimeOffset.UtcNow;
                     legacyConversionReport.Success = !hasUnreadableLegacySensitiveValues;
                     legacyConversionReport.AppliedConfig = !hasUnreadableLegacySensitiveValues;
-                    return new ConfigLoadResult {
+                    return new ConfigLoadResult
+                    {
                         Config = CurrentConfig,
                         LoadedFromExistingConfig = true,
                         ImportReport = hasUnreadableLegacySensitiveValues ? legacyConversionReport : null,
@@ -478,7 +479,8 @@ public sealed class UnifiedConfigurationService
                     cancellationToken,
                     validationMode,
                     replaceInvalidPersistedConfig: true);
-                return new ConfigLoadResult {
+                return new ConfigLoadResult
+                {
                     Config = CurrentConfig,
                     LoadedFromExistingConfig = true,
                     ValidationIssues = rebuildIssues,
@@ -504,7 +506,8 @@ public sealed class UnifiedConfigurationService
                     LogConfigRepair(repairNotice);
                 }
 
-                return new ConfigLoadResult {
+                return new ConfigLoadResult
+                {
                     Config = CurrentConfig,
                     LoadedFromExistingConfig = true,
                     ValidationIssues = fallbackIssues,
@@ -519,7 +522,8 @@ public sealed class UnifiedConfigurationService
         var report = await ImportLegacyAsync(ImportSource.Auto, manualImport: false, cancellationToken: cancellationToken);
         var importValidationIssues = RefreshValidationState(validationMode, logIssues: true);
 
-        return new ConfigLoadResult {
+        return new ConfigLoadResult
+        {
             Config = CurrentConfig,
             LoadedFromExistingConfig = false,
             ImportReport = report,
@@ -548,7 +552,8 @@ public sealed class UnifiedConfigurationService
         LegacyImportRequest request,
         CancellationToken cancellationToken = default)
     {
-        var report = new ImportReport {
+        var report = new ImportReport
+        {
             Source = request.Source,
             StartedAt = DateTimeOffset.UtcNow,
             OutputConfigPath = "config/avalonia.json",
@@ -610,7 +615,8 @@ public sealed class UnifiedConfigurationService
 
             config.SchemaVersion = UnifiedConfig.LatestSchemaVersion;
             NormalizeFightStageSelections(config);
-            config.Migration = new UnifiedMigrationMetadata {
+            config.Migration = new UnifiedMigrationMetadata
+            {
                 ImportedAt = DateTimeOffset.UtcNow,
                 ImportedBy = "MAAUnified",
                 ImportedFromGuiNew = report.ImportedGuiNew,

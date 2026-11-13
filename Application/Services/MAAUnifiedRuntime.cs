@@ -414,7 +414,8 @@ public static class MAAUnifiedRuntimeFactory
 
         _ = remoteControlFeatureService.StartRemotePollingAsync();
 
-        return new MAAUnifiedRuntime {
+        return new MAAUnifiedRuntime
+        {
             CoreBridge = bridge,
             TaskStartGate = taskStartGate,
             ConfigurationService = configService,

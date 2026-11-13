@@ -342,3 +342,8 @@ P1-07 渠道实例化仍未做：WPF dev-v2 的 `ExternalNotification.Configs` �
 - P2 页签过渡：主界面四个根页面 ContentControl 换为 `TransitioningContentControl` + 180 ms `CrossFade`。
 - P2 成就触发补充：截图测试（ConnectionTester）、点击预览图重测（OneMoreLook）、用户数据更新同时勾选干员与仓库（DoubleSync）。
 - 仍未接触发点：PallasStarter、SlackingOff、TimeManagementMaster（MAAUnified 无同形入口）；GameAudioMuteManager 属 Windows PC 端低频项，不移植。
+
+## 第十轮（2026-11-13，格式门与 CI）
+
+- 对 Tests/App/Application/Platform/Compat 执行 `dotnet format` 仅空白修正（17 文件，无逻辑变化），五个工程 `--verify-no-changes` 全部为 0。
+- `.github/workflows/ci-avalonia.yml` 增加 Linux 格式门：逐工程跑 `dotnet format --verify-no-changes --no-restore`，防止格式回退。
