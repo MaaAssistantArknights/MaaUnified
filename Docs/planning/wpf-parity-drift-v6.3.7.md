@@ -352,3 +352,5 @@ P1-07 渠道实例化仍未做：WPF dev-v2 的 `ExternalNotification.Configs` �
 
 - 剩余 3 条成就触发补齐：Roguelike 开局干员含 Pallas（PallasStarter，TaskChainStart 校验）、小游戏启动（SlackingOff）、全部定时器启用（TimeManagementMaster）；至此 23 条第三批成就均有触发入口。
 - `.github/workflows/ci-avalonia.yml` 增加 `macos-latest` job，运行全量 MAAUnified 测试；Linux 继续跑格式门与 baseline gate，Windows 保留平台能力门。
+
+- P1-34 收尾：发送系统/外部通知前把标题、正文（截断 2000 字）与外部消息长度写入 `debug/avalonia-ui-events.log`，交付包可直接还原用户看到的通知内容。

@@ -8052,8 +8052,22 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         }
     }
 
+    // WPF 9262180332/2b0ffbb455: record the notification content before dispatch so a
+    // support bundle can tell what the user actually saw, even when delivery fails.
+    private void RecordNotificationEvent(TaskQueueSystemNotification notification)
+    {
+        const int maxLength = 2000;
+        var message = notification.Message.Length <= maxLength
+            ? notification.Message
+            : notification.Message[..maxLength] + "…";
+        _ = RecordEventAsync(
+            notification.Scope,
+            $"notification title={notification.Title}; body={message}; external={notification.ExternalMessage?.Length ?? 0} chars");
+    }
+
     private void QueueSystemNotificationOnly(TaskQueueSystemNotification notification)
     {
+        RecordNotificationEvent(notification);
         // WPF parity (NotificationService.ProcessLog): an event notification still shows the
         // system toast when the kind has no external switch, without touching the delivery
         // trigger. Recruit tips/reminders keep their legacy toast-only behaviour.
@@ -8078,6 +8092,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         bool sendExternal = true,
         Action? display = null)
     {
+        RecordNotificationEvent(notification);
         NotificationDispatch.Notify(
             NotificationSource.TaskQueue,
             new NotificationMessage(notification.Kind, notification.Title, notification.Message),
