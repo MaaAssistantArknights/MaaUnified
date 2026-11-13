@@ -329,3 +329,9 @@ P1-07 渠道实例化仍未做：WPF dev-v2 的 `ExternalNotification.Configs` �
 - Copilot/GameSettings 迁移到 Avalonia 新剪贴板（`TryGetTextAsync`）与 `DragEventArgs.DataTransfer`/`TryGetFile`，不再使用过时 `GetTextAsync`/`IDataObject`。
 - 修复两个全量并行 flake：托盘停止通知等待通知到达；LinkStart 停止测试允许“连接先被取消、无需 Core Stop”的调度路径。
 - 仍待办：成就 88→112（23 条定义与触发点）、页签过渡动画、资源素材清单、GameAudioMuteManager；P1-07 provider 字段化编辑与 WPF 写回互操作；README 截图。
+
+## 第八轮（2026-11-13，P2 成就补齐）
+
+- 成就目录 88 → 111：补 WPF dev-v2 第三批 23 条（TimeManagementMaster、DoubleSync、ResumeRecord、QueueExpansion、QueueSimplifier、SortingMaster、AchievementObserver、DisappearTrick、TitleTweaker、AllChannelBroadcast、ConnectionTester、MasterDirector、PrivateDormManager、OperatorRoster、ChangelogReader、LatestVersionInspector、TimeMachine、LoadLastSave、PallasStarter、PallasCheers、OneMoreLook、SlackingOff、BackstageExplorer），五语言标题/描述/条件均已有文本。
+- 已接触发点：任务增删（QueueExpansion/QueueSimplifier）、自定义任务（MasterDirector）、任务排序（SortingMaster）、成就列表（AchievementObserver）、成就备份/恢复（TimeMachine/LoadLastSave）、版本已最新（LatestVersionInspector）、更新日志（ChangelogReader）、打开 debug 目录（BackstageExplorer）、最小化到托盘（DisappearTrick）、全部通知渠道启用（AllChannelBroadcast）、干员识别导出（OperatorRoster）、识别间隔超 7 天（ResumeRecord）、基建自定义计划（PrivateDormManager）、Pallas 酒（PallasCheers）。
+- 仍未接触发点：ConnectionTester、DoubleSync、OneMoreLook、PallasStarter、SlackingOff、TimeManagementMaster（对应交互在 MAAUnified 尚无同形入口，后续按可用入口补）。

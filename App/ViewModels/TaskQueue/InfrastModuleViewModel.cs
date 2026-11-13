@@ -768,6 +768,10 @@ public sealed class InfrastModuleViewModel : TaskModuleSettingsViewModelBase
 
         var plans = parsedPlans.ToArray();
         Volatile.Write(ref _parsedPlans, plans);
+        if (plans.Length > 0)
+        {
+            _ = Runtime.AchievementTrackerService.Unlock("PrivateDormManager");
+        }
 
         var planOptions = new List<PlanOption>();
         if (plans.Any(plan => plan.Periods.Count > 0))

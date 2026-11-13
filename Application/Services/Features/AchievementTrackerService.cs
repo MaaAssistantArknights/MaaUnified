@@ -1158,6 +1158,11 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
             BasicUsage("ClueObsession", target: 7, rare: true, groupIndex: 3),
             BasicUsage("ClueSharer", "ClueSend", 20, groupIndex: 1),
             BasicUsage("CluePhilanthropist", "ClueSend", 50, groupIndex: 2),
+            BasicUsage("TimeManagementMaster", hidden: true, rare: true),
+            BasicUsage("DoubleSync"),
+            BasicUsage("ResumeRecord"),
+            BasicUsage("QueueExpansion"),
+            BasicUsage("QueueSimplifier"),
 
             FeatureExploration("ScheduleMaster1", "ScheduleMaster", 1, groupIndex: 1),
             FeatureExploration("ScheduleMaster2", "ScheduleMaster", 100, groupIndex: 2),
@@ -1179,6 +1184,15 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
             FeatureExploration("NotFound404", hidden: true),
             FeatureExploration("Linguist"),
             FeatureExploration("StartupBoot"),
+            FeatureExploration("SortingMaster"),
+            FeatureExploration("AchievementObserver"),
+            FeatureExploration("DisappearTrick"),
+            FeatureExploration("TitleTweaker"),
+            FeatureExploration("AllChannelBroadcast", hidden: true, rare: true),
+            FeatureExploration("ConnectionTester"),
+            FeatureExploration("MasterDirector", hidden: true, rare: true),
+            FeatureExploration("PrivateDormManager"),
+            FeatureExploration("OperatorRoster"),
 
             AutoBattle("UseCopilot1", "UseCopilot", 1, groupIndex: 1),
             AutoBattle("UseCopilot2", "UseCopilot", 10, groupIndex: 2),
@@ -1208,6 +1222,7 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
             BugRelated("UnexpectedCrash", hidden: true),
             BugRelated("ProblemFeedback"),
             BugRelated("CdnTorture", target: 3),
+            BugRelated("BackstageExplorer"),
 
             Behavior("MissionStartCount", target: 3),
             Behavior("LongTaskTimeout"),
@@ -1219,6 +1234,10 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
             Behavior("UseDaily3", "UseDaily", 365, rare: true, groupIndex: 3),
             Behavior("UpdateObsession", "Update", groupIndex: 1),
             Behavior("UpdateEarlyBird", "Update", hidden: true, groupIndex: 2),
+            Behavior("ChangelogReader"),
+            Behavior("LatestVersionInspector"),
+            Behavior("TimeMachine"),
+            Behavior("LoadLastSave"),
 
             EasterEgg("Rules", hidden: true),
             EasterEgg("VersionClick", hidden: true),
@@ -1228,6 +1247,10 @@ public sealed class AchievementTrackerService : IAchievementTrackerService
             EasterEgg("Lucky", hidden: true, rare: true),
             EasterEgg("SanityPlanner", rare: true),
             EasterEgg("WarehouseKeeper", hidden: true),
+            EasterEgg("PallasStarter", hidden: true, rare: true),
+            EasterEgg("PallasCheers", hidden: true, rare: true),
+            EasterEgg("OneMoreLook", hidden: true),
+            EasterEgg("SlackingOff", hidden: true),
         ];
 
         return definitions.ToDictionary(definition => definition.Id, StringComparer.Ordinal);

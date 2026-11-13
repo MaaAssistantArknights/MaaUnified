@@ -112,6 +112,7 @@ public partial class ToolboxOperBoxView : UserControl
         {
             await CopyTextAsync(content);
             VM.NotifyOperBoxExportCopied();
+            VM.NotifyOperBoxExported();
             return;
         }
 
@@ -151,6 +152,7 @@ public partial class ToolboxOperBoxView : UserControl
         }
 
         VM.NotifyOperBoxExportSaved(file.Name);
+        VM.NotifyOperBoxExported();
     }
 
     private async Task CopyTextAsync(string text)

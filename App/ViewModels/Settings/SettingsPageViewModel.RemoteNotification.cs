@@ -453,6 +453,13 @@ public sealed partial class SettingsPageViewModel
             return;
         }
 
+        if (AvailableNotificationProviders.Count > 0
+            && AvailableNotificationProviders.All(provider =>
+                enabledProviders.Contains(provider, StringComparer.OrdinalIgnoreCase)))
+        {
+            _ = Runtime.AchievementTrackerService.Unlock("AllChannelBroadcast");
+        }
+
         ExternalNotificationStatusMessage = BuildExternalNotificationSaveStatusMessage(enabledProviders);
         ExternalNotificationErrorMessage = string.Empty;
         ExternalNotificationWarningMessage = string.Empty;

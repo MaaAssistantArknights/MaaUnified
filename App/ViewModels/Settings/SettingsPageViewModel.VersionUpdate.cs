@@ -417,6 +417,7 @@ public sealed partial class SettingsPageViewModel
             return;
         }
 
+        _ = Runtime.AchievementTrackerService.Unlock("ChangelogReader");
         VersionUpdateStatusMessage = RootTexts.GetOrDefault(
             "Settings.VersionUpdate.Status.OpenChangelogSucceeded",
             "Changelog opened.");
@@ -586,6 +587,10 @@ public sealed partial class SettingsPageViewModel
             }
 
             await ApplyVersionUpdateCheckResultAsync(checkResult, cancellationToken);
+            if (!checkResult.IsNewVersion)
+            {
+                _ = Runtime.AchievementTrackerService.Unlock("LatestVersionInspector");
+            }
             if (showDialog && checkResult.IsNewVersion)
             {
                 await HandleVersionUpdateDialogAsync(

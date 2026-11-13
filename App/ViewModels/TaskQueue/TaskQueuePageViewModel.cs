@@ -2795,7 +2795,16 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             "TaskQueue.AddTask",
             ct => Runtime.TaskQueueFeatureService.AddTaskAsync(normalizedTaskType, taskName, true, ct),
             resetBindingsBeforeReload: true,
-            onSuccessAsync: async ct => await SelectTaskByIndexAsync(Tasks.Count - 1, ct),
+            onSuccessAsync: async ct =>
+            {
+                _ = Runtime.AchievementTrackerService.Unlock("QueueExpansion");
+                if (string.Equals(normalizedTaskType, TaskModuleTypes.Custom, StringComparison.OrdinalIgnoreCase))
+                {
+                    _ = Runtime.AchievementTrackerService.Unlock("MasterDirector");
+                }
+
+                await SelectTaskByIndexAsync(Tasks.Count - 1, ct);
+            },
             cancellationToken: cancellationToken);
     }
 
@@ -2820,6 +2829,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             resetBindingsBeforeReload: true,
             onSuccessAsync: async ct =>
             {
+                _ = Runtime.AchievementTrackerService.Unlock("QueueSimplifier");
                 if (Tasks.Count > 0)
                 {
                     await SelectTaskByIndexAsync(Math.Min(index, Tasks.Count - 1), ct);
@@ -2981,6 +2991,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
                 return;
             }
 
+            _ = Runtime.AchievementTrackerService.Unlock("SortingMaster");
             ApplyLocalTaskMove(from, to);
             RegisterTaskQueueSavePending();
 
@@ -7186,6 +7197,11 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
             }
 
             var result = await coordinator.DrinkWineAsync(clientType);
+            if (result.Success)
+            {
+                _ = Runtime.AchievementTrackerService.Unlock("PallasCheers");
+            }
+
             await RecordEventAsync(
                 "TaskQueue.Pallas.DrinkWine",
                 $"Pallas wine trigger: success={result.Success}; message={result.Message}");

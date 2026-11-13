@@ -1619,6 +1619,10 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
     /// </summary>
     public string OperBoxExportText => BuildOperBoxExportText();
 
+    /// <summary>记录一次成功的干员识别导出（WPF ExportOperBoxTo* → OperatorRoster）。</summary>
+    public void NotifyOperBoxExported()
+        => _ = Runtime.AchievementTrackerService.Unlock("OperatorRoster");
+
     public void NotifyOperBoxExportSaved(string? fileName)
     {
         OperBoxInfo = string.IsNullOrWhiteSpace(fileName)
@@ -3644,6 +3648,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
         _hasOperBoxRecognitionData = true;
         OnPropertyChanged(nameof(CanExportOperBox));
         RebuildOperBoxLists();
+        UnlockResumeRecordIfGap(LastOperBoxSyncTime);
         LastOperBoxSyncTime = DateTimeOffset.UtcNow;
         OperBoxInfo = T("Toolbox.Status.RecognitionCompleted", "Recognition completed.");
         _ = PersistOperBoxAsync(CancellationToken.None);
@@ -3830,6 +3835,7 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
 
         if (updateSyncTime)
         {
+            UnlockResumeRecordIfGap(LastDepotSyncTime);
             LastDepotSyncTime = DateTimeOffset.UtcNow;
         }
         else
@@ -5913,6 +5919,15 @@ public sealed class ToolboxPageViewModel : PageViewModelBase
             stage,
             occurredAt = DateTimeOffset.Now,
         });
+    }
+
+    private void UnlockResumeRecordIfGap(DateTimeOffset? previousSyncTime)
+    {
+        if (previousSyncTime is { } previous
+            && DateTimeOffset.UtcNow - previous >= TimeSpan.FromDays(7))
+        {
+            _ = Runtime.AchievementTrackerService.Unlock("ResumeRecord");
+        }
     }
 
     private string BuildOperBoxExportText()

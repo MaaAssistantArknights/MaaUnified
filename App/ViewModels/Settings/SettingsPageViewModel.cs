@@ -1111,6 +1111,11 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             var normalized = UseTray && value;
             if (SetProperty(ref _minimizeToTray, normalized))
             {
+                if (normalized)
+                {
+                    _ = Runtime.AchievementTrackerService.Unlock("DisappearTrick");
+                }
+
                 MarkGuiSettingsDirty();
                 NotifyGuiSettingsPreviewChanged();
             }
@@ -5371,6 +5376,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
 
     public async Task ShowAchievementListDialogAsync(CancellationToken cancellationToken = default)
     {
+        _ = Runtime.AchievementTrackerService.Unlock("AchievementObserver");
         var snapshot = await RefreshAchievementSnapshotAsync("Settings.Achievement.Dialog.Snapshot", cancellationToken);
         if (snapshot is null)
         {
@@ -5447,6 +5453,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             return;
         }
 
+        _ = Runtime.AchievementTrackerService.Unlock("TimeMachine");
         AchievementStatusMessage = $"{AchievementTextCatalog.GetString("AchievementBackupSuccess", Language, "已备份到")} {path}";
         AchievementErrorMessage = string.Empty;
     }
@@ -5466,6 +5473,7 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
             return;
         }
 
+        _ = Runtime.AchievementTrackerService.Unlock("LoadLastSave");
         AchievementStatusMessage = AchievementTextCatalog.GetString("AchievementRestoreSuccess", Language, "已恢复成就进度");
         AchievementErrorMessage = string.Empty;
         await RefreshAchievementSnapshotAsync("Settings.Achievement.Restore.Refresh", cancellationToken);
@@ -5820,6 +5828,10 @@ public sealed partial class SettingsPageViewModel : PageViewModelBase, IDisposab
         var debugDirectory = ResolveDebugDirectoryPath();
         Directory.CreateDirectory(debugDirectory);
         var result = await _openExternalTargetAsync(debugDirectory, cancellationToken);
+        if (result.Success)
+        {
+            _ = Runtime.AchievementTrackerService.Unlock("BackstageExplorer");
+        }
         if (!await ApplyResultAsync(result, "Settings.IssueReport.OpenDebugDirectory", cancellationToken))
         {
             IssueReportStatusMessage = LocalizeSettingsText(
