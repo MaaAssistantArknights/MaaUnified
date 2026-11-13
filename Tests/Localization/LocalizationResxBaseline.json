@@ -1048,33 +1048,7 @@
       "VersionUpdate.Log.Software.PreparingPackage"
     ]
   },
-  "allowedDuplicateKeys": {
-    "zh-cn": [
-      "RecruitingTips",
-      "RecruitmentOfStar",
-      "TaskStallWarning"
-    ],
-    "zh-tw": [
-      "RecruitingTips",
-      "RecruitmentOfStar",
-      "TaskStallWarning"
-    ],
-    "en-us": [
-      "RecruitingTips",
-      "RecruitmentOfStar",
-      "TaskStallWarning"
-    ],
-    "ja-jp": [
-      "RecruitingTips",
-      "RecruitmentOfStar",
-      "TaskStallWarning"
-    ],
-    "ko-kr": [
-      "RecruitingTips",
-      "RecruitmentOfStar",
-      "TaskStallWarning"
-    ]
-  },
+  "allowedDuplicateKeys": {},
   "allowedInversions": {
     "zh-cn": 0,
     "zh-tw": 0,

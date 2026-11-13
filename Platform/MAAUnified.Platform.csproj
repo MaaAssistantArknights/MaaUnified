@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <!-- Tmds.DBus 0.21 的 Variant 已标记过时，但 WriteDictionary 仍只接受该类型；
+         迁移到 VariantValue 写 API 单独排期。 -->
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

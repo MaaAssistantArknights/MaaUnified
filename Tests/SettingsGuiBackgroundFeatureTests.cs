@@ -869,7 +869,7 @@ public sealed class SettingsGuiBackgroundFeatureTests
         // persist GUI.BackgroundImagePath="" — otherwise "never written -> default applies" would
         // silently become an explicit clear the user never requested (N2 missing-vs-empty semantics).
         var persisted = fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.BackgroundImagePath];
-        var persistedText = persisted is JsonValue persistedValue && persistedValue.TryGetValue(out string? text) ? text : persisted.ToString();
+        var persistedText = persisted is JsonValue persistedValue && persistedValue.TryGetValue(out string? text) ? text : persisted?.ToString() ?? string.Empty;
         Assert.Equal("background/background.png", persistedText);
 
         // After a restart the settings page shows the default path again, not an empty textbox.

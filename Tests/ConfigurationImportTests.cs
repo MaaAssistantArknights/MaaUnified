@@ -3623,7 +3623,7 @@ public sealed class ConfigurationImportTests
         Assert.Equal("en-us", service.CurrentConfig.GlobalValues["GUI.Localization"]?.GetValue<string>());
     }
 
-    public async Task SaveAsync_ReclamationArchiveClearStoreChange_ShouldPersist()
+    private async Task SaveAsync_ReclamationArchiveClearStoreChange_ShouldPersist()
     {
         var root = CreateTempRoot();
         var loadedConfig = new UnifiedConfig();
@@ -4860,7 +4860,7 @@ public sealed class ConfigurationImportTests
         }
     }
 
-    public async Task MissionStartCount_ShouldUseClientYjDayBoundary(
+    private async Task MissionStartCount_ShouldUseClientYjDayBoundary(
         string clientType,
         string utcNowText,
         string expectedYjDate)
@@ -4943,8 +4943,9 @@ public sealed class ConfigurationImportTests
             tracker.MissionStartCountAdd(Utc("2026-10-11T02:00:00Z")); // local 10-11 10:00
 
             Assert.Equal(3, tracker.GetProgress("MissionStartCount"));
-            Assert.True((await tracker.GetSnapshotAsync("en-us")).Value!.Items
-                .Any(item => item.Id == "MissionStartCount" && item.IsUnlocked));
+            Assert.Contains(
+                (await tracker.GetSnapshotAsync("en-us")).Value!.Items,
+                item => item.Id == "MissionStartCount" && item.IsUnlocked);
         }
         finally
         {
@@ -5079,7 +5080,7 @@ public sealed class ConfigurationImportTests
         }
     }
 
-    public async Task RecordStartup_ShouldUnlockMartianFromBuildOrResourceAge(
+    private async Task RecordStartup_ShouldUnlockMartianFromBuildOrResourceAge(
         double? buildAgeDays,
         double? resourceAgeDays,
         bool expectMartian)
@@ -5108,7 +5109,7 @@ public sealed class ConfigurationImportTests
         }
     }
 
-    public async Task RecordStartup_ShouldUnlockUpdateAchievementsFromBuildAge(
+    private async Task RecordStartup_ShouldUnlockUpdateAchievementsFromBuildAge(
         double buildAgeHours,
         bool expectEarlyBird,
         bool expectObsession)
@@ -5160,7 +5161,7 @@ public sealed class ConfigurationImportTests
         }
     }
 
-    public async Task RecordStartup_ShouldUnlockPioneerTierFromCoreVersion(string version, string? expectedId)
+    private async Task RecordStartup_ShouldUnlockPioneerTierFromCoreVersion(string version, string? expectedId)
     {
         var root = CreateTempRoot();
         try

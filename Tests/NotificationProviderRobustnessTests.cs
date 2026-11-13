@@ -443,8 +443,8 @@ public sealed class NotificationProviderRobustnessTests
 
             var bundlePath = await diagnostics.BuildIssueReportBundleAsync(root);
             using var archive = ZipFile.OpenRead(bundlePath);
-            var entry = Assert.Single(archive.Entries.Where(static item =>
-                string.Equals(item.FullName, "debug/avalonia-ui-events.log", StringComparison.Ordinal)));
+            var entry = Assert.Single(archive.Entries, static item =>
+                string.Equals(item.FullName, "debug/avalonia-ui-events.log", StringComparison.Ordinal));
             using var reader = new StreamReader(entry.Open());
             var content = await reader.ReadToEndAsync();
             Assert.Contains("bundle-visible-event", content, StringComparison.Ordinal);

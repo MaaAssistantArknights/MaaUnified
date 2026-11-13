@@ -30,13 +30,13 @@ public partial class GameSettingsView : UserControl
 
     private void OnScriptPathDragOver(object? sender, DragEventArgs e)
     {
-        e.DragEffects = TryGetFirstDroppedLocalFile(e.Data, out _) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.DragEffects = TryGetFirstDroppedLocalFile(e.DataTransfer, out _) ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
 
     private void OnStartsWithScriptDrop(object? sender, DragEventArgs e)
     {
-        if (VM is null || !TryGetFirstDroppedLocalFile(e.Data, out var filePath))
+        if (VM is null || !TryGetFirstDroppedLocalFile(e.DataTransfer, out var filePath))
         {
             return;
         }
@@ -47,7 +47,7 @@ public partial class GameSettingsView : UserControl
 
     private void OnEndsWithScriptDrop(object? sender, DragEventArgs e)
     {
-        if (VM is null || !TryGetFirstDroppedLocalFile(e.Data, out var filePath))
+        if (VM is null || !TryGetFirstDroppedLocalFile(e.DataTransfer, out var filePath))
         {
             return;
         }
@@ -56,11 +56,10 @@ public partial class GameSettingsView : UserControl
         e.Handled = true;
     }
 
-    private static bool TryGetFirstDroppedLocalFile(IDataObject data, out string filePath)
+    private static bool TryGetFirstDroppedLocalFile(IDataTransfer? data, out string filePath)
     {
         filePath = string.Empty;
-        var first = data.GetFiles()?.FirstOrDefault();
-        var localPath = first?.TryGetLocalPath();
+        var localPath = data?.TryGetFile()?.TryGetLocalPath();
         if (string.IsNullOrWhiteSpace(localPath))
         {
             return false;

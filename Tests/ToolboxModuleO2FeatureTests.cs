@@ -108,7 +108,7 @@ public sealed class ToolboxModuleO2FeatureTests
         var notOwnedHeaderTemplate = vm.Texts["Toolbox.OperBox.Header.NotOwned"];
         var ownedHeaderTemplate = vm.Texts["Toolbox.OperBox.Header.Owned"];
         var currentMiniGame = Assert.Single(
-            vm.MiniGameTaskList.Where(item => string.Equals(item.Value, vm.MiniGameTaskName, StringComparison.Ordinal)));
+            vm.MiniGameTaskList, item => string.Equals(item.Value, vm.MiniGameTaskName, StringComparison.Ordinal));
         var expectedMiniGameTip = string.IsNullOrWhiteSpace(currentMiniGame.Tip)
             ? string.Format(CultureInfo.InvariantCulture, vm.Texts["Toolbox.MiniGame.CurrentTask"], currentMiniGame.Display)
             : currentMiniGame.Tip;
@@ -724,7 +724,7 @@ public sealed class ToolboxModuleO2FeatureTests
         var localizedName = vm.Texts["Toolbox.ToolName.OperBox"];
         Assert.False(vm.Peeping);
         Assert.Equal("Toolbox.Busy", dialogService.LastScope);
-        var busyRecord = Assert.Single(vm.ExecutionHistory.Where(record => !record.Success));
+        var busyRecord = Assert.Single(vm.ExecutionHistory, record => !record.Success);
         Assert.Contains($"`{localizedName}`", busyRecord.ResultSummary, StringComparison.Ordinal);
         Assert.DoesNotContain("`OperBox`", busyRecord.ResultSummary, StringComparison.Ordinal);
     }

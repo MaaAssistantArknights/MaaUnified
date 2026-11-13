@@ -449,10 +449,10 @@ public sealed class TaskModuleBFeatureTests
         Assert.True(persisted.Success);
         Assert.Equal(
             ["lmd", "LMD", "lmd"],
-            persisted.Value?["buy_first"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
+            persisted.Value!["buy_first"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
         Assert.Equal(
             ["gavial", "Gavial", "gavial"],
-            persisted.Value?["blacklist"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
+            persisted.Value!["blacklist"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
     }
 
     [Fact]
@@ -492,10 +492,10 @@ public sealed class TaskModuleBFeatureTests
         // could depend on the variant that an OrdinalIgnoreCase dedup dropped.
         Assert.Equal(
             ["Gavial", "gavial"],
-            mall.Params?["buy_first"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
+            mall.Params!["buy_first"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
         Assert.Equal(
             ["LMD", "LMD", "lmd"],
-            mall.Params?["blacklist"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
+            mall.Params!["blacklist"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
     }
 
     [Fact]
@@ -677,7 +677,7 @@ public sealed class TaskModuleBFeatureTests
         Assert.True(persisted.Success);
         Assert.Equal(
             ["My custom item", "Gavial"],
-            persisted.Value?["blacklist"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
+            persisted.Value!["blacklist"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
     }
 
     [Fact]

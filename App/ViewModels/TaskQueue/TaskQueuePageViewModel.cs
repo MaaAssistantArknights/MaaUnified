@@ -324,7 +324,6 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     private Task<bool>? _stopStartRequestTask;
     private CancellationTokenSource? _moduleAutoSaveCts;
     private CancellationTokenSource? _taskQueueAutoSaveCts;
-    private int _pendingBindingVersion;
     private CancellationTokenSource? _startRequestCts;
     // Reference-type snapshot behind a volatile field so the callback pump thread can
     // atomically capture the active lease at dispatch time; a nullable struct field could

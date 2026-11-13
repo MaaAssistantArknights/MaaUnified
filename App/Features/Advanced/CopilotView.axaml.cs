@@ -117,7 +117,7 @@ public partial class CopilotView : UserControl
         var path = file?.TryGetLocalPath();
         var payload = !string.IsNullOrWhiteSpace(path)
             ? path
-            : await clipboard.GetTextAsync() ?? string.Empty;
+            : await Avalonia.Input.Platform.ClipboardExtensions.TryGetTextAsync(clipboard) ?? string.Empty;
         await VM.LoadCurrentFromClipboardAsync(payload);
     }
 
@@ -131,19 +131,19 @@ public partial class CopilotView : UserControl
         var topLevel = TopLevel.GetTopLevel(this);
         var payload = topLevel?.Clipboard is null
             ? string.Empty
-            : await topLevel.Clipboard.GetTextAsync() ?? string.Empty;
+            : await Avalonia.Input.Platform.ClipboardExtensions.TryGetTextAsync(topLevel.Clipboard) ?? string.Empty;
         await VM.LoadCurrentFromClipboardSetAsync(payload);
     }
 
     private void OnCopilotDragOver(object? sender, DragEventArgs e)
     {
-        e.DragEffects = TryGetFirstDroppedJsonFile(e.Data, out _) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.DragEffects = TryGetFirstDroppedJsonFile(e.DataTransfer, out _) ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
 
     private async void OnCopilotDrop(object? sender, DragEventArgs e)
     {
-        if (VM is null || !TryGetFirstDroppedJsonFile(e.Data, out var path))
+        if (VM is null || !TryGetFirstDroppedJsonFile(e.DataTransfer, out var path))
         {
             return;
         }
@@ -635,11 +635,10 @@ public partial class CopilotView : UserControl
         }
     }
 
-    private static bool TryGetFirstDroppedJsonFile(IDataObject data, out string filePath)
+    private static bool TryGetFirstDroppedJsonFile(IDataTransfer? data, out string filePath)
     {
         filePath = string.Empty;
-        var first = data.GetFiles()?.FirstOrDefault();
-        var localPath = first?.TryGetLocalPath();
+        var localPath = data?.TryGetFile()?.TryGetLocalPath();
         if (string.IsNullOrWhiteSpace(localPath)
             || !localPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
         {

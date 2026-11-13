@@ -2054,12 +2054,6 @@ OF-1 스테이지가 개방되지 않은 경우에는 선택하지 마세요.</v
   <data name="RecruitingTips" xml:space="preserve">
     <value>공개모집 팁</value>
   </data>
-  <data name="RecruitingTips" xml:space="preserve">
-    <value>공개모집 팁</value>
-  </data>
-  <data name="RecruitmentOfStar" xml:space="preserve">
-    <value>★{0} {key=Operator}를 모집했습니다!</value>
-  </data>
   <data name="RecruitmentOfStar" xml:space="preserve">
     <value>★{0} {key=Operator}를 모집했습니다!</value>
   </data>
@@ -5059,9 +5053,6 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   </data>
   <data name="TaskStallWarning" xml:space="preserve">
     <value>작업 로그 출력이 {0}분 동안 갱신되지 않았습니다(현재 {1}분째 멈춰 있습니다). 작업이 정상적으로 실행 중인지 확인하세요.</value>
-  </data>
-  <data name="TaskStallWarning" xml:space="preserve">
-    <value>작업 로그 출력이 {0}분 동안 업데이트되지 않았습니다(현재 {1}분 동안 정체되어 있습니다). 작업이 아직 실행 중인지 확인하세요.</value>
   </data>
   <data name="TheEx" xml:space="preserve">
     <value>EX 스테이지가 없어 중단되었습니다</value>

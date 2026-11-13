@@ -4017,7 +4017,7 @@ public sealed class TaskQueueG2FeatureTests
     }
 
 
-    public void ShouldUnlockTaskStartCancelOnManualStop_ShouldRequireStopWithinFiveSeconds(
+    private void ShouldUnlockTaskStartCancelOnManualStop_ShouldRequireStopWithinFiveSeconds(
         double elapsedSeconds,
         bool expected)
     {

@@ -444,7 +444,7 @@ public sealed class FightTaskParityTests
             IsInventoryTarget = false,
         }, new UnifiedProfile(), config);
 
-        Assert.Empty(compiled.Issues.Where(issue => issue.Blocking));
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Blocking);
         var drops = Assert.IsType<JsonObject>(compiled.Params["drops"]);
         Assert.Equal(300, drops["30012"]?.GetValue<int>());
         Assert.False(compiled.Params["_ui_is_inventory_target"]?.GetValue<bool>());
@@ -464,7 +464,7 @@ public sealed class FightTaskParityTests
             IsInventoryTarget = true,
         }, new UnifiedProfile(), config);
 
-        Assert.Empty(compiled.Issues.Where(issue => issue.Blocking));
+        Assert.DoesNotContain(compiled.Issues, issue => issue.Blocking);
         var drops = Assert.IsType<JsonObject>(compiled.Params["drops"]);
         Assert.Equal(60, drops["30012"]?.GetValue<int>());
         Assert.True(compiled.Params["_ui_is_inventory_target"]?.GetValue<bool>());

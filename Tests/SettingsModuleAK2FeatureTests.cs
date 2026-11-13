@@ -344,7 +344,7 @@ public sealed class SettingsModuleAK2FeatureTests
             vm.SelectedGpuOption?.Descriptor.Kind);
     }
 
-    public async Task Initialize_RecruitReportSettings_FallBackToImportedBareKeys_LikeCompile()
+    private async Task Initialize_RecruitReportSettings_FallBackToImportedBareKeys_LikeCompile()
     {
         // gui.json importers normalize Penguin.EnablePenguin/Penguin.Id to the bare aliases
         // (LegacyConfigValueMappings.ProfileKeyAliases). The settings page must surface those

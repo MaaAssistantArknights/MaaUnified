@@ -1663,13 +1663,14 @@ public sealed partial class CopilotPageViewModel : PageViewModelBase
                 // 弹「完成任务 + 任务链名」Toast；ParadoxCopilot 不弹。
                 // UseCopilot 成就进度仅 TaskChainCompleted 累计，AllTasksCompleted 不重复计数（避免一次运行 +2）
                 var finishedChain = metadata.TaskChain ?? _activeTaskChain;
-                if (string.Equals(finishedChain, "Copilot", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(finishedChain, "SSSCopilot", StringComparison.OrdinalIgnoreCase))
+                var chainName = finishedChain ?? "Copilot";
+                if (string.Equals(chainName, "Copilot", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(chainName, "SSSCopilot", StringComparison.OrdinalIgnoreCase))
                 {
                     NotifyCopilotEvent(
                         NotificationKind.TaskComplete,
                         GetRootText("CompleteTask", "Complete task: ")
-                        + GetRootText(finishedChain, finishedChain),
+                        + GetRootText(chainName, chainName),
                         "Copilot.Notification.Complete",
                         "copilot completion",
                         dedupeKey: $"Copilot.Complete:{_activeItemCoreTaskId?.ToString(CultureInfo.InvariantCulture) ?? finishedChain}");

@@ -2522,12 +2522,6 @@ With save file: farm points through crafting (advanced).
   <data name="RecruitingTips" xml:space="preserve">
     <value>Recruiting Tips</value>
   </data>
-  <data name="RecruitingTips" xml:space="preserve">
-    <value>Recruiting Tips</value>
-  </data>
-  <data name="RecruitmentOfStar" xml:space="preserve">
-    <value>{0}★ has been recruited!</value>
-  </data>
   <data name="RecruitmentOfStar" xml:space="preserve">
     <value>{0}★ has been recruited!</value>
   </data>
@@ -5830,9 +5824,6 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   </data>
   <data name="TaskQueue.Warning.MallCreditFightDowngraded" xml:space="preserve">
     <value>Disabled Mall credit fight for `{0}` because an enabled `{1}` task uses the current/last stage selector.</value>
-  </data>
-  <data name="TaskStallWarning" xml:space="preserve">
-    <value>Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running.</value>
   </data>
   <data name="TaskStallWarning" xml:space="preserve">
     <value>Task log output has not been updated for {0} minutes (currently stalled for {1} minutes). Please check whether the task is still running.</value>

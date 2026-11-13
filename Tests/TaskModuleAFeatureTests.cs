@@ -53,7 +53,7 @@ public sealed class TaskModuleAFeatureTests
         // BuildCoreParams blanks it before the payload reaches Core.
         Assert.Equal(
             ["支援机械"],
-            ((JsonArray)tasks[2].Params["preserve_tags"]!).Select(tag => tag?.GetValue<string>()).ToArray());
+            ((JsonArray)tasks[2].Params["preserve_tags"]!).Select(tag => tag!.GetValue<string>()).ToArray());
         Assert.False(tasks[2].Params["_ui_preserve_tags_enabled"]?.GetValue<bool>());
 
         Assert.Equal(TaskModuleTypes.SingleStep, tasks[3].Type);
@@ -671,7 +671,7 @@ public sealed class TaskModuleAFeatureTests
         Assert.DoesNotContain("_ui_preserve_tags_enabled", json.Select(pair => pair.Key), StringComparer.Ordinal);
         Assert.Equal(
             ["支援机械", "高级资深干员"],
-            ((JsonArray)json["preserve_tags"]!).Select(tag => tag?.GetValue<string>()).ToArray());
+            ((JsonArray)json["preserve_tags"]!).Select(tag => tag!.GetValue<string>()).ToArray());
         Assert.Equal(8, json["level3_recruitment_permit_reserve"]?.GetValue<int>());
 
         var confirm = Assert.IsType<JsonArray>(json["confirm"]);
@@ -879,7 +879,7 @@ public sealed class TaskModuleAFeatureTests
 
         var persisted = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
         var firstTags = Assert.IsType<JsonArray>(persisted["first_tags"]);
-        Assert.Equal(["支援机械", "近战位"], firstTags.Select(tag => tag?.GetValue<string>()).ToArray());
+        Assert.Equal(["支援机械", "近战位"], firstTags.Select(tag => tag!.GetValue<string>()).ToArray());
     }
 
     [Fact]
@@ -917,7 +917,7 @@ public sealed class TaskModuleAFeatureTests
         Assert.True(persisted["_ui_preserve_tags_enabled"]?.GetValue<bool>());
         Assert.Equal(
             ["支援机械", "高级资深干员"],
-            ((JsonArray)persisted["preserve_tags"]!).Select(tag => tag?.GetValue<string>()).ToArray());
+            ((JsonArray)persisted["preserve_tags"]!).Select(tag => tag!.GetValue<string>()).ToArray());
         Assert.Contains(6, ((JsonArray)persisted["select"]!).Select(item => item?.GetValue<int>()));
         Assert.Contains(6, ((JsonArray)persisted["confirm"]!).Select(item => item?.GetValue<int>()));
         var recruitmentTime = Assert.IsType<JsonObject>(persisted["recruitment_time"]);
@@ -1025,7 +1025,7 @@ public sealed class TaskModuleAFeatureTests
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(appended.ParamsJson));
         Assert.Equal(
             ["支援机械", "高级资深干员"],
-            ((JsonArray)json["preserve_tags"]!).Select(tag => tag?.GetValue<string>()).ToArray());
+            ((JsonArray)json["preserve_tags"]!).Select(tag => tag!.GetValue<string>()).ToArray());
         Assert.DoesNotContain("_ui_preserve_tags_enabled", json.Select(pair => pair.Key), StringComparer.Ordinal);
         Assert.DoesNotContain("skip_robot", json.Select(pair => pair.Key), StringComparer.Ordinal);
     }

@@ -926,7 +926,7 @@ public sealed class CopilotN3ExecutionTests
             entry => entry.Message.Contains("operator-box data file is missing", StringComparison.Ordinal));
     }
 
-    public async Task StartAsync_WhenUseCopilotListContainsLegacyItemWithoutTabIndex_ShouldNotReject_WpfParity()
+    private async Task StartAsync_WhenUseCopilotListContainsLegacyItemWithoutTabIndex_ShouldNotReject_WpfParity()
     {
         // WPF dev-v2 d6601334f2：列表校验不再依赖 tab_index；旧条目（tab_index 缺失）按作业内容判定类型
         await using var fixture = await CopilotN3Fixture.CreateAsync();

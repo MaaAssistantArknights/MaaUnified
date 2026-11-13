@@ -1301,8 +1301,8 @@ public sealed class MainShellViewModelTests
             "Localization.Fallback",
             expectedCount: 2);
         Assert.Equal(2, lines.Count);
-        Assert.Single(lines.Where(line => line.Contains("key=TaskQueue.Unknown.Key; fallback=", StringComparison.Ordinal)));
-        Assert.Single(lines.Where(line => line.Contains("key=TaskQueue.Unknown.Key.2; fallback=", StringComparison.Ordinal)));
+        Assert.Single(lines, line => line.Contains("key=TaskQueue.Unknown.Key; fallback=", StringComparison.Ordinal));
+        Assert.Single(lines, line => line.Contains("key=TaskQueue.Unknown.Key.2; fallback=", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1548,9 +1548,16 @@ public sealed class MainShellViewModelTests
         Assert.Equal(ShellUiAction.None, action);
         bridge.ReleaseConnect();
         await firstStart;
-        Assert.Contains(
-            AchievementTextCatalog.GetString("BackgroundLinkStopped", fixture.ViewModel.CurrentShellLanguage, "Tasks stopped"),
-            notifications.Titles);
+        var expectedTitle = AchievementTextCatalog.GetString(
+            "BackgroundLinkStopped",
+            fixture.ViewModel.CurrentShellLanguage,
+            "Tasks stopped");
+        Assert.True(
+            await WaitUntilAsync(
+                () => notifications.Titles.Contains(expectedTitle),
+                retry: 200,
+                delayMs: 25),
+            $"Expected stopped notification '{expectedTitle}', got: {string.Join(" | ", notifications.Titles)}");
     }
 
     [Fact]
@@ -4920,7 +4927,7 @@ private sealed class CapturingTrayService : ITrayService
         Assert.Equal("ja-jp", shellSpy.LastTargetLanguage);
     }
 
-    public void TrayMenuText_LanguageItems_ShouldUseFrozenWpfNativeNames(string language)
+    private void TrayMenuText_LanguageItems_ShouldUseFrozenWpfNativeNames(string language)
     {
         var text = PlatformCapabilityTextMap.CreateTrayMenuText(language);
 
@@ -4943,7 +4950,7 @@ private sealed class CapturingTrayService : ITrayService
         }
     }
 
-    public void TrayMenuText_ShouldUseFrozenWpfTerms(
+    private void TrayMenuText_ShouldUseFrozenWpfTerms(
         string language,
         string expectedStart,
         string expectedForceShow,
@@ -4961,7 +4968,7 @@ private sealed class CapturingTrayService : ITrayService
             text.LanguageItems!.Select(item => item.Language));
     }
 
-    public void ResolveLinkStartHotkeyCommand_ShouldToggleStartStop(SessionState state, TrayCommandId expected)
+    private void ResolveLinkStartHotkeyCommand_ShouldToggleStartStop(SessionState state, TrayCommandId expected)
     {
         // WPF parity (frozen MaaHotKeyActionHandler.HandleLinkStart): idle -> start,
         // otherwise -> stop. WPF idle covers MAAUnified Idle and Connected.
@@ -4999,7 +5006,7 @@ private sealed class CapturingTrayService : ITrayService
         Assert.StartsWith(MainShellViewModel.WindowDisplayName, fixture.ViewModel.WindowTitle, StringComparison.Ordinal);
     }
 
-    public async Task CanStartExecution_ShouldNotDisableWpfTrayStartOrStopEntries(
+    private async Task CanStartExecution_ShouldNotDisableWpfTrayStartOrStopEntries(
         SessionState sessionState,
         bool hasBlockingIssue,
         bool expectedStartEnabled,

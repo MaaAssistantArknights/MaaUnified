@@ -2057,12 +2057,6 @@
   <data name="RecruitingTips" xml:space="preserve">
     <value>公招提示</value>
   </data>
-  <data name="RecruitingTips" xml:space="preserve">
-    <value>公招提示</value>
-  </data>
-  <data name="RecruitmentOfStar" xml:space="preserve">
-    <value>公招出現 {0}★ 囉！</value>
-  </data>
   <data name="RecruitmentOfStar" xml:space="preserve">
     <value>公招出現 {0}★ 囉！</value>
   </data>
@@ -5061,9 +5055,6 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   </data>
   <data name="TaskStallWarning" xml:space="preserve">
     <value>任務日誌已超過 {0} 分鐘沒有更新（目前已停滯 {1} 分鐘），請檢查任務是否仍在正常執行。</value>
-  </data>
-  <data name="TaskStallWarning" xml:space="preserve">
-    <value>任務日誌輸出已 {0} 分鐘沒有更新（目前已停滯 {1} 分鐘），請檢查任務是否仍在執行。</value>
   </data>
   <data name="TheEx" xml:space="preserve">
     <value>無獎勵關卡，已停止</value>

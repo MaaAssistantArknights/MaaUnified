@@ -702,7 +702,7 @@ public sealed class TaskQueueG1FeatureTests
         Assert.False(vm.IsSelectedTaskBindingPending);
         Assert.True(vm.RecruitModule.IsTaskBound);
         Assert.True(vm.TaskPanels.All(panel => panel.Module.IsTaskBound));
-        Assert.Single(vm.TaskPanels.Where(panel => panel.IsSelected));
+        Assert.Single(vm.TaskPanels, panel => panel.IsSelected);
     }
 
     [Fact]

@@ -333,7 +333,7 @@ public sealed class ToolboxDataLinkFeatureTests
         vm.SelectedTabIndex = 1;
         Dispatcher.UIThread.RunJobs(null);
 
-        var texas = Assert.Single(vm.OperBoxHaveList.Where(item => item.Id == "char_102_texas"));
+        var texas = Assert.Single(vm.OperBoxHaveList, item => item.Id == "char_102_texas");
         Assert.True(texas.ShowSkillDetails);
         Assert.True(texas.HasAnyMastery);
         Assert.False(texas.ShowRankBadge);
@@ -348,7 +348,7 @@ public sealed class ToolboxDataLinkFeatureTests
         Assert.True(texas.HasProgressionBadges);
 
         // 没有专精与模组数据时：只有 RANK 徽标，不出现空徽标行。
-        var amiya = Assert.Single(vm.OperBoxHaveList.Where(item => item.Id == "char_002_amiya"));
+        var amiya = Assert.Single(vm.OperBoxHaveList, item => item.Id == "char_002_amiya");
         Assert.True(amiya.ShowSkillDetails);
         Assert.False(amiya.HasAnyMastery);
         Assert.True(amiya.ShowRankBadge);
@@ -371,7 +371,7 @@ public sealed class ToolboxDataLinkFeatureTests
         vm.SelectedTabIndex = 1;
         Dispatcher.UIThread.RunJobs(null);
 
-        var texas = Assert.Single(vm.OperBoxHaveList.Where(item => item.Id == "char_102_texas"));
+        var texas = Assert.Single(vm.OperBoxHaveList, item => item.Id == "char_102_texas");
         Assert.False(texas.ShowSkillDetails);
         Assert.False(texas.ShowRankBadge);
         Assert.False(texas.HasAnyMastery);

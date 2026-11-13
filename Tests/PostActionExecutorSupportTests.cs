@@ -91,11 +91,11 @@ public sealed class PostActionExecutorSupportTests
         Assert.False(capability.ExitSelf.Supported);
         // WPF dev-v2 3b4f06dd86: the PC client exit reuses MaaCore CloseDown, so it is core-managed
         // exactly like ｢exit Arknights｣ and never falls back to a legacy command line.
-        Assert.False(capability.ExitPCClient.Supported);
-        Assert.Contains("requires native provider", capability.ExitArknights.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("requires native provider", capability.BackToAndroidHome.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("requires native provider", capability.ExitSelf.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("requires native provider", capability.ExitPCClient.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(capability.ExitPCClient!.Supported);
+        Assert.Contains("requires native provider", capability.ExitArknights.Message ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("requires native provider", capability.BackToAndroidHome.Message ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("requires native provider", capability.ExitSelf.Message ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("requires native provider", capability.ExitPCClient!.Message ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

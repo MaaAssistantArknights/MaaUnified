@@ -2054,12 +2054,6 @@ MAA を複数開くには、新しい MAA を他のフォルダにコピーし�
   <data name="RecruitingTips" xml:space="preserve">
     <value>公開求人ヒント</value>
   </data>
-  <data name="RecruitingTips" xml:space="preserve">
-    <value>公開求人ヒント</value>
-  </data>
-  <data name="RecruitmentOfStar" xml:space="preserve">
-    <value>公開求人で星{0}が出ました！</value>
-  </data>
   <data name="RecruitmentOfStar" xml:space="preserve">
     <value>公開求人で星{0}が出ました！</value>
   </data>
@@ -5058,9 +5052,6 @@ DEBUGディレクトリに保存される画像には数量制限があり、超
   </data>
   <data name="TaskStallWarning" xml:space="preserve">
     <value>タスクのログ出力が {0} 分間更新されていません（現在 {1} 分間停止しています）。タスクが正常に実行されているか確認してください。</value>
-  </data>
-  <data name="TaskStallWarning" xml:space="preserve">
-    <value>タスクログの出力が {0} 分間更新されていません（現在 {1} 分間停滞しています）。タスクがまだ実行中か確認してください。</value>
   </data>
   <data name="TheEx" xml:space="preserve">
     <value>ステージ報酬がないため停止します</value>

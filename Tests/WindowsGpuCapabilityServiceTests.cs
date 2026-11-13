@@ -28,7 +28,7 @@ public sealed class WindowsGpuCapabilityServiceTests
         Assert.DoesNotContain(options, option => option.Kind == GpuOptionKind.SystemDefault);
         Assert.Equal(GpuOptionKind.SpecificGpu, options[1].Kind);
         Assert.True(options[1].GpuIndex.HasValue);
-        Assert.Equal((uint)2, options[1].GpuIndex.Value);
+        Assert.Equal((uint)2, options[1].GpuIndex!.Value);
         Assert.Equal("PCI#2", options[1].InstancePath);
     }
 
@@ -163,11 +163,11 @@ public sealed class WindowsGpuCapabilityServiceTests
                     DriverVersion: null),
             ]);
 
-        var specific = Assert.Single(options.Where(option => option.Kind == GpuOptionKind.SpecificGpu));
+        var specific = Assert.Single(options, option => option.Kind == GpuOptionKind.SpecificGpu);
         Assert.Equal(string.Empty, specific.InstancePath);
         Assert.True(specific.GpuIndex.HasValue);
         Assert.Equal((uint)3, specific.GpuIndex.Value);
-        Assert.True(specific.Id.StartsWith("DXGI#3#AMD Radeon RX 7800 XT", StringComparison.Ordinal));
+        Assert.StartsWith("DXGI#3#AMD Radeon RX 7800 XT", specific.Id, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -202,10 +202,10 @@ public sealed class WindowsGpuCapabilityServiceTests
         Assert.Equal("Legacy GPU", options[1].Description);
         Assert.True(options[1].IsDeprecated);
         Assert.Equal((uint)0, options[1].GpuIndex);
-        var legacy = Assert.Single(options.Where(option => option.InstancePath == "PCI#0"));
+        var legacy = Assert.Single(options, option => option.InstancePath == "PCI#0");
         Assert.True(legacy.IsDeprecated);
         Assert.Equal((uint)0, legacy.GpuIndex);
-        var arc = Assert.Single(options.Where(option => option.InstancePath == "PCI#1"));
+        var arc = Assert.Single(options, option => option.InstancePath == "PCI#1");
         Assert.False(arc.IsDeprecated);
         Assert.Equal((uint)1, arc.GpuIndex);
     }

@@ -1011,7 +1011,7 @@ public sealed class TaskModuleCFeatureTests
         Assert.False(validated.Value!.CompiledParams.ContainsKey("start_with_seed"));
     }
 
-    public async Task SaveCustom_PreservesWpfTaskNamesAndOrder()
+    private async Task SaveCustom_PreservesWpfTaskNamesAndOrder()
     {
         await using var fixture = await TestFixture.CreateAsync();
         Assert.True((await fixture.TaskQueue.AddTaskAsync("Custom", "custom")).Success);

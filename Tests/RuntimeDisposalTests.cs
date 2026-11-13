@@ -349,7 +349,10 @@ public sealed class RuntimeDisposalTests
             RemoteControlConnectivityRequest request,
             CancellationToken cancellationToken = default)
             => Task.FromResult(UiOperationResult<RemoteControlConnectivityResult>.Ok(
-                new RemoteControlConnectivityResult(request.PollIntervalMs, null, null),
+                new RemoteControlConnectivityResult(
+                    request.PollIntervalMs,
+                    new EndpointProbeResult("get", string.Empty, true, 200, "ok"),
+                    new EndpointProbeResult("report", string.Empty, true, 200, "ok")),
                 "Remote connectivity passed."));
 
         public ValueTask DisposeAsync()

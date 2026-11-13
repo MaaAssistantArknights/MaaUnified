@@ -126,7 +126,7 @@ public sealed class CopilotPopupNavigationRegressionTests
         var code = File.ReadAllText(Path.Combine(root, "App", "Features", "Settings", "ConfigurationManagerView.axaml.cs"));
 
         Assert.Contains("UpdateSourceTrigger=PropertyChanged", xaml, StringComparison.Ordinal);
-        Assert.Equal(1, Regex.Matches(xaml, "EditorKeyDown=\"OnNewProfileNameEditorKeyDown\"").Count);
+        Assert.Single(Regex.Matches(xaml, "EditorKeyDown=\"OnNewProfileNameEditorKeyDown\""));
         Assert.True(ConfigurationManagerView.ShouldSubmitConfigurationProfile(Key.Enter));
         Assert.False(ConfigurationManagerView.ShouldSubmitConfigurationProfile(Key.Space));
         Assert.False(ConfigurationManagerView.ShouldSubmitConfigurationProfile(Key.F4));

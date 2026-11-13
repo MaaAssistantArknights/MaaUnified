@@ -865,7 +865,7 @@ public sealed class TaskQueueNotificationTests
     }
 
 
-    public async Task RecruitSpecialTag_RobotTag_SuppressedUnlessNotChooseLevel1(
+    private async Task RecruitSpecialTag_RobotTag_SuppressedUnlessNotChooseLevel1(
         bool notChooseLevel1,
         int expectedCount)
     {
