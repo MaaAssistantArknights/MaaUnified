@@ -62,7 +62,9 @@ case "$platform" in
 
     for elf_file in "${elf_files[@]}"; do
       set +e
-      ldd_output="$(LC_ALL=C ldd "$elf_file" 2>&1)"
+      # AppImage's AppRun puts the bundled runtime directory on LD_LIBRARY_PATH;
+      # mirror that here so sibling libraries (e.g. libunwind for libc++abi) resolve.
+      ldd_output="$(LC_ALL=C LD_LIBRARY_PATH="$publish_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$elf_file" 2>&1)"
       ldd_status=$?
       set -e
       if (( ldd_status != 0 )); then
