@@ -1,4 +1,5 @@
 using System;
+using System.Formats.Tar;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -183,9 +184,9 @@ public sealed class VersionUpdateIntegrityTests
         var packageDirectory = Path.Combine(root.Path, "update-packages");
         Directory.CreateDirectory(packageDirectory);
         File.WriteAllText(Path.Combine(root.Path, "app.txt"), "old");
-        var packagePath = Path.Combine(packageDirectory, "update.zip");
-        await CreateZipAsync(packagePath, ("app.txt", "new"));
-        await SavePendingUpdateAsync(root.Path, Path.Combine("update-packages", "update.zip"));
+        var packagePath = Path.Combine(packageDirectory, "update.tar.gz");
+        await CreateTarGzAsync(packagePath, ("app.txt", "new"));
+        await SavePendingUpdateAsync(root.Path, Path.Combine("update-packages", "update.tar.gz"));
         PendingUpdateFailureState.Write(root.Path, "previous attempt failed");
 
         var result = PendingAppUpdateService.TryApplyPendingUpdatePackage(root.Path);
@@ -200,9 +201,9 @@ public sealed class VersionUpdateIntegrityTests
         using var root = TestRoot.Create();
         var packageDirectory = Path.Combine(root.Path, "update-packages");
         Directory.CreateDirectory(packageDirectory);
-        var packagePath = Path.Combine(packageDirectory, "update.zip");
+        var packagePath = Path.Combine(packageDirectory, "update.tar.gz");
         await File.WriteAllBytesAsync(packagePath, [1, 2, 3, 4]);
-        await SavePendingUpdateAsync(root.Path, Path.Combine("update-packages", "update.zip"));
+        await SavePendingUpdateAsync(root.Path, Path.Combine("update-packages", "update.tar.gz"));
 
         var result = PendingAppUpdateService.TryApplyPendingUpdatePackage(root.Path);
 
@@ -612,12 +613,12 @@ public sealed class VersionUpdateIntegrityTests
         Directory.CreateDirectory(packageDirectory);
         File.WriteAllText(Path.Combine(root.Path, "app.txt"), "old");
         File.WriteAllText(Path.Combine(root.Path, "old.txt"), "remove me");
-        var packagePath = Path.Combine(packageDirectory, "update.zip");
-        await CreateZipAsync(
+        var packagePath = Path.Combine(packageDirectory, "update.tar.gz");
+        await CreateTarGzAsync(
             packagePath,
             ("app.txt", "new"),
             ("removelist.txt", "old.txt"));
-        await SavePendingUpdateAsync(root.Path, Path.Combine("update-packages", "update.zip"));
+        await SavePendingUpdateAsync(root.Path, Path.Combine("update-packages", "update.tar.gz"));
         File.WriteAllText(Path.Combine(root.Path, UpdateApplyPlatform.ExternalUpdaterExecutableName), "fake updater");
         var launcher = new RecordingExternalUpdaterLauncher(succeeds: true);
 
@@ -659,9 +660,9 @@ public sealed class VersionUpdateIntegrityTests
         var packageDirectory = Path.Combine(root.Path, "update-packages");
         Directory.CreateDirectory(packageDirectory);
         File.WriteAllText(Path.Combine(root.Path, "app.txt"), "old");
-        var packagePath = Path.Combine(packageDirectory, "update.zip");
-        await CreateZipAsync(packagePath, ("app.txt", "new"));
-        await SavePendingUpdateAsync(root.Path, Path.Combine("update-packages", "update.zip"));
+        var packagePath = Path.Combine(packageDirectory, "update.tar.gz");
+        await CreateTarGzAsync(packagePath, ("app.txt", "new"));
+        await SavePendingUpdateAsync(root.Path, Path.Combine("update-packages", "update.tar.gz"));
         File.WriteAllText(Path.Combine(root.Path, UpdateApplyPlatform.ExternalUpdaterExecutableName), "fake updater");
         var launcher = new RecordingExternalUpdaterLauncher(succeeds: false);
 
@@ -684,9 +685,9 @@ public sealed class VersionUpdateIntegrityTests
         var packageDirectory = Path.Combine(root.Path, "update-packages");
         Directory.CreateDirectory(packageDirectory);
         File.WriteAllText(Path.Combine(root.Path, "app.txt"), "old");
-        var packagePath = Path.Combine(packageDirectory, "update.zip");
-        await CreateZipAsync(packagePath, ("app.txt", "new"));
-        await SavePendingUpdateAsync(root.Path, Path.Combine("update-packages", "update.zip"));
+        var packagePath = Path.Combine(packageDirectory, "update.tar.gz");
+        await CreateTarGzAsync(packagePath, ("app.txt", "new"));
+        await SavePendingUpdateAsync(root.Path, Path.Combine("update-packages", "update.tar.gz"));
         var launcher = new RecordingExternalUpdaterLauncher(succeeds: true);
 
         var result = PendingAppUpdateService.TryApplyPendingUpdatePackage(
@@ -828,16 +829,31 @@ public sealed class VersionUpdateIntegrityTests
     private static string CurrentArchitecture
         => RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "arm64" : "x64";
 
-    private static async Task CreateZipAsync(string packagePath, params (string Name, string Content)[] entries)
+    private static Task CreateTarGzAsync(string packagePath, params (string Name, string Content)[] entries)
     {
-        using var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create);
-        foreach (var (name, content) in entries)
+        // Linux treats .zip installers as manual packages, so use the cross-platform
+        // OTA container format for these in-process apply tests.
+        var staging = Path.Combine(Path.GetTempPath(), $"maa-unified-tar-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(staging);
+        try
         {
-            var entry = archive.CreateEntry(name);
-            await using var stream = entry.Open();
-            await using var writer = new StreamWriter(stream);
-            await writer.WriteAsync(content);
+            foreach (var (name, content) in entries)
+            {
+                var target = Path.Combine(staging, name);
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.WriteAllText(target, content);
+            }
+
+            using var output = File.Create(packagePath);
+            using var gzip = new GZipStream(output, CompressionLevel.SmallestSize);
+            TarFile.CreateFromDirectory(staging, gzip, includeBaseDirectory: false);
         }
+        finally
+        {
+            Directory.Delete(staging, recursive: true);
+        }
+
+        return Task.CompletedTask;
     }
 
     private static async Task SavePendingUpdateAsync(string baseDirectory, string relativePackagePath)

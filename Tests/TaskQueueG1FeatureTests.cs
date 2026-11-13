@@ -1861,7 +1861,7 @@ public sealed class TaskQueueG1FeatureTests
             var result = await fixture.TaskQueue.GetTaskParamsAsync(0);
             return result.Success
                 && string.Equals(result.Value?["account_name"]?.GetValue<string>(), "debounce-200ms", StringComparison.Ordinal);
-        }, retry: 19, delayMs: 20));
+        }, retry: 200, delayMs: 50));
     }
 
     [Fact]

@@ -981,7 +981,9 @@ public sealed class SensitiveSettingsSecurityTests
         using var xdg = TestDirectory.Create();
         var databaseDirectory = Path.Combine(runtime.Path, "data");
         Directory.CreateDirectory(databaseDirectory);
-        await File.WriteAllBytesAsync(Path.Combine(databaseDirectory, "sensitive-settings.db"), RandomNumberGenerator.GetBytes(64));
+        var databasePath = Path.Combine(databaseDirectory, "sensitive-settings.db");
+        await File.WriteAllBytesAsync(databasePath, RandomNumberGenerator.GetBytes(64));
+        File.SetUnixFileMode(databasePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         var system = new FakeBackend(SensitiveStorageBackendKind.SystemProtected)
         {
             VerifyFailure = new SensitiveStorageException(SensitiveStorageErrorCode.StructurallyUnavailable, "missing"),
