@@ -32,6 +32,20 @@ public sealed class TaskQueueGuideRegressionTests
         Assert.Equal(7, Regex.Matches(guideXaml, "Classes=\"guide-step-marker\"").Count);
     }
 
+    [Fact]
+    public void MainWindow_ShouldKeepRootHostsAsContentControl_SoSettingsHitTestStyleApplies()
+    {
+        var root = TestRepoLayout.GetMaaUnifiedRoot();
+        var mainWindowXaml = File.ReadAllText(Path.Combine(root, "App", "Views", "MainWindow.axaml"));
+
+        // settings-root-host relies on a ContentControl type selector for opacity/hit-testing.
+        // Replacing the host with a derived type leaves the settings page hit-testable on top
+        // of the task queue, which makes the guide look visible but swallow every click.
+        Assert.DoesNotContain("TransitioningContentControl", mainWindowXaml, StringComparison.Ordinal);
+        Assert.Contains("ContentControl.settings-root-host", mainWindowXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"SettingsRootHost\"", mainWindowXaml, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("zh-cn", "敏感设置存储警告", "取消", "使用明文存储", "明文")]
     [InlineData("zh-tw", "敏感設定儲存警告", "取消", "使用明文儲存", "明文")]
