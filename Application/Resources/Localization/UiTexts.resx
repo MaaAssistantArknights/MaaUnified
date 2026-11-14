@@ -5310,6 +5310,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TaskQueue.Guide.Agreement.Confirmed" xml:space="preserve">
     <value>已确认用户协议</value>
   </data>
+  <data name="TaskQueue.Guide.Agreement.GoConfirm" xml:space="preserve">
+    <value>去确认用户协议</value>
+  </data>
   <data name="TaskQueue.Guide.Agreement.Link" xml:space="preserve">
     <value>用户协议</value>
   </data>

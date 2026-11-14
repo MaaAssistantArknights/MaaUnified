@@ -189,6 +189,27 @@ public sealed class SettingsGuideStateMachine
         return true;
     }
 
+    /// <summary>Jumps to a specific visible guide step (used by the demo's agreement shortcut).</summary>
+    /// <param name="step">Target step index.</param>
+    /// <returns>Whether the step changed.</returns>
+    public bool GoToStep(int step)
+    {
+        if (!IsVisible)
+        {
+            return false;
+        }
+
+        var target = Math.Clamp(step, 0, StepCount - 1);
+        if (target == CurrentStep)
+        {
+            return false;
+        }
+
+        CurrentStep = target;
+        RefreshDemoState();
+        return true;
+    }
+
     public bool TryGoPrevious()
     {
         if (!CanGoToPrevious)

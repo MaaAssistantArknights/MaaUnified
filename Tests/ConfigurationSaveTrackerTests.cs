@@ -34,6 +34,43 @@ public sealed class ConfigurationSaveTrackerTests
     }
 
     [Fact]
+    public async Task RunTrackedAsync_ActiveSaveKeepsPendingMarkerUntilCompletion()
+    {
+        var tracker = ConfigurationSaveTracker.Instance;
+        var key = NewKey();
+        var diagnostics = CreateDiagnostics(out var root);
+        try
+        {
+            var saveStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var allowSaveToComplete = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            tracker.MarkPending(key, "Tracker test", key, diagnostics, static _ => Task.FromResult(true));
+
+            var saveTask = tracker.RunTrackedAsync(
+                key,
+                "Tracker test",
+                key,
+                diagnostics,
+                async _ =>
+                {
+                    saveStarted.TrySetResult(true);
+                    await allowSaveToComplete.Task;
+                    return true;
+                });
+
+            await saveStarted.Task;
+            Assert.True(tracker.IsPendingOrFailed(key));
+
+            allowSaveToComplete.TrySetResult(true);
+            Assert.True(await saveTask);
+            Assert.False(tracker.IsPendingOrFailed(key));
+        }
+        finally
+        {
+            Cleanup(root);
+        }
+    }
+
+    [Fact]
     public async Task RunTrackedAsync_SupersededSuccessPreservesNewerPendingMarker()
     {
         var tracker = ConfigurationSaveTracker.Instance;

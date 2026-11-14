@@ -353,7 +353,8 @@ public sealed class ConfigurationSaveTracker
             }
 
             var entry = GetOrCreateEntry(key, displayName);
-            entry.Pending = false;
+            // Keep Pending set while the write is active: a save that was scheduled
+            // before a newer edit must not erase the newer edit's pending marker.
             entry.ActiveCount++;
             pendingVersion = entry.PendingVersion;
         }

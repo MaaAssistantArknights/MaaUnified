@@ -236,6 +236,11 @@
                     </Grid>
                     <TextBlock Classes="guide-step-description"
                                Text="{Binding RootTexts[TaskQueue.Guide.Demo.Note]}" />
+                    <Button Classes="app-button app-secondary"
+                            HorizontalAlignment="Center"
+                            Content="{Binding RootTexts[TaskQueue.Guide.Agreement.GoConfirm]}"
+                            IsVisible="{Binding IsGuideAgreementRequiredForDemo}"
+                            Click="OnGoToGuideAgreementStepClick" />
                     <ItemsControl ItemsSource="{Binding GuideDemoSteps}">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>

@@ -543,35 +543,19 @@
                     Classes="app-surface app-section main-shell-content-surface"
                     Classes.settings-root-content-surface="{Binding IsSettingsRootTabSelected}">
               <Grid>
-                <TransitioningContentControl x:Name="TaskQueueRootHost"
+                <ContentControl x:Name="TaskQueueRootHost"
                                 Content="{Binding TaskQueueRootPage.PageContent}"
-                                IsVisible="{Binding IsTaskQueueRootTabSelected}" >
-                  <TransitioningContentControl.PageTransition>
-                    <CrossFade Duration="0:0:0.18" />
-                  </TransitioningContentControl.PageTransition>
-                </TransitioningContentControl>
-                <TransitioningContentControl x:Name="CopilotRootHost"
+                                IsVisible="{Binding IsTaskQueueRootTabSelected}" />
+                <ContentControl x:Name="CopilotRootHost"
                                 Content="{Binding CopilotRootPage.PageContent}"
-                                IsVisible="{Binding IsCopilotRootTabSelected}" >
-                  <TransitioningContentControl.PageTransition>
-                    <CrossFade Duration="0:0:0.18" />
-                  </TransitioningContentControl.PageTransition>
-                </TransitioningContentControl>
-                <TransitioningContentControl x:Name="ToolboxRootHost"
+                                IsVisible="{Binding IsCopilotRootTabSelected}" />
+                <ContentControl x:Name="ToolboxRootHost"
                                 Content="{Binding ToolboxRootPage.PageContent}"
-                                IsVisible="{Binding IsToolboxRootTabSelected}" >
-                  <TransitioningContentControl.PageTransition>
-                    <CrossFade Duration="0:0:0.18" />
-                  </TransitioningContentControl.PageTransition>
-                </TransitioningContentControl>
-                <TransitioningContentControl x:Name="SettingsRootHost"
+                                IsVisible="{Binding IsToolboxRootTabSelected}" />
+                <ContentControl x:Name="SettingsRootHost"
                                 Content="{Binding SettingsRootPage.PageContent}"
                                 Classes="settings-root-host"
-                                Classes.settings-root-host-selected="{Binding IsSettingsRootTabSelected}" >
-                  <TransitioningContentControl.PageTransition>
-                    <CrossFade Duration="0:0:0.18" />
-                  </TransitioningContentControl.PageTransition>
-                </TransitioningContentControl>
+                                Classes.settings-root-host-selected="{Binding IsSettingsRootTabSelected}" />
 
               </Grid>
             </Border>

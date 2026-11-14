@@ -462,6 +462,10 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
     public bool CanConfirmGuideAgreement =>
         IsGuideVisible && _guideState.IsAgreementStep && !_guideState.AgreementConfirmed;
 
+    /// <summary>Gets a value indicating whether the task demo needs the agreement confirmed first.</summary>
+    public bool IsGuideAgreementRequiredForDemo =>
+        IsGuideVisible && _guideState.IsTaskDemoStep && !_guideState.AgreementConfirmed;
+
     /// <summary>
     /// Gets the red-dot state for the unconfirmed agreement. The dot reuses the shared
     /// <c>app-badge</c> shell and is cleared as soon as <see cref="ConfirmGuideAgreementAsync"/> succeeds.
@@ -1686,6 +1690,21 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         return SaveGuideStateAsync("Settings guide agreement confirmed.", cancellationToken);
     }
 
+    /// <summary>Jumps from the task demo back to the agreement step to confirm it.</summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Whether the step changed and the guide state was saved.</returns>
+    public Task<bool> GoToGuideAgreementStepAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_guideState.GoToStep(SettingsGuideStateMachine.AgreementStepIndex))
+        {
+            return Task.FromResult(false);
+        }
+
+        _isGuideSuspendedForTaskEditing = false;
+        NotifyGuideStateChanged();
+        return SaveGuideStateAsync("Settings guide agreement step opened.", cancellationToken);
+    }
+
     /// <summary>
     /// Marks one simulated task-settings demo action complete. The demo is locked until the user
     /// agreement is confirmed, which is the second half of the agreement/demo interlock.
@@ -1810,6 +1829,7 @@ public sealed class TaskQueuePageViewModel : PageViewModelBase
         OnPropertyChanged(nameof(IsGuideAgreementStep));
         OnPropertyChanged(nameof(IsGuideTaskDemoStep));
         OnPropertyChanged(nameof(CanConfirmGuideAgreement));
+        OnPropertyChanged(nameof(IsGuideAgreementRequiredForDemo));
         OnPropertyChanged(nameof(GuideAgreementBadgeVisible));
         OnPropertyChanged(nameof(IsGuideAgreementTipVisible));
         OnPropertyChanged(nameof(GuideNextGateTip));

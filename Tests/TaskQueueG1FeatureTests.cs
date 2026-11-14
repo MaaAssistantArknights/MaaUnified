@@ -254,6 +254,22 @@ public sealed class TaskQueueG1FeatureTests
     }
 
     [Fact]
+    public async Task TaskQueueGuide_DemoWithoutAgreement_ShouldOfferAgreementShortcut()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepIndex] = JsonValue.Create("5");
+        fixture.Config.CurrentConfig.GlobalValues[ConfigurationKeys.GuideStepOrderVersion] = JsonValue.Create(2);
+        var vm = new TaskQueuePageViewModel(fixture.Runtime, new ConnectionGameSharedStateViewModel());
+
+        Assert.True(vm.IsGuideTaskDemoStep);
+        Assert.True(vm.IsGuideAgreementRequiredForDemo);
+        Assert.True(await vm.GoToGuideAgreementStepAsync());
+        Assert.Equal(SettingsGuideStateMachine.AgreementStepIndex, vm.GuideStepIndex);
+        Assert.True(vm.IsGuideAgreementStep);
+        Assert.False(vm.IsGuideAgreementRequiredForDemo);
+    }
+
+    [Fact]
     public async Task TaskQueueGuide_SkipShouldRecordStepAndPersistCompletion()
     {
         await using var fixture = await TestFixture.CreateAsync();

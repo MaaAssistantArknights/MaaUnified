@@ -4567,6 +4567,9 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="TaskQueue.Guide.Agreement.Confirmed" xml:space="preserve">
     <value>已確認使用者協議</value>
   </data>
+  <data name="TaskQueue.Guide.Agreement.GoConfirm" xml:space="preserve">
+    <value>去確認使用者協議</value>
+  </data>
   <data name="TaskQueue.Guide.Agreement.Link" xml:space="preserve">
     <value>使用者協議</value>
   </data>

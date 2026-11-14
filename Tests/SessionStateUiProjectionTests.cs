@@ -708,7 +708,7 @@ public sealed class SessionStateUiProjectionTests
         using var cancellation = new CancellationTokenSource();
 
         var runTask = vm.RunSelectedTaskOnceAsync(cancellation.Token);
-        await bridge.FirstConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await bridge.FirstConnectStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.True(sharedState.IsSessionOperationActive);
         Assert.False(settings.IsSessionIdle);

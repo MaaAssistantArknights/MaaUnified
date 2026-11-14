@@ -4565,6 +4565,9 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   <data name="TaskQueue.Guide.Agreement.Confirmed" xml:space="preserve">
     <value>사용자 약관 확인됨</value>
   </data>
+  <data name="TaskQueue.Guide.Agreement.GoConfirm" xml:space="preserve">
+    <value>사용자 약관 확인하기</value>
+  </data>
   <data name="TaskQueue.Guide.Agreement.Link" xml:space="preserve">
     <value>사용자 약관</value>
   </data>

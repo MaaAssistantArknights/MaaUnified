@@ -66,6 +66,14 @@ public partial class TaskQueueGuideView : UserControl
         }
     }
 
+    private async void OnGoToGuideAgreementStepClick(object? sender, RoutedEventArgs e)
+    {
+        if (VM is { } vm)
+        {
+            await vm.GoToGuideAgreementStepAsync();
+        }
+    }
+
     private void OnOpenGuideAgreementClick(object? sender, RoutedEventArgs e)
     {
         try

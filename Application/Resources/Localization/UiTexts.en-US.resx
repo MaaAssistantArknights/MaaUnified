@@ -5309,6 +5309,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="TaskQueue.Guide.Agreement.Confirmed" xml:space="preserve">
     <value>User agreement confirmed</value>
   </data>
+  <data name="TaskQueue.Guide.Agreement.GoConfirm" xml:space="preserve">
+    <value>Review and confirm the user agreement</value>
+  </data>
   <data name="TaskQueue.Guide.Agreement.Link" xml:space="preserve">
     <value>User agreement</value>
   </data>
