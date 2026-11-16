@@ -4606,6 +4606,9 @@ DEBUG 目錄下儲存的圖片有數量限制，超出後會自動清理舊圖�
   <data name="TaskQueue.Guide.Demo.EnableWeekly" xml:space="preserve">
     <value>啟用週常計畫</value>
   </data>
+  <data name="TaskQueue.Guide.Demo.FightName" xml:space="preserve">
+    <value>引導作戰</value>
+  </data>
   <data name="TaskQueue.Guide.Demo.Next" xml:space="preserve">
     <value>下一步：{0}</value>
   </data>

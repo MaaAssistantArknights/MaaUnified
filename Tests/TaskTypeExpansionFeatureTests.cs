@@ -577,7 +577,15 @@ public sealed class TaskTypeExpansionFeatureTests
         module.UseAbyssalHunter = true;
         module.UseWeeklySchedule = true;
         Assert.True(module.ShowWeeklyScheduleDays);
-        module.WeeklyScheduleMonday = false;
+        // Disable a day that is not today so QueueEnabledTasksAsync still has a runnable day;
+        // otherwise this test fails only when it happens to run on Monday/Tuesday.
+        var today = DateTime.Now.DayOfWeek;
+        var disabledDay = today == DayOfWeek.Monday ? DayOfWeek.Tuesday : DayOfWeek.Monday;
+        var disabledKey = disabledDay == DayOfWeek.Monday
+            ? "_ui_weekly_schedule_monday"
+            : "_ui_weekly_schedule_tuesday";
+        module.WeeklyScheduleMonday = disabledDay != DayOfWeek.Monday;
+        module.WeeklyScheduleTuesday = disabledDay != DayOfWeek.Tuesday;
 
         Assert.True(await module.FlushPendingChangesAsync());
         var persisted = (await fixture.TaskQueue.GetTaskParamsAsync(0)).Value!;
@@ -586,7 +594,7 @@ public sealed class TaskTypeExpansionFeatureTests
         Assert.True(persisted["use_pinus_sylvestris"]!.GetValue<bool>());
         Assert.True(persisted["use_abyssal_hunter"]!.GetValue<bool>());
         Assert.True(persisted["_ui_use_weekly_schedule"]!.GetValue<bool>());
-        Assert.False(persisted["_ui_weekly_schedule_monday"]!.GetValue<bool>());
+        Assert.False(persisted[disabledKey]!.GetValue<bool>());
         Assert.True(persisted["_ui_weekly_schedule_sunday"]!.GetValue<bool>());
 
         var result = await fixture.TaskQueue.QueueEnabledTasksAsync();
@@ -608,7 +616,10 @@ public sealed class TaskTypeExpansionFeatureTests
         Assert.Equal(string.Empty, rebound.FiammettaTarget3);
         Assert.True(rebound.UseAbyssalHunter);
         Assert.True(rebound.UseWeeklySchedule);
-        Assert.False(rebound.WeeklyScheduleMonday);
+        var reboundDisabledDay = disabledDay == DayOfWeek.Monday
+            ? rebound.WeeklyScheduleMonday
+            : rebound.WeeklyScheduleTuesday;
+        Assert.False(reboundDisabledDay);
     }
 
     [Fact]

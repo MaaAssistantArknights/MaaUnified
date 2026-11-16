@@ -4604,6 +4604,9 @@ DEBUG 디렉토리에 저장된 이미지는 수량 제한이 있으며 초과 �
   <data name="TaskQueue.Guide.Demo.EnableWeekly" xml:space="preserve">
     <value>주간 계획 활성화</value>
   </data>
+  <data name="TaskQueue.Guide.Demo.FightName" xml:space="preserve">
+    <value>가이드 작전</value>
+  </data>
   <data name="TaskQueue.Guide.Demo.Next" xml:space="preserve">
     <value>다음 작업: {0}</value>
   </data>

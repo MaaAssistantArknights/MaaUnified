@@ -5349,6 +5349,9 @@ DEBUG 目录下保存的图片有数量限制，超出后会自动清理旧图�
   <data name="TaskQueue.Guide.Demo.EnableWeekly" xml:space="preserve">
     <value>启用周常计划</value>
   </data>
+  <data name="TaskQueue.Guide.Demo.FightName" xml:space="preserve">
+    <value>引导作战</value>
+  </data>
   <data name="TaskQueue.Guide.Demo.Next" xml:space="preserve">
     <value>下一步：{0}</value>
   </data>

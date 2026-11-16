@@ -150,6 +150,7 @@
     <x:Double x:Key="MAA.Size.TaskQueue.PostActionSummaryWidth">185</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.PostActionDescriptionWidth">160</x:Double>
     <x:Double x:Key="MAA.Size.TaskQueue.PostActionDividerHeight">1</x:Double>
+    <x:Double x:Key="MAA.Size.TaskQueue.GuideCardWidth">720</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.DepotCardMinWidth">186</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.DepotIcon">36</x:Double>
     <x:Double x:Key="MAA.Size.Toolbox.DepotCardImage">50</x:Double>

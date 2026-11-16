@@ -5348,6 +5348,9 @@ Only supports Official(CN) and Bilibili server. Login account is not supported.<
   <data name="TaskQueue.Guide.Demo.EnableWeekly" xml:space="preserve">
     <value>Enable the weekly plan</value>
   </data>
+  <data name="TaskQueue.Guide.Demo.FightName" xml:space="preserve">
+    <value>Guide Fight</value>
+  </data>
   <data name="TaskQueue.Guide.Demo.Next" xml:space="preserve">
     <value>Next: {0}</value>
   </data>

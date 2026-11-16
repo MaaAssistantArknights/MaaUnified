@@ -78,7 +78,7 @@ public sealed class CopilotPopupNavigationRegressionTests
         var taskQueueXaml = File.ReadAllText(Path.Combine(root, "App", "Features", "Root", "TaskQueueView.axaml"));
 
         Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", guideXaml, StringComparison.Ordinal);
-        Assert.Contains("MaxHeight=\"420\"", guideXaml, StringComparison.Ordinal);
+        Assert.Contains("Classes=\"guide-step-content\"", guideXaml, StringComparison.Ordinal);
         Assert.Equal(7, Regex.Matches(guideXaml, "Click=\"OnOpenGuideSettingsClick\"").Count);
         Assert.Contains("Click=\"OnSkipGuideClick\"", guideXaml, StringComparison.Ordinal);
         Assert.Contains("IsVisible=\"{Binding IsGuideSkipVisible}\"", guideXaml, StringComparison.Ordinal);
